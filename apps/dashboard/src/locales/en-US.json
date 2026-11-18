@@ -1076,6 +1076,7 @@
       "cliDefault": "CLI default model",
       "chooseModel": "Choose a reviewed model",
       "modelUnknown": "No reviewed model available",
+      "modelCatalogLimited": "The model list is limited to reviewed local sources.",
       "modelUnverified": "Model availability is unverified.",
       "catalogUnverified": "The native catalog and its current session could not be verified.",
       "workspaceUnknown": "Current workspace",
@@ -1194,6 +1195,7 @@
       "choosePaths": "Choose folder and executable…",
       "catalog_ready": "The installed executable matches the reviewed version. Choose a model to continue.",
       "catalog_executable_not_found": "The CLI executable was not found in the local search.",
+      "catalog_antigravity_executable_unreviewed": "CLI updated · review required",
       "catalog_executable_unreviewed": "The installed CLI does not match a reviewed version and checksum for managed terminals.",
       "catalog_executable_inspection_failed": "The local CLI executable could not be verified.",
       "catalog_ambiguous_executable": "Multiple installations were found. Choose the reviewed native executable explicitly in Advanced.",
@@ -1339,7 +1341,7 @@
     "core": {
       "connecting": "CORE CONNECTING",
       "online": "CORE ONLINE",
-      "unavailable": "CORE UNAVAILABLE"
+      "unavailable": "MANAGED TERMINALS DISCONNECTED"
     },
     "workspace": {
       "create": "＋ New Workspace",
@@ -1374,7 +1376,15 @@
     "unassigned": "Unassigned",
     "members": "{{count}} terminals",
     "available": "{{count}} in this selection",
-    "missing": "{{count}} unavailable here; not adopted or restarted.",
+    "savedTerminals": {
+      "title": "Saved terminals",
+      "closed": "Closed in this Core",
+      "detached": "No current Core connection. Process state unverified.",
+      "hide": "Remove from view",
+      "show_one": "Show {{count}} hidden terminal",
+      "show_other": "Show {{count}} hidden terminals",
+      "reopen": "Reopen as a new terminal"
+    },
     "assign": "Reviewed terminal",
     "choose": "Choose…",
     "addMember": "Assign to Feature",
@@ -1489,7 +1499,7 @@
     "agents_other": "{{count}} agents",
     "running": "{{count}} running",
     "needs": "{{count}} need you",
-    "unknown": "{{count}} unavailable",
+    "unknown": "{{count}} without current state evidence",
     "emptyTitle": "Your Feature starts here",
     "emptyBody": "Open a terminal to see its card. Activities and links appear only with source evidence.",
     "newSession": "New session",
@@ -1512,6 +1522,43 @@
     "evidenceLimit": "CLI activity and parentage require additional session evidence. A selected model may differ from the model used by the CLI.",
     "relayUnknown": "Relay status unavailable",
     "for": "for {{duration}}"
+  },
+  "paneLifecycle": {
+    "state": {
+      "starting": "Starting",
+      "ready": "Ready",
+      "running": "Running",
+      "waiting_for_user": "Waiting for you",
+      "unknown": "No turn signal",
+      "failed": "Failed",
+      "disconnected": "Disconnected",
+      "ended": "Ended"
+    },
+    "failure": {
+      "cli_not_installed": "CLI not installed",
+      "not_authenticated": "Sign in to the CLI",
+      "model_missing": "Model unavailable",
+      "catalog_changed": "Catalog changed",
+      "native_authority_refused": "Action refused",
+      "process_crashed": "Process exited (code {{exitCode}})",
+      "open_refused": "Terminal could not open",
+      "opening_uncertain": "Opening could not be verified"
+    },
+    "retry": "Try again",
+    "changeCli": "Change CLI",
+    "viewLogs": "View logs",
+    "reconnect": "Reconnect",
+    "endedList": "Ended ({{count}})",
+    "ownershipUncertain": "Ownership uncertain",
+    "inspect": "View details",
+    "reopen": "Reopen",
+    "recoveryIntro": "Ownership of this session is still unverified.",
+    "recoveryQuit": "Quit ORQST normally so the recovery session starts without the normal Core.",
+    "recoveryStart": "Launch the ORQST app executable with --offline-recovery to open the native recovery window.",
+    "recoveryVerify": "Use the native reviews to capture the reservation, verify the required kernel and session evidence, and authorize the release. Follow any restart requirement shown by native recovery.",
+    "reopenBlocked": "The previous session is preserved. Its reviewed CLI and model must be available to reopen it.",
+    "removalUnconfirmed": "Removal unconfirmed. Refresh before retrying.",
+    "remove": "Remove from Feature"
   },
   "terminalStudio": {
     "featureTokens": "{{tokens}} tokens · {{measured}} of {{total}} Feature terminals",
@@ -1613,6 +1660,7 @@
       "unavailable": "Not available",
       "reason_ready": "Ready",
       "reason_executable_not_found": "CLI not found",
+      "reason_antigravity_executable_unreviewed": "CLI updated · review required",
       "reason_executable_unreviewed": "Unreviewed CLI version or checksum",
       "reason_executable_inspection_failed": "CLI verification failed",
       "reason_ambiguous_executable": "Multiple CLI installations found",
@@ -1742,19 +1790,19 @@
     "showPanel": "Show the Feature panel",
     "hidePanel": "Hide the Feature panel",
     "batch": {
-      "summary": "{{accepted}} of {{total}} terminals opened.",
+      "summary": "Core accepted {{accepted}} of {{total}} terminals.",
       "status": {
-        "accepted": "Opened",
+        "accepted": "Accepted by Core",
         "refused": "Not opened",
         "unknown": "Unknown"
       },
       "reason": {
-        "core_enrolled": "Opened",
+        "core_enrolled": "Accepted by Core",
         "workspace_unsupported": "Only the current workspace is supported for now",
         "account_unsupported": "Choosing an account is not available yet",
         "capacity_exceeded": "No room: up to 8 terminals",
         "selection_unavailable": "This CLI or model is not available",
-        "catalog_changed": "The list of CLIs and models changed; reopen the dialog",
+        "catalog_changed": "The reviewed selection changed. Refresh the list and choose again.",
         "review_cancelled": "The review was cancelled",
         "context_changed": "The workspace or Feature changed meanwhile",
         "preparation_failed": "Preparation failed",

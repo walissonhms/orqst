@@ -130,6 +130,13 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
     input: featureUpdateSchema,
   }),
   z.strictObject({
+    kind: z.literal('featureRemoveTerminal'),
+    id,
+    featureId: id,
+    terminalId: id,
+    expectedRevision: z.number().int().positive().safe(),
+  }),
+  z.strictObject({
     kind: z.literal('featureAssign'),
     id,
     featureId: id,

@@ -30,8 +30,9 @@ pub trait Extensions {
     /// `closeSlot` side effects (MCP invalidation). The hub inbox survives.
     fn slot_closed(&mut self, _slot: usize) {}
     /// Remove an exited slot from live destination discovery while preserving its mailbox.
-    fn slot_released(&mut self, slot: usize) {
+    fn slot_released(&mut self, slot: usize) -> R<()> {
         self.slot_closed(slot);
+        Ok(())
     }
     /// OpenCode slots (initial or enrolled) keep capacity reserved: retirement is refused.
     fn retire_blocked(&self) -> bool {
@@ -168,11 +169,10 @@ impl Core {
                     return None;
                 }
                 let result = if kind == "releaseOwnedSlot" {
-                    let result = self.pair.release_owned_slot(slot);
-                    if result.is_ok() {
-                        self.extensions.slot_released(slot);
-                    }
-                    result
+                    self.pair.release_owned_slot(slot).and_then(|evidence| {
+                        self.extensions.slot_released(slot)?;
+                        Ok(evidence)
+                    })
                 } else {
                     self.pair.owned_slot_inventory(slot)
                 };
@@ -211,6 +211,13 @@ impl Core {
                 }
                 let result = self.pair.retire(&raw["proof"]).map(|_| None);
                 if result.is_ok() {
+                    for slot in 0..self.pair.len() {
+                        if self.extensions.slot_released(slot).is_err() {
+                            // Retirement already completed. Missing display metadata
+                            // leaves an uncertain saved row; it cannot restore authority.
+                            eprintln!("ORQST_FEATURE_RELEASE metadata unconfirmed");
+                        }
+                    }
                     self.extensions.close();
                 }
                 Some(result)

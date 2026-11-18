@@ -70,6 +70,7 @@ export class TerminalNativeBroker<Document extends object> {
   private busy = false;
   private closed = false;
   private views = new Map<string, View>();
+  private preparedStart?: { profileId: string; attemptId: string };
 
   constructor(
     private readonly authority: TerminalAuthority,
@@ -87,6 +88,53 @@ export class TerminalNativeBroker<Document extends object> {
       throw new Error('Invalid native terminal enrollment');
   }
 
+  /** Private native batch gesture. Only an already allowed CLI policy can use this path. */
+  async startPrepared(
+    document: Document,
+    profileId: string,
+    expiresAt: number,
+  ): Promise<TerminalNativeReply> {
+    const policy = this.host.cliAuthorization;
+    if (
+      !policy ||
+      !this.current(document, false) ||
+      this.busy ||
+      this.views.size !== 0 ||
+      !Number.isSafeInteger(expiresAt) ||
+      expiresAt <= this.authority.now() ||
+      expiresAt > this.authority.now() + 15_000
+    )
+      return { status: 'denied' };
+    this.busy = true;
+    const generation = this.generation;
+    try {
+      const prepared = await this.supervisor.prepare(this.clientId, profileId);
+      const view: View = { profile: prepared.profile };
+      this.views.set(prepared.attemptId, view);
+      view.policyEpoch = policy.epoch(view.profile);
+      if (
+        prepared.challenge.operation !== 'start' ||
+        prepared.challenge.target !== prepared.attemptId ||
+        generation !== this.generation ||
+        !this.current(document, false) ||
+        Math.min(expiresAt, prepared.challenge.expiresAt) <= this.authority.now() ||
+        !this.policyCurrent(view)
+      )
+        return this.refusal('denied', view);
+      // Record before signing/doing anything that could start a process. Foreground Open
+      // can only attach this instance, including when the launch ACK is incomplete.
+      this.preparedStart = { profileId, attemptId: prepared.attemptId };
+      await this.supervisor.launch(prepared.attemptId, this.signChallenge(prepared.challenge));
+      return await this.result(prepared.attemptId);
+    } catch {
+      return this.preparedStart
+        ? { status: 'ok', instanceId: this.preparedStart.attemptId, opening: 'incomplete' }
+        : { status: 'denied' };
+    } finally {
+      this.busy = false;
+    }
+  }
+
   async dispatch(document: Document, raw: unknown): Promise<TerminalNativeReply> {
     if (!this.current(document, false)) return { status: 'denied' };
     const parsed = terminalNativeRequestSchema.safeParse(raw);
@@ -96,6 +144,15 @@ export class TerminalNativeBroker<Document extends object> {
     const request = parsed.data;
     const generation = this.generation;
     try {
+      if (request.action === 'open' && this.preparedStart) {
+        const { profileId, attemptId } = this.preparedStart;
+        const view = this.views.get(attemptId);
+        if (request.profileId !== profileId || !view || !this.current(document, true))
+          return { status: 'denied' };
+        // A focused Open can obtain new attach/input proofs. The start is already consumed.
+        return await this.completeOpen(attemptId, view, generation, this.authority.now() + 10_000);
+      }
+      if (request.action === 'start' && this.preparedStart) return { status: 'denied' };
       if (request.action === 'start' || request.action === 'open') {
         const prepared = await this.supervisor.prepare(this.clientId, request.profileId);
         const view: View = { profile: prepared.profile };
@@ -111,67 +168,17 @@ export class TerminalNativeBroker<Document extends object> {
         );
         if (result !== 'confirmed') return this.refusal(result, view);
         if (request.action === 'open') {
-          // One explicit native review covers these three operations on this exact
-          // immutable profile. Each operation still consumes its own signed challenge.
-          try {
-            await this.supervisor.launch(
-              prepared.attemptId,
-              this.proof(prepared.challenge, generation),
-            );
-            // A policy-reviewed Open already covers output for this exact owned attempt.
-            // If focus changes mid-open, a later passive read can finish only that step.
-            if (this.host.cliAuthorization) view.openOutputUntil = prepared.challenge.expiresAt;
-            // Attach needs a running (or exited) attempt; launch returns while it is still
-            // starting. Wait briefly, bounded by the combined review's deadline.
-            const startedBy = Math.min(prepared.challenge.expiresAt, Date.now() + 10_000);
-            while (
-              (await this.supervisor.snapshot(prepared.attemptId)).state === 'starting' &&
-              Date.now() < startedBy
-            )
-              await new Promise((resolve) => setTimeout(resolve, 100));
-            const attach = await this.supervisor.requestAttach(this.clientId, prepared.attemptId);
-            view.attachment = await this.supervisor.attach(
-              prepared.attemptId,
-              this.proof(attach, generation, prepared.challenge.expiresAt),
-            );
-            const input = await this.supervisor.requestInput(prepared.attemptId, view.attachment);
-            view.lease = await this.supervisor.enableInput(
-              prepared.attemptId,
-              view.attachment,
-              this.proof(input, generation, prepared.challenge.expiresAt),
-            );
-            this.inputEnabled(view);
-            const result = await this.result(prepared.attemptId);
-            // The final snapshot is asynchronous too. Neither it nor fresh later
-            // challenges may renew the original combined review's deadline.
-            this.assertCurrent(input, generation, prepared.challenge.expiresAt);
-            if (!view.attachment || !view.lease) throw new Error('Native grants revoked');
-            view.openOutputUntil = undefined;
-            return { ...result, opening: 'ready' };
-          } catch (error) {
-            // Diagnostics only: the failed step's message (no content or credentials).
-            process.stderr.write(
-              `ORQST_OPEN_HOST incomplete ${String((error as Error)?.message ?? error).slice(0, 160)}\n`,
-            );
-            // Launch may have succeeded. Keep its identity/receipt; never retry,
-            // signal, or adopt it. Remove only this document's output/input grants.
-            view.lease = undefined;
-            if (view.attachment) {
-              const attachment = view.attachment;
-              view.attachment = undefined;
-              try {
-                await this.supervisor.revokeInput(prepared.attemptId, attachment);
-              } catch {
-                /* Already unavailable. */
-              }
-              try {
-                await this.supervisor.detach(prepared.attemptId, attachment);
-              } catch {
-                /* Already unavailable. */
-              }
-            }
-            return { status: 'ok', instanceId: prepared.attemptId, opening: 'incomplete' };
-          }
+          return await this.completeOpen(
+            prepared.attemptId,
+            view,
+            generation,
+            prepared.challenge.expiresAt,
+            () =>
+              this.supervisor.launch(
+                prepared.attemptId,
+                this.proof(prepared.challenge, generation),
+              ),
+          );
         }
         await this.supervisor.launch(
           prepared.attemptId,
@@ -369,6 +376,73 @@ export class TerminalNativeBroker<Document extends object> {
     }
     this.authority.revoke(this.clientId);
     this.closed = true;
+  }
+
+  private async completeOpen(
+    attemptId: string,
+    view: View,
+    generation: number,
+    expiresAt: number,
+    launch?: () => void | Promise<void>,
+  ): Promise<TerminalNativeReply> {
+    try {
+      if (launch) await launch();
+      // A policy-reviewed Open already covers output for this exact owned attempt.
+      // If focus changes mid-open, a later passive read can finish only that step.
+      if (this.host.cliAuthorization) view.openOutputUntil = expiresAt;
+      // Attach needs a running (or exited) attempt; launch returns while it is still
+      // starting. Wait briefly, bounded by the combined review's deadline.
+      const startedBy = Math.min(expiresAt, Date.now() + 10_000);
+      while (
+        (await this.supervisor.snapshot(attemptId)).state === 'starting' &&
+        Date.now() < startedBy
+      )
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      if (!view.attachment) {
+        const attach = await this.supervisor.requestAttach(this.clientId, attemptId);
+        view.attachment = await this.supervisor.attach(
+          attemptId,
+          this.proof(attach, generation, expiresAt),
+        );
+      }
+      const input = await this.supervisor.requestInput(attemptId, view.attachment);
+      view.lease = await this.supervisor.enableInput(
+        attemptId,
+        view.attachment,
+        this.proof(input, generation, expiresAt),
+      );
+      this.inputEnabled(view);
+      const result = await this.result(attemptId);
+      // The final snapshot is asynchronous too. Neither it nor fresh later
+      // challenges may renew the original combined review's deadline.
+      this.assertCurrent(input, generation, expiresAt);
+      if (!view.attachment || !view.lease) throw new Error('Native grants revoked');
+      view.openOutputUntil = undefined;
+      return { ...result, opening: 'ready' };
+    } catch (error) {
+      // Diagnostics only: the failed step's message (no content or credentials).
+      process.stderr.write(
+        `ORQST_OPEN_HOST incomplete ${String((error as Error)?.message ?? error).slice(0, 160)}\n`,
+      );
+      // Launch may have succeeded. Keep its identity/receipt; never retry,
+      // signal, or adopt it. Remove only this document's output/input grants.
+      view.lease = undefined;
+      if (view.attachment) {
+        const attachment = view.attachment;
+        view.attachment = undefined;
+        try {
+          await this.supervisor.revokeInput(attemptId, attachment);
+        } catch {
+          /* Already unavailable. */
+        }
+        try {
+          await this.supervisor.detach(attemptId, attachment);
+        } catch {
+          /* Already unavailable. */
+        }
+      }
+      return { status: 'ok', instanceId: attemptId, opening: 'incomplete' };
+    }
   }
 
   private current(document: Document, focus: boolean): boolean {

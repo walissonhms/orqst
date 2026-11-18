@@ -11,7 +11,7 @@ import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 import { build } from 'esbuild';
 import { Store } from '@orqst/database';
-import type { Snapshot } from '@orqst/protocol';
+import { defaultFeatureId, type Snapshot } from '@orqst/protocol';
 import { terminalExecutableSha256 } from '../packages/core/src/terminal/codex-profile.js';
 import { reviewedDesktopCodexBinary } from '../apps/desktop/src/terminal-creation.js';
 import { reviewedClaudeTuiBinary } from '../packages/core/src/terminal/interactive-profile.js';
@@ -23,7 +23,8 @@ assert.match(process.version, /^v24\./);
 const trials = Number(process.argv[2] ?? 3);
 assert(Number.isInteger(trials) && trials > 0 && trials <= 10);
 const catalogOnly = process.argv[3] === '--catalog-only';
-assert(process.argv[3] === undefined || catalogOnly);
+const batchPreparation = process.argv[3] === '--batch-preparation';
+assert(process.argv[3] === undefined || catalogOnly || batchPreparation);
 process.umask(0o077);
 const root = await realpath(await mkdtemp(join(tmpdir(), 'orqst-benchmark-')));
 const bundles = join(root, 'bundles');
@@ -280,7 +281,7 @@ if (process.argv[1]?.endsWith('tauri-terminal-preparation-host.cjs')) {
     for (const path of [join(home, '.codex'), parent, preferencesDirectory])
       await mkdir(path, { recursive: true, mode: 0o700 });
     const data = join(dir, 'observer');
-    if (!catalogOnly) {
+    if (!catalogOnly && !batchPreparation) {
       await observe(home, join(dir, 'empty-store'), empty, 'emptyObserver');
       await observe(home, data, sessions, 'historyObserver');
     }
@@ -299,6 +300,31 @@ if (process.argv[1]?.endsWith('tauri-terminal-preparation-host.cjs')) {
       printTrial(trial, loadStart);
       continue;
     }
+    if (batchPreparation) {
+      const { items } = await prepare(
+        {
+          action: 'create-batch',
+          ...scope,
+          catalogId: catalog.catalogId,
+          requests: Array.from({ length: 4 }, (_, index) => ({
+            id: randomUUID(),
+            workspaceId,
+            provider: 'codex',
+            modelId: entry.models[0].id,
+            name: `Synthetic terminal ${index + 1}`,
+          })),
+        },
+        context,
+        'batch',
+      );
+      assert.equal(items.length, 4);
+      assert(
+        items.every(({ status }: { status: string }) => status === 'prepared'),
+        JSON.stringify(items),
+      );
+      printTrial(trial, loadStart);
+      continue;
+    }
     const create = {
       action: 'create-selected',
       ...scope,
@@ -308,7 +334,17 @@ if (process.argv[1]?.endsWith('tauri-terminal-preparation-host.cjs')) {
       count: 1,
     };
     const { files: initial } = await prepare(create, context, 'firstPreparation');
-    const { files: added } = await prepare(create, context, 'nextPreparation');
+    const nextScope = { workspaceId, featureId: defaultFeatureId(workspaceId) };
+    const { catalog: nextCatalog } = await prepare(
+      { action: 'catalog', ...nextScope },
+      context,
+      'nextCatalog',
+    );
+    const { files: added } = await prepare(
+      { ...create, ...nextScope, catalogId: nextCatalog.catalogId },
+      context,
+      'nextPreparation',
+    );
     const boot = performance.now();
     await withHost(
       [

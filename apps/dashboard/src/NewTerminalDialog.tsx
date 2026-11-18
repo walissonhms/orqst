@@ -21,6 +21,7 @@ export interface ProviderCatalog {
   models: CatalogModel[];
   /** Native catalogs explicitly report whether a CLI-default selection exists. */
   cliDefault?: boolean;
+  modelCatalogLimited?: boolean;
   /** ORQST account profiles for this CLI; login always happens in the CLI itself. */
   accounts?: { id: string; label: string; state: 'ready' | 'limited' | 'signed_out' | 'unknown' }[];
 }
@@ -620,6 +621,7 @@ function BatchDialogFrame({
 
 export function CompactTerminalForm({
   catalog,
+  initial,
   workspace,
   featureName,
   max,
@@ -630,6 +632,7 @@ export function CompactTerminalForm({
   onAdvanced,
 }: {
   catalog: ProviderCatalog[];
+  initial?: { provider: TerminalProvider; name: string };
   workspace: WorkspaceOption;
   featureName?: string;
   max: number;
@@ -640,9 +643,14 @@ export function CompactTerminalForm({
   onAdvanced?: () => void;
 }) {
   const { t } = useTranslation();
-  const [provider, setProvider] = useState(() => firstAvailable(catalog)?.provider ?? '');
+  const [provider, setProvider] = useState(
+    () =>
+      catalog.find((entry) => entry.provider === initial?.provider && entry.available)?.provider ??
+      firstAvailable(catalog)?.provider ??
+      '',
+  );
   const [model, setModel] = useState<string | null>(null);
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
   const nameInput = useRef<HTMLInputElement>(null);
   useEffect(() => nameInput.current?.focus(), []);
 
@@ -739,6 +747,7 @@ export function CompactTerminalForm({
             ))}
           </select>
         </label>
+        {entry?.modelCatalogLimited && <p>{t('studio.create.modelCatalogLimited')}</p>}
         {validModel && <p>{t('studio.create.modelUnverified')}</p>}
         {max === 0 && <p role="status">{t('studio.create.noCapacity')}</p>}
       </fieldset>

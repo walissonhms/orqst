@@ -200,7 +200,11 @@ pub fn hub_members(
                 .collect();
             Some(HubMember {
                 terminal_id: member.terminal_id.clone(),
-                alias: format!("T-{:03}", slot + 1),
+                alias: owners.first().and_then(|feature| {
+                    feature.terminal_displays.iter()
+                        .find(|display| display.terminal_id == member.terminal_id)
+                        .map(|display| display.display_id.clone())
+                }).unwrap_or_else(|| format!("T-{:03}", slot + 1)),
                 name: provider_name(&member.provider),
                 provider: member.provider.clone(),
                 feature_id: (owners.len() == 1).then(|| owners[0].feature_id.clone()),

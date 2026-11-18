@@ -7,6 +7,13 @@ pane chrome and the minimized dock. The stage grows to accommodate more than
 four docked panes. Embedded terminal documents retain the native PTY and its
 existing ownership checks.
 
+## Studio terminal availability
+
+Studio restores saved Feature context for the terminal picker and shows saved
+terminal IDs without a current connection. Batch preparation checks each
+distinct executable once before writing and keeps the signed native Core checks.
+The Codex picker accepts both reviewed cache versions.
+
 ## V6 Studio integration — 2026-11-18
 
 The Studio combines the persistent Workspace and Feature tree, a single action

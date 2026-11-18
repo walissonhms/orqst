@@ -49,45 +49,47 @@ function fixture() {
   };
 }
 
-test('real Codex picker cache and configured values retain provenance without entitlement', () => {
-  const f = fixture();
-  try {
-    writeFileSync(
-      join(f.home, '.codex/config.toml'),
-      'model = "synthetic-configured"\n[profiles.test]\nmodel = "synthetic-profile"\n',
-      { mode: 0o600 },
-    );
-    writeFileSync(
-      join(f.home, '.codex/models_cache.json'),
-      JSON.stringify({
-        client_version: '0.162.1',
-        fetched_at: new Date().toISOString(),
-        models: [
-          { slug: 'synthetic-picker', display_name: 'Synthetic picker', visibility: 'list' },
-          { slug: 'synthetic-hidden', visibility: 'hide' },
-        ],
-      }),
-      { mode: 0o600 },
-    );
-    const models = discoverTerminalModels('codex', f.project, f.home, {});
-    assert.equal(models.limited, false);
-    assert.deepEqual(
-      models.options.map((entry) => entry.selection.value),
-      [null, 'synthetic-configured', 'synthetic-profile', 'synthetic-picker'],
-    );
-    const picked = models.options.find((entry) => entry.selection.source === 'cli-cache')!;
-    assert.deepEqual(terminalModelArguments(picked.selection), ['--model', 'synthetic-picker']);
-    assert.throws(
-      () => terminalModelArguments({ ...picked.selection, expiresAt: Date.now() - 1 }),
-      /expired/,
-    );
-    assert.deepEqual(terminalModelArguments(models.options[0]!.selection), []);
-    writeFileSync(join(f.home, '.codex/models_cache.json'), '{"models":[]}', { mode: 0o600 });
-    assert.throws(() => terminalModelArguments(picked.selection), /catalogue changed/);
-  } finally {
-    f.close();
-  }
-});
+for (const version of ['0.162.1', '0.169.0']) {
+  test(`Codex ${version} picker cache and configured values retain provenance without entitlement`, () => {
+    const f = fixture();
+    try {
+      writeFileSync(
+        join(f.home, '.codex/config.toml'),
+        'model = "synthetic-configured"\n[profiles.test]\nmodel = "synthetic-profile"\n',
+        { mode: 0o600 },
+      );
+      writeFileSync(
+        join(f.home, '.codex/models_cache.json'),
+        JSON.stringify({
+          client_version: version,
+          fetched_at: new Date().toISOString(),
+          models: [
+            { slug: 'synthetic-picker', display_name: 'Synthetic picker', visibility: 'list' },
+            { slug: 'synthetic-hidden', visibility: 'hide' },
+          ],
+        }),
+        { mode: 0o600 },
+      );
+      const models = discoverTerminalModels('codex', f.project, f.home, {});
+      assert.equal(models.limited, false);
+      assert.deepEqual(
+        models.options.map((entry) => entry.selection.value),
+        [null, 'synthetic-configured', 'synthetic-profile', 'synthetic-picker'],
+      );
+      const picked = models.options.find((entry) => entry.selection.source === 'cli-cache')!;
+      assert.deepEqual(terminalModelArguments(picked.selection), ['--model', 'synthetic-picker']);
+      assert.throws(
+        () => terminalModelArguments({ ...picked.selection, expiresAt: Date.now() - 1 }),
+        /expired/,
+      );
+      assert.deepEqual(terminalModelArguments(models.options[0]!.selection), []);
+      writeFileSync(join(f.home, '.codex/models_cache.json'), '{"models":[]}', { mode: 0o600 });
+      assert.throws(() => terminalModelArguments(picked.selection), /catalogue changed/);
+    } finally {
+      f.close();
+    }
+  });
+}
 
 test('Claude aliases have official provenance and OpenCode exposes only explicit configured IDs', () => {
   const f = fixture();

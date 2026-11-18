@@ -51,7 +51,7 @@ function read(path: string): Buffer | null {
 }
 
 const codexCacheSchema = z.object({
-  client_version: z.literal('0.162.1'),
+  client_version: z.enum(['0.162.1', '0.169.0']),
   fetched_at: z.iso.datetime({ offset: true }),
   models: z
     .array(

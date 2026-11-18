@@ -1076,6 +1076,7 @@
       "cliDefault": "Modelo padrão da CLI",
       "chooseModel": "Escolha um modelo revisado",
       "modelUnknown": "Nenhum modelo revisado disponível",
+      "modelCatalogLimited": "A lista de modelos é limitada às fontes locais revisadas.",
       "modelUnverified": "Disponibilidade do modelo não verificada.",
       "catalogUnverified": "Não foi possível verificar o catálogo nativo e a sessão atual.",
       "workspaceUnknown": "Workspace atual",
@@ -1194,6 +1195,7 @@
       "choosePaths": "Escolher pasta e executável…",
       "catalog_ready": "O executável instalado corresponde à versão revisada. Escolha um modelo para continuar.",
       "catalog_executable_not_found": "O executável da CLI não foi encontrado na busca local.",
+      "catalog_antigravity_executable_unreviewed": "CLI atualizado · revisão necessária",
       "catalog_executable_unreviewed": "A CLI instalada diverge das versões e somas de verificação revisadas para terminais gerenciados.",
       "catalog_executable_inspection_failed": "Não foi possível verificar o executável local da CLI.",
       "catalog_ambiguous_executable": "Foram encontradas várias instalações. Escolha explicitamente o executável nativo revisado em Avançado.",
@@ -1339,7 +1341,7 @@
     "core": {
       "connecting": "CONECTANDO AO CORE",
       "online": "CORE ONLINE",
-      "unavailable": "CORE INDISPONÍVEL"
+      "unavailable": "TERMINAIS GERENCIADOS DESCONECTADOS"
     },
     "workspace": {
       "create": "＋ Novo Workspace",
@@ -1374,7 +1376,15 @@
     "unassigned": "Sem Feature",
     "members": "{{count}} terminais",
     "available": "{{count}} nesta seleção",
-    "missing": "{{count}} indisponíveis aqui; não adotados ou reiniciados.",
+    "savedTerminals": {
+      "title": "Terminais salvos",
+      "closed": "Fechado neste Core",
+      "detached": "Sem conexão com o Core atual. Estado do processo não verificado.",
+      "hide": "Remover da visualização",
+      "show_one": "Mostrar {{count}} terminal oculto",
+      "show_other": "Mostrar {{count}} terminais ocultos",
+      "reopen": "Reabrir como novo terminal"
+    },
     "assign": "Terminal revisado",
     "choose": "Escolher…",
     "addMember": "Atribuir à Feature",
@@ -1489,7 +1499,7 @@
     "agents_other": "{{count}} agentes",
     "running": "{{count}} em execução",
     "needs": "{{count}} precisam de você",
-    "unknown": "{{count}} indisponíveis",
+    "unknown": "{{count}} sem evidência de estado atual",
     "emptyTitle": "Sua Feature começa aqui",
     "emptyBody": "Abra um terminal para ver seu card. Atividades e conexões aparecem somente com evidência de origem.",
     "newSession": "Nova sessão",
@@ -1512,6 +1522,43 @@
     "evidenceLimit": "Atividade da CLI e parentesco exigem evidências adicionais da sessão. O modelo selecionado pode diferir do modelo usado pela CLI.",
     "relayUnknown": "Estado do relay indisponível",
     "for": "há {{duration}}"
+  },
+  "paneLifecycle": {
+    "state": {
+      "starting": "Iniciando",
+      "ready": "Pronto",
+      "running": "Executando",
+      "waiting_for_user": "Aguardando você",
+      "unknown": "Sem sinal",
+      "failed": "Falhou",
+      "disconnected": "Desconectado",
+      "ended": "Encerrado"
+    },
+    "failure": {
+      "cli_not_installed": "CLI não instalada",
+      "not_authenticated": "Faça login na CLI",
+      "model_missing": "Modelo indisponível",
+      "catalog_changed": "Catálogo mudou",
+      "native_authority_refused": "Ação recusada",
+      "process_crashed": "Processo terminou (código {{exitCode}})",
+      "open_refused": "Falha ao abrir terminal",
+      "opening_uncertain": "Abertura não confirmada"
+    },
+    "retry": "Tentar novamente",
+    "changeCli": "Alterar CLI",
+    "viewLogs": "Ver logs",
+    "reconnect": "Reconectar",
+    "endedList": "Encerrados ({{count}})",
+    "ownershipUncertain": "Estado incerto",
+    "inspect": "Ver detalhes",
+    "reopen": "Reabrir",
+    "recoveryIntro": "A propriedade desta sessão ainda não foi verificada.",
+    "recoveryQuit": "Encerre o ORQST normalmente para que a recuperação inicie sem o Core normal.",
+    "recoveryStart": "Execute o binário do ORQST com --offline-recovery para abrir a janela nativa de recuperação.",
+    "recoveryVerify": "Use as revisões nativas para capturar a reserva, verificar as evidências exigidas do kernel e da sessão e autorizar a liberação. Siga a orientação da recuperação caso seja necessário reiniciar o computador.",
+    "reopenBlocked": "A sessão anterior está preservada. A CLI e o modelo revisados precisam estar disponíveis para reabri-la.",
+    "removalUnconfirmed": "Remoção não confirmada. Atualize antes de tentar novamente.",
+    "remove": "Remover da Feature"
   },
   "terminalStudio": {
     "featureTokens": "{{tokens}} tokens · {{measured}} de {{total}} terminais da Feature",
@@ -1613,6 +1660,7 @@
       "unavailable": "Indisponível",
       "reason_ready": "Pronto",
       "reason_executable_not_found": "CLI não encontrada",
+      "reason_antigravity_executable_unreviewed": "CLI atualizado · revisão necessária",
       "reason_executable_unreviewed": "Versão ou checksum da CLI não revisado",
       "reason_executable_inspection_failed": "Falha ao verificar a CLI",
       "reason_ambiguous_executable": "Várias instalações da CLI encontradas",
@@ -1742,19 +1790,19 @@
     "showPanel": "Mostrar o painel de Features",
     "hidePanel": "Ocultar o painel de Features",
     "batch": {
-      "summary": "{{accepted}} de {{total}} terminais abertos.",
+      "summary": "O Core aceitou {{accepted}} de {{total}} terminais.",
       "status": {
-        "accepted": "Aberto",
+        "accepted": "Aceito pelo Core",
         "refused": "Não aberto",
         "unknown": "Desconhecido"
       },
       "reason": {
-        "core_enrolled": "Aberto",
+        "core_enrolled": "Aceito pelo Core",
         "workspace_unsupported": "Por enquanto só o workspace atual é suportado",
         "account_unsupported": "Escolher conta ainda não está disponível",
         "capacity_exceeded": "Sem espaço: até 8 terminais",
         "selection_unavailable": "Esta CLI ou modelo não está disponível",
-        "catalog_changed": "A lista de CLIs e modelos mudou; abra a janela de novo",
+        "catalog_changed": "A seleção revisada mudou. Atualize a lista e selecione de novo.",
         "review_cancelled": "A revisão foi cancelada",
         "context_changed": "O workspace ou a Feature mudou nesse meio-tempo",
         "preparation_failed": "A preparação falhou",

@@ -8,6 +8,7 @@ import type {
   TerminalPreparationCatalog,
   TerminalPreparationFailure,
 } from '@orqst/protocol';
+import { terminalCatalogReason } from './native-terminal-catalog.js';
 
 type Scope = { workspaceId: string; featureId: string | null };
 type Provider = TerminalPreparationCatalog['providers'][number]['provider'];
@@ -242,7 +243,7 @@ export function TauriStudioPreparation({
       </div>
       {chosen && chosen.reason !== 'ready' && (
         <p className="studio-next" role="status">
-          {t(`studio.tauri.catalog_${chosen.reason}`)}
+          {t(`studio.tauri.catalog_${terminalCatalogReason(chosen)}`)}
         </p>
       )}
       {model && <p className="studio-next">{t('studio.tauri.modelUnverified')}</p>}
@@ -322,7 +323,7 @@ export function TauriStudioPreparation({
               </label>
               {companion && companion.reason !== 'ready' && (
                 <p className="studio-next" role="status">
-                  {t(`studio.tauri.catalog_${companion.reason}`)}
+                  {t(`studio.tauri.catalog_${terminalCatalogReason(companion)}`)}
                 </p>
               )}
             </>
@@ -355,7 +356,7 @@ export function TauriStudioPreparation({
                     action: 'create-mcp-pair',
                     generation: catalogGeneration,
                     workspaceId,
-                    featureId,
+                    featureId: catalog.restoredFeature?.featureId ?? featureId,
                     catalogId: catalog.catalogId,
                     sourceProvider: provider,
                     workerProvider: companionProvider,
@@ -366,7 +367,7 @@ export function TauriStudioPreparation({
                     action: 'create-selected',
                     generation: catalogGeneration,
                     workspaceId,
-                    featureId,
+                    featureId: catalog.restoredFeature?.featureId ?? featureId,
                     catalogId: catalog.catalogId,
                     provider,
                     modelId: model.id,

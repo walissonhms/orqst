@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { terminalDisplayNameSchema } from './terminal-workspace.js';
-import { TERMINAL_SLOT_CEILING } from './terminal-capacity.js';
+import { TERMINAL_SLOT_CEILING, terminalDisplayIdSchema } from './terminal-capacity.js';
 
 export const featureScopeSchema = z.strictObject({
   workspaceId: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
@@ -39,6 +39,13 @@ export const featureUpdateSchema = z
   );
 export type FeatureCreate = z.input<typeof featureCreateSchema>;
 export type FeatureUpdate = z.infer<typeof featureUpdateSchema>;
+export const featureTerminalDisplaySchema = z.strictObject({
+  terminalId: z.uuid(),
+  displayId: terminalDisplayIdSchema,
+  released: z.literal(true).optional(),
+});
+export type FeatureTerminalDisplay = z.infer<typeof featureTerminalDisplaySchema>;
+
 export const workspaceFeatureSchema = featureScopeSchema
   .extend({
     schemaVersion: z.literal(1),
@@ -50,14 +57,22 @@ export const workspaceFeatureSchema = featureScopeSchema
       .array(z.uuid())
       .max(TERMINAL_SLOT_CEILING)
       .refine((ids) => new Set(ids).size === ids.length),
+    terminalDisplays: z.array(featureTerminalDisplaySchema).max(TERMINAL_SLOT_CEILING).optional(),
     orchestratorTerminalId: z.uuid().nullable().optional(),
     createdAt: z.number().int().nonnegative().safe(),
     updatedAt: z.number().int().nonnegative().safe(),
   })
   .refine(
     (feature) =>
-      !feature.orchestratorTerminalId ||
-      feature.terminalIds.includes(feature.orchestratorTerminalId),
+      (!feature.orchestratorTerminalId ||
+        feature.terminalIds.includes(feature.orchestratorTerminalId)) &&
+      (!feature.terminalDisplays ||
+        (feature.terminalDisplays.length === feature.terminalIds.length &&
+          feature.terminalDisplays.every(
+            ({ terminalId }, index) => terminalId === feature.terminalIds[index],
+          ) &&
+          new Set(feature.terminalDisplays.map(({ displayId }) => displayId)).size ===
+            feature.terminalDisplays.length)),
   );
 export type WorkspaceFeature = z.infer<typeof workspaceFeatureSchema>;
 export const featureConfigurationEventSchema = featureScopeSchema.extend({
@@ -68,6 +83,8 @@ export const featureConfigurationEventSchema = featureScopeSchema.extend({
     'feature.updated',
     'feature.archived',
     'feature.terminal_added',
+    'feature.terminal_reopened',
+    'feature.terminal_removed',
   ]),
   revision: z.number().int().positive().safe(),
   timestamp: z.number().int().nonnegative().safe(),

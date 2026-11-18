@@ -443,6 +443,10 @@ export async function connectManagedTerminalCore(
             async () => (await readFeature(featureId)).revision,
           ),
         ),
+      removeTerminal: async (featureId: string, terminalId: string, expectedRevision: number) =>
+        workspaceFeatureSchema.parse(
+          await call({ kind: 'featureRemoveTerminal', featureId, terminalId, expectedRevision }),
+        ),
       assign: async (featureId: string, slot: number, expectedRevision: number) =>
         workspaceFeatureSchema.parse(
           await featureMutation(

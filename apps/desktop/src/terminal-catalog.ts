@@ -1,4 +1,6 @@
 import { terminalPreparationCatalogSchema, terminalCatalogRequestSchema } from '@orqst/protocol';
+import { z } from 'zod';
+import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.js';
 import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import {
@@ -13,7 +15,7 @@ import {
   localCliProviders,
   type LocalCliProvider,
 } from '../../../packages/core/src/terminal/local-cli.js';
-import { inspectTerminalExecutables, terminalExecutablePins } from './terminal-discovery.js';
+import { inspectCatalogExecutables, reviewedPins } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
 
 /** Resolve the scope and re-read only providers participating in the request. */
@@ -22,23 +24,26 @@ export function inspectTerminalPreparationCatalog(
   trusted: TerminalPreparationContext,
   context: Pick<TerminalCreationInput, 'home' | 'environment'>,
   requestedProviders: readonly LocalCliProvider[],
+  restoreSavedFeature = false,
 ) {
   const request = terminalCatalogRequestSchema.parse(raw);
   const workspace = resolveTerminalPreparationContext(
     trusted,
     request.workspaceId,
     request.featureId,
+    restoreSavedFeature,
   );
-  const providers = [...new Set(requestedProviders)].map((provider) => {
-    const { executables, refusal } = inspectTerminalExecutables(
-      provider,
-      context.environment.PATH ?? '',
-      context.home,
-    );
-    const path = executables.length === 1 ? executables[0] : undefined;
-    const hash = path ? cachedTerminalExecutableSha256(path) : undefined;
-    const version = terminalExecutablePins(provider).find(({ sha256 }) => sha256 === hash)?.version;
-    const installation = path && path.length <= 4096 && version ? { path, version } : {};
+  const providers = inspectCatalogExecutables(
+    requestedProviders,
+    context.environment.PATH ?? '',
+    context.home,
+  ).map(({ provider, executables, refusal }) => {
+    if (executables.length !== 1)
+      return { provider, executables, models: null, refusal, installation: {} };
+    const path = executables[0]!;
+    const hash = cachedTerminalExecutableSha256(path);
+    const version = reviewedPins(provider).find(({ sha256 }) => sha256 === hash)?.version;
+    const installation = path.length <= 4096 && version ? { path, version } : {};
     let models;
     try {
       models = discoverTerminalModels(
@@ -49,7 +54,7 @@ export function inspectTerminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables: [], models: null, refusal, installation };
+      return { provider, executables, models: null, refusal, installation };
     }
     const executable = executables.length === 1 ? executables[0]! : null;
     const identity = JSON.stringify([
@@ -100,36 +105,102 @@ export function terminalCatalogId(
   );
 }
 
+/** Fields from the already released immutable member. Every new launch has fresh review. */
+export function inspectReleasedTerminal(
+  workspace: ReturnType<typeof resolveTerminalPreparationContext>,
+  terminalId: string,
+) {
+  if (!workspace.feature) return;
+  const member = workspace.feature.terminalDisplays?.find(
+    (entry) => entry.terminalId === terminalId,
+  );
+  if (!member?.released) return;
+  const receipt = workspace.features.releasedTerminal(workspace.feature.featureId, terminalId);
+  if (!receipt) return;
+  const saved = z
+    .object({
+      version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+      identity: z.object({ terminalId: z.uuid() }),
+      project: z.string(),
+      model: z.object({ value: z.string().nullable() }).optional(),
+    })
+    .parse(JSON.parse(terminalFile(receipt.file, true).toString('utf8')));
+  if (saved.identity.terminalId !== terminalId || saved.project !== workspace.project) return;
+  return {
+    provider: localCliProviders[saved.version - 1]!,
+    value: saved.model?.value ?? null,
+    name:
+      workspace.features
+        .readLayout(workspace.feature.featureId)
+        ?.names.find(({ id }) => id === terminalId)?.name ?? member.displayId,
+  };
+}
+
 /** Read-only catalog with verified installation metadata and opaque launch choices. */
 export function terminalPreparationCatalog(
   raw: unknown,
   trusted: TerminalPreparationContext,
   context: Pick<TerminalCreationInput, 'home' | 'environment'>,
+  restoreSavedFeature = false,
 ) {
-  const { request, catalogId, providers } = inspectTerminalPreparationCatalog(
+  const { request, catalogId, providers, workspace } = inspectTerminalPreparationCatalog(
     raw,
     trusted,
     context,
     localCliProviders,
+    restoreSavedFeature,
   );
+  const feature = workspace.feature;
+  const reopenable = feature?.terminalDisplays?.flatMap((member) => {
+    if (!member.released) return [];
+    try {
+      const saved = inspectReleasedTerminal(workspace, member.terminalId);
+      const id = providers
+        .find((entry) => entry.provider === saved?.provider)
+        ?.models?.options.find((option) => option.selection.value === saved?.value)?.id;
+      if (!saved || !id) return [];
+      return [
+        {
+          terminalId: member.terminalId,
+          displayId: member.displayId,
+          provider: saved.provider,
+          modelId: id,
+          name: saved.name,
+        },
+      ];
+    } catch {
+      return [];
+    }
+  });
   return terminalPreparationCatalogSchema.parse({
     contractVersion: 1,
     workspaceId: request.workspaceId,
     featureId: request.featureId,
     catalogId,
+    ...(reopenable?.length ? { reopenable } : {}),
+    ...(restoreSavedFeature && workspace.feature
+      ? {
+          restoredFeature: {
+            featureId: workspace.feature.featureId,
+            name: workspace.feature.name,
+            terminalIds: workspace.feature.terminalIds,
+            ...(workspace.feature.terminalDisplays?.some((member) => member.released)
+              ? { terminalDisplays: workspace.feature.terminalDisplays }
+              : {}),
+          },
+        }
+      : {}),
     providers: providers.map(({ provider, executables, models, refusal, installation }) => ({
       provider,
       ...installation,
       status: executables.length === 1 && models ? 'available' : 'unavailable',
-      reason: !models
-        ? 'catalog_limited'
-        : !executables.length
-          ? refusal
-          : executables.length > 1
-            ? 'ambiguous_executable'
-            : models.limited
-              ? 'catalog_limited'
-              : 'ready',
+      reason: !executables.length
+        ? refusal
+        : executables.length > 1
+          ? 'ambiguous_executable'
+          : !models || models.limited
+            ? 'catalog_limited'
+            : 'ready',
       models:
         models?.options.map(({ id, label, selection }) => ({
           id,

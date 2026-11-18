@@ -1,0 +1,118 @@
+import type { TerminalBatchItem, TerminalPreparationCatalog } from '@orqst/protocol';
+
+type TerminalProvider = TerminalPreparationCatalog['providers'][number]['provider'];
+
+export type PaneLifecycleState =
+  | 'starting'
+  | 'ready'
+  | 'running'
+  | 'waiting_for_user'
+  | 'unknown'
+  | 'failed'
+  | 'disconnected'
+  | 'ended';
+
+export type PaneFailureReason =
+  | 'cli_not_installed'
+  | 'not_authenticated'
+  | 'model_missing'
+  | 'catalog_changed'
+  | 'native_authority_refused'
+  | 'process_crashed'
+  | 'open_refused'
+  | 'opening_uncertain';
+
+export interface PaneLifecycleFailure {
+  reason: PaneFailureReason;
+  evidence: string;
+  retryable: boolean;
+  exitCode?: number;
+}
+
+export interface OwnedPaneEvidence {
+  transport: 'connected' | 'lost';
+  process: 'prepared' | 'starting' | 'live' | 'exited' | 'uncertain';
+  firstFrame?: boolean;
+  prompt?: boolean;
+  turn?: 'running' | 'waiting_for_user' | 'unknown';
+  exitCode?: number;
+}
+
+export interface PaneLifecycle {
+  state: PaneLifecycleState;
+  failure?: PaneLifecycleFailure;
+}
+
+/** Core admission and first-frame evidence are distinct from provider prompt/turn evidence. */
+export function projectPaneLifecycle(evidence: OwnedPaneEvidence): PaneLifecycle {
+  if (evidence.process === 'exited') {
+    if (evidence.exitCode !== undefined && evidence.exitCode !== 0)
+      return {
+        state: 'failed',
+        failure: {
+          reason: 'process_crashed',
+          evidence: 'exit',
+          retryable: true,
+          exitCode: evidence.exitCode,
+        },
+      };
+    return { state: 'ended' };
+  }
+  if (evidence.transport === 'lost' || evidence.process === 'uncertain')
+    return { state: 'disconnected' };
+  if (evidence.process !== 'live' || !evidence.firstFrame) return { state: 'starting' };
+  if (evidence.turn === 'running' || evidence.turn === 'waiting_for_user')
+    return { state: evidence.turn };
+  return { state: evidence.prompt ? 'ready' : 'unknown' };
+}
+
+export interface TerminalOpenCard extends PaneLifecycle {
+  /** Renderer correlation key, stable from submit through the native ACK. */
+  id: string;
+  workspaceId: string;
+  featureId: string | null;
+  targetFeatureId: string;
+  name: string;
+  provider: TerminalProvider;
+  terminalId?: string;
+}
+
+export function projectBatchOutcome(
+  card: TerminalOpenCard,
+  outcome: TerminalBatchItem | undefined,
+): TerminalOpenCard {
+  if (outcome?.status === 'accepted') return { ...card, terminalId: outcome.terminalId };
+  const evidence = outcome?.reason ?? 'opening_uncertain';
+  if (!outcome || outcome.effects !== 'not_started')
+    return {
+      ...card,
+      ...(outcome?.terminalId ? { terminalId: outcome.terminalId } : {}),
+      state: 'failed',
+      failure: { reason: 'opening_uncertain', evidence, retryable: false },
+    };
+  const reason =
+    evidence === 'catalog_changed' || evidence === 'context_changed'
+      ? 'catalog_changed'
+      : evidence === 'focus_required' || evidence === 'admission_invalid'
+        ? 'native_authority_refused'
+        : 'open_refused';
+  return { ...card, state: 'failed', failure: { reason, evidence, retryable: true } };
+}
+
+export interface EndedTerminal {
+  terminalId: string;
+  displayId?: string;
+  name?: string;
+  provider?: TerminalProvider;
+  exitedAt?: number;
+  disposition: 'exit_confirmed' | 'kernel_absent' | 'uncertain';
+  released?: boolean;
+}
+
+/** A closed UI, absent slot or persisted member ID has no process-authority implications. */
+export function reconcileEndedTerminals(
+  saved: readonly EndedTerminal[],
+  connectedTerminalIds: ReadonlySet<string>,
+): EndedTerminal[] {
+  return saved.filter(({ terminalId }) => !connectedTerminalIds.has(terminalId));
+}

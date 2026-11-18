@@ -1,3 +1,4 @@
+import type { PaneLifecycle, PaneLifecycleState } from './terminal-lifecycle';
 import {
   useCallback,
   useEffect,
@@ -85,15 +86,7 @@ import './mention-composer.css';
 import './pane-menu.css';
 
 export type TerminalProvider = 'codex' | 'claude' | 'opencode' | 'antigravity' | 'shell';
-export type PaneCardState =
-  | 'starting'
-  | 'ready'
-  | 'running'
-  | 'waiting_for_user'
-  | 'unknown'
-  | 'failed'
-  | 'disconnected'
-  | 'ended';
+export type PaneCardState = PaneLifecycleState;
 export type TerminalStatus = PaneCardState | 'completed' | 'interrupted';
 
 export interface StudioTerminal {
@@ -111,6 +104,8 @@ export interface StudioTerminal {
   status: TerminalStatus;
   /** Product card state, supplied independently from the observed agent turn. */
   cardState?: PaneCardState;
+  lifecycle?: PaneLifecycle;
+  correlationId?: string;
   cwd?: string;
   sessionId?: string;
   activity?: ReadonlyArray<{ at: number; label: string }>;
@@ -210,6 +205,7 @@ interface Props {
   toolbarScopes?: ReactNode;
   /** Host controls shown just before New terminal (e.g. account limits). */
   toolbarEnd?: ReactNode;
+  dockEnd?: ReactNode;
   /** CLI accounts available for switching. */
   accounts?: AccountOption[];
   /** Actions the host can perform today; others are shown disabled. */
@@ -440,6 +436,7 @@ export function FeatureStudioStage({
   showToolbar = true,
   toolbarScopes,
   toolbarEnd,
+  dockEnd,
   emptyHint,
 }: Props) {
   const { t } = useTranslation();
@@ -1359,7 +1356,7 @@ export function FeatureStudioStage({
             .join(' ');
           return (
             <PaneCard
-              key={pane.id}
+              key={terminal.correlationId ?? pane.id}
               className={classes}
               style={{
                 transform: `translate(${rect.x}px, ${rect.y}px)`,
@@ -1375,7 +1372,7 @@ export function FeatureStudioStage({
                 if (canonical) setActivePane(pane.id);
               }}
               terminal={terminal}
-              state={terminal.cardState}
+              lifecycle={terminal.lifecycle}
               canonical={canonical}
               orchestrator={state.orchestrator === pane.id}
               statusIcon={<StatusIcon status={terminal.status} />}
@@ -1709,23 +1706,10 @@ export function FeatureStudioStage({
                   );
                 })()}
               {pane.compact ? null : (
-                <div
-                  className="ts-body"
-                  data-terminal-id={pane.id}
-                  data-native-suspended={
-                    canonical && terminal.cardState === 'starting' ? '' : undefined
-                  }
-                >
+                <div className="ts-body" data-terminal-id={pane.id}>
                   {endingTerminal === terminal.id ? (
                     <span className="ts-starting" role="status">
                       {t('studio.pane.ending')}
-                    </span>
-                  ) : canonical && terminal.cardState === 'starting' ? (
-                    <span className="ts-starting" role="status">
-                      <span className="ts-spinner" aria-hidden="true" />
-                      {t('studio.pane.startingCli', {
-                        cli: t(`terminalStudio.providers.${terminal.provider}`),
-                      })}
                     </span>
                   ) : (
                     renderBody(terminal)
@@ -2011,6 +1995,7 @@ export function FeatureStudioStage({
           ))}
         </div>
       </footer>
+      {dockEnd}
       {details && byId.get(details) && (
         <TerminalDetails terminal={byId.get(details)!} onClose={() => setDetails(null)} />
       )}

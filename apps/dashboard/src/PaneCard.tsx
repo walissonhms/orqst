@@ -1,10 +1,11 @@
+import type { PaneLifecycle } from './terminal-lifecycle';
 import type { ComponentProps, PointerEventHandler, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { PaneCardState, StudioTerminal } from './FeatureStudioStage';
+import type { StudioTerminal } from './FeatureStudioStage';
 
 interface Props extends ComponentProps<'article'> {
   terminal: StudioTerminal;
-  state?: PaneCardState;
+  lifecycle?: PaneLifecycle;
   canonical: boolean;
   orchestrator: boolean;
   statusIcon: ReactNode;
@@ -17,7 +18,7 @@ interface Props extends ComponentProps<'article'> {
 /** React owns the card chrome. The body can host a retained native PTY. */
 export function PaneCard({
   terminal,
-  state = 'unknown',
+  lifecycle,
   canonical,
   orchestrator,
   statusIcon,
@@ -30,7 +31,8 @@ export function PaneCard({
 }: Props) {
   const { t, i18n } = useTranslation();
   const provider = t(`terminalStudio.providers.${terminal.provider}`);
-  const stateText = t(`studio.pane.state.${state}`);
+  const state = lifecycle?.state ?? terminal.cardState ?? 'unknown';
+  const stateText = t(`paneLifecycle.state.${state}`);
   const description = [
     terminal.alias && `@${terminal.alias.replace(/^@/, '')}`,
     terminal.model,
@@ -44,7 +46,7 @@ export function PaneCard({
     terminal.name.replace(/^@/, '').toLowerCase() !== terminal.label.toLowerCase();
 
   return (
-    <article {...article}>
+    <article {...article} data-lifecycle={state}>
       <div
         className="ts-head"
         onPointerDown={onHeaderPointerDown}

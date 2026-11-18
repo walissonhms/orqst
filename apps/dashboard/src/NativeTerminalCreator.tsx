@@ -15,7 +15,15 @@ import {
   type TerminalRequest,
 } from './NewTerminalDialog.js';
 import { Modal } from './Modal.js';
+import { SavedTerminalList } from './SavedTerminalList.js';
 import { catalogModelId, dialogCatalog } from './native-terminal-catalog.js';
+import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catalog-cache.js';
+import {
+  hasTerminalLifecycleConsumer,
+  registerTerminalOpens,
+  finishTerminalOpens,
+  consumeTerminalRetry,
+} from './use-terminal-lifecycle.js';
 
 type Native = TauriStudio;
 type Entry = TerminalPreparationCatalog['providers'][number];
@@ -45,6 +53,7 @@ interface Props {
   workspace: { id: string; name: string };
   featureId: string | null;
   featureName?: string;
+  reopenTerminalId?: string;
   /** Open the previous detailed form (MCP pair, path review). */
   onAdvanced?: () => void;
   /** A possible native start owns presentation when the dialog closes. */
@@ -59,6 +68,7 @@ export function NativeTerminalCreator({
   workspace,
   featureId,
   featureName,
+  reopenTerminalId,
   onAdvanced,
   onClose,
 }: Props) {
@@ -74,62 +84,73 @@ export function NativeTerminalCreator({
   const [failure, setFailure] = useState<TerminalPreparationFailure>();
   const opening = useRef(false);
   const requestId = useRef(0);
+  const [retry] = useState(() => consumeTerminalRetry(workspace.id, featureId));
 
-  const load = useCallback(async () => {
-    if (opening.current) return;
-    const current = ++requestId.current;
-    setSelection(undefined);
-    setFailure(undefined);
-    setState('loading');
-    try {
-      const reply = await native.request({
-        action: 'catalog',
-        workspaceId: workspace.id,
-        featureId,
-      });
-      if (current !== requestId.current) return;
-      if (
-        reply.status === 'catalog' &&
-        reply.catalog.workspaceId === workspace.id &&
-        reply.catalog.featureId === featureId &&
-        reply.snapshot
-      ) {
-        // Catalog and snapshot are one native admission generation.
-        setSelection({ catalog: reply.catalog, snapshot: reply.snapshot });
-        setState('ready');
-        return;
+  const load = useCallback(
+    async (force = false) => {
+      if (opening.current) return;
+      const current = ++requestId.current;
+      setSelection(undefined);
+      setFailure(undefined);
+      setResults([]);
+      setState('loading');
+      try {
+        const reply = await loadTerminalCatalog(
+          native,
+          { workspaceId: workspace.id, featureId },
+          force,
+        );
+        if (current !== requestId.current) return;
+        if (
+          reply.status === 'catalog' &&
+          reply.catalog.workspaceId === workspace.id &&
+          reply.catalog.featureId === featureId &&
+          reply.snapshot
+        ) {
+          // Catalog and snapshot are one native admission generation.
+          setSelection({ catalog: reply.catalog, snapshot: reply.snapshot });
+          setState('ready');
+          return;
+        }
+        setMessage(
+          t(
+            reply.status === 'catalog'
+              ? 'studio.create.catalogUnverified'
+              : reply.status === 'denied' || reply.status === 'ok'
+                ? 'studio.tauri.denied'
+                : reply.status === 'batch'
+                  ? 'studio.unavailable'
+                  : `studio.${reply.status}`,
+          ),
+        );
+      } catch {
+        if (current !== requestId.current) return;
+        setMessage(t('studio.unavailable'));
       }
-      setMessage(
-        t(
-          reply.status === 'catalog'
-            ? 'studio.create.catalogUnverified'
-            : reply.status === 'denied' || reply.status === 'ok'
-              ? 'studio.tauri.denied'
-              : reply.status === 'batch'
-                ? 'studio.unavailable'
-                : `studio.${reply.status}`,
-        ),
-      );
-    } catch {
-      if (current !== requestId.current) return;
-      setMessage(t('studio.unavailable'));
-    }
-    setState('error');
-  }, [native, workspace.id, featureId, t]);
+      setState('error');
+    },
+    [native, workspace.id, featureId, t],
+  );
 
   useEffect(() => {
-    void load();
+    void load(!!retry);
     return () => {
       requestId.current++;
     };
-  }, [load]);
+  }, [load, retry]);
 
   const catalog = selection?.catalog;
   const snapshot = selection?.snapshot;
   const capacity =
-    snapshot?.canCreate && !snapshot.busy ? Math.max(0, snapshot.limit - snapshot.count) : 0;
+    snapshot?.canCreate && !snapshot.busy
+      ? Math.max(
+          0,
+          snapshot.limit -
+            Math.max(snapshot.count, catalog?.restoredFeature?.terminalIds.length ?? 0),
+        )
+      : 0;
 
-  const open = async (requests: TerminalRequest[]) => {
+  const open = async (requests: TerminalRequest[], reopenTerminalId?: string) => {
     if (
       opening.current ||
       state !== 'ready' ||
@@ -138,7 +159,12 @@ export function NativeTerminalCreator({
       catalog.workspaceId !== workspace.id ||
       catalog.featureId !== featureId ||
       requests.length === 0 ||
-      requests.length > capacity
+      requests.length >
+        (reopenTerminalId
+          ? snapshot.canCreate && !snapshot.busy
+            ? snapshot.limit - snapshot.count
+            : 0
+          : capacity)
     )
       return;
     const counts = new Map<string, number>();
@@ -148,11 +174,11 @@ export function NativeTerminalCreator({
       counts.set(request.provider, n);
       return {
         request,
-        id: crypto.randomUUID(),
+        id: requests.length === 1 && retry ? retry.id : crypto.randomUUID(),
         workspaceId: request.workspaceId,
         provider: request.provider as Entry['provider'],
         entry,
-        modelId: request.model === null ? null : catalogModelId(entry, request.model),
+        modelId: catalogModelId(entry, request.model),
         name: request.name || `${t(`terminalStudio.providers.${request.provider}`)} ${n}`,
       };
     });
@@ -176,13 +202,31 @@ export function NativeTerminalCreator({
       reason: 'opening_uncertain',
       effects: 'possible',
     });
+    const publishCards = hasTerminalLifecycleConsumer();
+    const targetFeatureId =
+      catalog.restoredFeature?.featureId ?? featureId ?? defaultFeatureId(workspace.id);
+    const ids = new Set(items.map(({ id }) => id));
+    if (publishCards)
+      registerTerminalOpens(
+        items.map(({ id, workspaceId, provider, name }) => ({
+          id,
+          workspaceId,
+          provider,
+          name,
+          featureId,
+          targetFeatureId,
+          state: 'starting',
+        })),
+      );
     try {
-      const reply = await native.request({
+      // Dispatch while the submit gesture is active. The enrollment reply does not gate rendering.
+      const pending = native.request({
         action: 'create-batch',
         generation: snapshot.generation,
         workspaceId: workspace.id,
-        featureId,
+        featureId: catalog.restoredFeature?.featureId ?? featureId,
         catalogId: catalog.catalogId,
+        ...(reopenTerminalId ? { reopenTerminalId } : {}),
         requests: items.map(({ id, workspaceId, provider, modelId, name }) => ({
           id,
           workspaceId,
@@ -191,6 +235,30 @@ export function NativeTerminalCreator({
           name,
         })),
       });
+      if (publishCards) onClose(true);
+      const reply = await pending;
+      invalidateTerminalCatalog(native, { workspaceId: workspace.id, featureId });
+      if (publishCards && reply.status !== 'batch') {
+        const refusal =
+          reply.status === 'focus_required' || reply.status === 'busy'
+            ? reply.status
+            : reply.status === 'denied' && reply.failure?.effects !== 'possible'
+              ? 'admission_invalid'
+              : undefined;
+        finishTerminalOpens(
+          ids,
+          refusal
+            ? items.map(({ id }) => ({
+                id,
+                status: 'refused',
+                reason: refusal,
+                effects: 'not_started',
+              }))
+            : [],
+        );
+        return;
+      }
+      if (publishCards && reply.status === 'batch') finishTerminalOpens(ids, reply.items);
       if (reply.status !== 'batch') {
         const details = reply.status === 'catalog' ? undefined : reply.failure;
         if (
@@ -212,7 +280,7 @@ export function NativeTerminalCreator({
         ...(reply.items.find((result) => result.id === id) ?? unknownItem(id)),
         name,
       }));
-      setResults(outcomes);
+      if (!publishCards) setResults(outcomes);
       // The orchestrator label needs the new terminal ID; it grants nothing.
       const lead = outcomes.find(
         (result) =>
@@ -221,17 +289,85 @@ export function NativeTerminalCreator({
           items.find((item) => item.id === result.id)?.request.orchestrator,
       );
       if (lead?.terminalId)
-        void labelOrchestrator(featureId ?? defaultFeatureId(workspace.id), lead.terminalId);
-      setState('done');
-      // Every terminal opened: go back to the live terminal views. Refusals keep the dialog
+        void labelOrchestrator(
+          catalog.restoredFeature?.featureId ?? featureId ?? defaultFeatureId(workspace.id),
+          lead.terminalId,
+        );
+      if (!publishCards) setState('done');
+      // Every terminal enrolled: go back to the managed terminal views. Refusals keep the dialog
       // open with their reasons.
-      if (outcomes.every((result) => result.status === 'accepted')) onClose(true);
+      if (!publishCards && outcomes.every((result) => result.status === 'accepted')) onClose(true);
     } catch {
+      if (publishCards) {
+        finishTerminalOpens(ids, []);
+        return;
+      }
       setResults(items.map(({ id, name }) => ({ ...unknownItem(id), name })));
       setState('done');
     } finally {
       opening.current = false;
     }
+  };
+
+  const remove = async (terminalId: string) => {
+    const restored = catalog?.restoredFeature;
+    if (
+      opening.current ||
+      !snapshot ||
+      !catalog ||
+      !restored ||
+      !restored.terminalDisplays?.some((entry) => entry.terminalId === terminalId && entry.released)
+    )
+      return;
+    opening.current = true;
+    try {
+      const reply = await native.request({
+        action: 'remove-terminal',
+        generation: snapshot.generation,
+        catalogId: catalog.catalogId,
+        workspaceId: workspace.id,
+        featureId: restored.featureId,
+        terminalId,
+      });
+      if (reply.status === 'ok') {
+        opening.current = false;
+        await load(true);
+        return;
+      }
+      setFailure(
+        reply.status === 'catalog' || reply.status === 'batch' ? undefined : reply.failure,
+      );
+      setMessage(t('paneLifecycle.removalUnconfirmed'));
+      setState('error');
+    } catch {
+      setFailure(undefined);
+      setMessage(t('paneLifecycle.removalUnconfirmed'));
+      setState('error');
+    } finally {
+      opening.current = false;
+    }
+  };
+
+  const reopen = (terminalId: string) => {
+    const member = catalog?.reopenable?.find((entry) => entry.terminalId === terminalId);
+    if (!member) {
+      setMessage(t('paneLifecycle.reopenBlocked'));
+      setState('error');
+      return;
+    }
+    void open(
+      [
+        {
+          workspaceId: workspace.id,
+          provider: member.provider,
+          model: member.modelId,
+          name: member.name,
+          accountId: null,
+          orchestrator: false,
+        },
+      ],
+      terminalId,
+    );
   };
 
   const cancel = () => {
@@ -242,12 +378,58 @@ export function NativeTerminalCreator({
     }
   };
   const form = (state === 'ready' || state === 'opening') && catalog;
+  const reopenTarget =
+    reopenTerminalId &&
+    catalog?.reopenable?.find(({ terminalId }) => terminalId === reopenTerminalId);
+  const savedMembers =
+    form &&
+    (catalog.restoredFeature?.terminalIds.map((id) => {
+      const display = catalog.restoredFeature?.terminalDisplays?.find(
+        ({ terminalId }) => terminalId === id,
+      );
+      const reopen = catalog.reopenable?.find(({ terminalId }) => terminalId === id);
+      return {
+        id,
+        provider: reopen?.provider,
+        name: reopen?.name,
+        closed: !!display?.released,
+        confirmedExit: !!display?.released,
+        displayId: display?.displayId,
+        released: display?.released,
+      };
+    }) ??
+      catalog.reopenable?.map(({ terminalId, provider, name, displayId }) => ({
+        id: terminalId,
+        provider,
+        name,
+        displayId,
+        closed: true,
+        confirmedExit: true,
+        released: true,
+      })) ??
+      []);
   const choices = catalog
     ? dialogCatalog(catalog, (reason) => t(`terminalStudio.create.reason_${reason}`))
     : [];
+  const canRefresh =
+    (state === 'error' && failure?.effects !== 'possible') ||
+    (state === 'done' &&
+      results.every((result) => result.effects === 'not_started') &&
+      results.some(({ reason }) =>
+        ['catalog_changed', 'context_changed', 'selection_unavailable'].includes(reason),
+      ));
   const title = t('terminalStudio.create.title');
   return (
     <Modal label={title} className={batch && form ? 'ntd' : 'ntd ntd-compact'} onClose={cancel}>
+      {reopenTarget && (
+        <button
+          type="button"
+          disabled={state !== 'ready'}
+          onClick={() => reopen(reopenTarget.terminalId)}
+        >
+          {t('paneLifecycle.reopen')} {reopenTarget.displayId} · {reopenTarget.name}
+        </button>
+      )}
       {form ? (
         batch ? (
           <NewTerminalDialog
@@ -266,6 +448,7 @@ export function NativeTerminalCreator({
         ) : (
           <CompactTerminalForm
             catalog={choices}
+            initial={retry}
             workspace={workspace}
             featureName={
               featureName ?? (featureId === null ? t('features.defaultName') : undefined)
@@ -325,8 +508,8 @@ export function NativeTerminalCreator({
                 {t('terminalStudio.create.advanced')}
               </button>
             )}
-            {state === 'error' && failure?.effects !== 'possible' && (
-              <button type="button" className="ntd-secondary" onClick={() => void load()}>
+            {canRefresh && (
+              <button type="button" className="ntd-secondary" onClick={() => void load(true)}>
                 {t('studio.refresh')}
               </button>
             )}
@@ -334,6 +517,29 @@ export function NativeTerminalCreator({
               {t('terminalStudio.mention.close')}
             </button>
           </footer>
+        </div>
+      )}
+      {form && savedMembers && (!!savedMembers.length || !!catalog.pendingOwnedExits?.length) && (
+        <div className="ntd-history">
+          <SavedTerminalList
+            members={savedMembers}
+            onRemove={
+              catalog.restoredFeature && state === 'ready' && !snapshot?.busy
+                ? (id) => void remove(id)
+                : undefined
+            }
+            onReopen={
+              state === 'ready' &&
+              snapshot?.canCreate &&
+              !snapshot.busy &&
+              snapshot.count < snapshot.limit
+                ? reopen
+                : undefined
+            }
+          />
+          {!!catalog.pendingOwnedExits?.length && (
+            <p role="status">{t('tauriPreparation.code_owned_exit_pending')}</p>
+          )}
         </div>
       )}
     </Modal>

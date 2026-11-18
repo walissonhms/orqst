@@ -62,6 +62,21 @@ impl FeatureContext {
         })
     }
 
+    pub fn record_terminal_release(&self, slot: usize, manifest: &str, epoch: &str) -> Result<()> {
+        let terminal_id = self.terminal_ids.get(slot).ok_or_else(|| refused("Unknown released slot"))?;
+        self.with(|db| Features::open(db, &self.env)?.record_terminal_release(
+            &self.workspace_id, terminal_id, manifest, epoch,
+        ))
+    }
+
+    pub fn remove_terminal(
+        &self, feature_id: &str, terminal_id: &str, expected_revision: u64
+    ) -> Result<WorkspaceFeature> {
+        self.with(|db| Features::open(db, &self.env)?.remove_released_terminal(
+            &self.workspace_id, feature_id, terminal_id, expected_revision,
+        ))
+    }
+
     pub fn read_view(&self) -> Result<FeatureViewState> {
         self.with(|db| Features::open(db, &self.env)?.read_view(&self.workspace_id))
     }
@@ -209,6 +224,7 @@ pub const FEATURE_KINDS: &[&str] = &[
     "featureCreate",
     "featureUpdate",
     "featureAssign",
+    "featureRemoveTerminal",
     "featurePermissionsRead",
     "featurePermissionsSave",
     "featureTeamRead",
@@ -260,6 +276,7 @@ pub fn dispatch(ctx: &FeatureContext, request: &Value) -> Result<Option<String>>
         }
         "featureUpdate" | "featureTeamSave" => &["featureId", "input"],
         "featureAssign" => &["featureId", "slot", "expectedRevision"],
+        "featureRemoveTerminal" => &["featureId", "terminalId", "expectedRevision"],
         "featurePermissionsSave" => &["featureId", "actorId", "input"],
         "featureLayoutSave" => &["featureId", "record"],
         "layoutSave" | "layoutImport" => &["record"],
@@ -279,6 +296,12 @@ pub fn dispatch(ctx: &FeatureContext, request: &Value) -> Result<Option<String>>
         "featureUpdate" => {
             let id = feature_id()?;
             some(ctx.update(&id, &FeatureUpdate::parse(field(map, "input")?)?))
+        }
+        "featureRemoveTerminal" => {
+            let expected = field(map, "expectedRevision")?.as_u64()
+                .filter(|revision| (1..=MAX_SAFE).contains(revision))
+                .ok_or_else(|| invalid("Invalid removal revision"))?;
+            some(ctx.remove_terminal(&feature_id()?, &uuid_field(map, "terminalId")?, expected))
         }
         "featureAssign" => {
             let id = feature_id()?;

@@ -132,7 +132,10 @@ async function start() {
             return [
               {
                 terminalId: member.terminalId,
-                alias: `T-${String(slot + 1).padStart(3, '0')}`,
+                alias:
+                  owner[0]?.terminalDisplays?.find(
+                    ({ terminalId }) => terminalId === member.terminalId,
+                  )?.displayId ?? `T-${String(slot + 1).padStart(3, '0')}`,
                 name: hubNames[member.provider] ?? member.provider,
                 provider: member.provider,
                 featureId: owner.length === 1 ? owner[0]!.featureId : null,
@@ -297,6 +300,18 @@ async function start() {
       if (process.connected) process.disconnect();
     }
     process.on('disconnect', shutdown);
+    function recordTerminalRelease(slot: number) {
+      hubSlots[slot] = undefined;
+      mcp?.invalidate();
+      const member = selection[slot];
+      const manifest = files[slot];
+      if (!member || !manifest) throw new Error('Released terminal binding missing');
+      features().recordTerminalRelease(
+        terminalIdentity(member.config).terminalId,
+        manifest,
+        authority.epoch,
+      );
+    }
     process.on('message', (raw: unknown) => {
       if (closed) return;
       const parsed = terminalPairRPCSchema.safeParse(raw);
@@ -468,6 +483,13 @@ async function start() {
           case 'featureUpdate':
             value = features().update(request.featureId, request.input);
             break;
+          case 'featureRemoveTerminal':
+            value = features().removeReleasedTerminal(
+              request.featureId,
+              request.terminalId,
+              request.expectedRevision,
+            );
+            break;
           case 'featureAssign': {
             const selected = selection[request.slot];
             if (!selected) throw new Error('Unknown reviewed terminal');
@@ -536,9 +558,8 @@ async function start() {
           case 'releaseOwnedSlot': {
             value = pair.releaseOwnedSlot(request.slot);
             const releasedMember = hubSlots[request.slot];
-            hubSlots[request.slot] = undefined;
             if (releasedMember) hub?.forget(releasedMember.terminalId);
-            mcp?.invalidate();
+            recordTerminalRelease(request.slot);
             break;
           }
           case 'beginOwnedShutdown':
@@ -583,6 +604,13 @@ async function start() {
             if (selection.some(({ config }) => config.version === 3))
               throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
             pair.retire(request.proof);
+            for (const slot of selection.keys()) {
+              try {
+                recordTerminalRelease(slot);
+              } catch {
+                process.stderr.write('ORQST_FEATURE_RELEASE metadata unconfirmed\n');
+              }
+            }
             void mcp?.close();
             break;
           case 'prepareMcp':

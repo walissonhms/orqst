@@ -1566,6 +1566,86 @@ async function batchFixture(f: ReturnType<typeof fixture>, count = 3) {
   return { request, features, feature };
 }
 
+test('cold catalog restores the saved Feature and binds Open to its exact scope', async () => {
+  const f = fixture();
+  try {
+    const { request, features, feature } = await batchFixture(f, 1);
+    const savedId = randomUUID();
+    features.assignTerminal(feature.featureId, savedId, feature.revision);
+    const catalog = await prepareTauriTerminals(
+      { action: 'catalog', workspaceId: f.workspaceId, featureId: null },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(catalog.status, 'catalog');
+    assert.equal(catalog.catalog.featureId, null);
+    assert.deepEqual(catalog.catalog.restoredFeature, {
+      featureId: feature.featureId,
+      name: feature.name,
+      terminalIds: [savedId],
+    });
+    const result = await prepareTauriTerminals(
+      { ...request, catalogId: catalog.catalog.catalogId },
+      f.context,
+      f.ports,
+      Date.now,
+      f.trusted,
+    );
+    assert.equal(result.status, 'batch');
+    assert.equal(result.items[0]?.status, 'prepared');
+    assert.deepEqual(features.read(feature.featureId).terminalIds, [
+      savedId,
+      result.items[0]?.terminalId,
+    ]);
+  } finally {
+    f.close();
+  }
+});
+
+test('the batch reopens a fenced saved member using its same displayed identity and selected model', async () => {
+  const f = fixture();
+  try {
+    const { request, features, feature } = await batchFixture(f, 1);
+    const run = (input: unknown) =>
+      prepareTauriTerminals(input, f.context, f.ports, Date.now, f.trusted);
+    const prepared = await run(request);
+    assert.equal(prepared.status, 'batch');
+    const old = prepared.items[0]!;
+    assert.equal(old.status, 'prepared');
+    const terminalId = old.terminalId!;
+    const file = old.file!;
+    const original = readFileSync(file, 'utf8');
+    const scope = { workspaceId: request.workspaceId, featureId: request.featureId };
+    const beforeRelease = await run({ action: 'catalog', ...scope });
+    assert.equal(beforeRelease.status, 'catalog');
+    assert.equal(beforeRelease.catalog.reopenable, undefined);
+    features.recordTerminalRelease(terminalId, file, randomUUID());
+    const catalog = await run({ action: 'catalog', ...scope });
+    assert.equal(catalog.status, 'catalog');
+    const released = catalog.catalog.reopenable?.[0];
+    assert.equal(released?.terminalId, terminalId);
+    assert.equal(released?.displayId, 'T-001');
+    const reopened = await run({
+      ...request,
+      catalogId: catalog.catalog.catalogId,
+      reopenTerminalId: terminalId,
+      requests: [{ ...request.requests[0], id: randomUUID(), modelId: released!.modelId }],
+    });
+    assert.equal(reopened.status, 'batch');
+    const replacement = reopened.items[0]!;
+    assert.equal(replacement.status, 'prepared');
+    assert.notEqual(replacement.terminalId, terminalId);
+    assert.deepEqual(features.read(feature.featureId).terminalDisplays, [
+      { terminalId: replacement.terminalId, displayId: 'T-001' },
+    ]);
+    assert.equal(readFileSync(file, 'utf8'), original);
+  } finally {
+    f.close();
+  }
+});
+
 test('batch prepares eight independent owned manifests without dialogs and with one commit', async () => {
   const f = fixture();
   try {

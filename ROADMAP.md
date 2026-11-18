@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Studio terminal availability
+
+The scoped picker and saved-member view cover cold Feature recovery. Synthetic
+benchmarks cover batch preparation. The remaining owner check is a signed Preview
+trace through PTY and provider readiness. See the
+[opening and availability contract](docs/development/diag25-terminal-availability.md).
+
 ## V6 Studio shell and pane integration — 2026-11-18
 
 The staging renderer combines Feature navigation, reviewed creation, scoped

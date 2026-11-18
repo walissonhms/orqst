@@ -1,5 +1,10 @@
 # V6 feature delivery checklist — 2026-11-04
 
+Saved Feature membership is rendered as history when no matching live slot is
+connected. View dismissal and fresh opening are available through the
+[Studio terminal picker](../development/diag25-terminal-availability.md).
+Native provider acceptance is pending.
+
 ## Integrated Studio shell and panes — 2026-11-18
 
 - [x] One 45 px breadcrumb/action row, with a 155 px tree at the audited sizes.

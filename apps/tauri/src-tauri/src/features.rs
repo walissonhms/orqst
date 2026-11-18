@@ -232,6 +232,12 @@ pub(crate) fn valid_request(value: &Value) -> bool {
                     || value["input"]["orchestratorTerminalId"].is_null()
                     || uuid(&value["input"]["orchestratorTerminalId"]))
         }
+        Some("removeTerminal") => {
+            exact(value, &["contractVersion", "generation", "action", "featureId", "terminalId", "expectedRevision"])
+                && uuid(&value["featureId"])
+                && uuid(&value["terminalId"])
+                && safe(&value["expectedRevision"]).is_some_and(|n| n > 0)
+        }
         Some("assign") => {
             exact(
                 value,
@@ -646,6 +652,31 @@ pub(crate) fn workspace_id(value: &Value) -> bool {
                 .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
     })
 }
+pub(crate) fn terminal_display_id(value: &Value) -> bool {
+    value.as_str().and_then(|id| id.strip_prefix("T-")).is_some_and(|digits| {
+        (3..=5).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit())
+    })
+}
+
+pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
+    value.get("terminalDisplays").is_none_or(|displays| {
+        displays.as_array().is_some_and(|displays| {
+            value["terminalIds"].as_array().is_some_and(|ids| {
+                displays.len() == ids.len()
+                    && displays.iter().zip(ids).all(|(display, id)| {
+                        (exact(display, &["terminalId", "displayId"])
+                            || (exact(display, &["terminalId", "displayId", "released"])
+                                && display["released"] == true))
+                            && &display["terminalId"] == id
+                            && terminal_display_id(&display["displayId"])
+                    })
+                    && displays.iter().filter_map(|d| d["displayId"].as_str())
+                        .collect::<HashSet<_>>().len() == displays.len()
+            })
+        })
+    })
+}
+
 pub(crate) fn valid_snapshot(v: &Value) -> bool {
     if !exact(
         v,
@@ -707,9 +738,14 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
             "createdAt",
             "updatedAt",
         ];
-        let mut keys_with_label = base_keys.to_vec();
-        keys_with_label.push("orchestratorTerminalId");
-        if !(exact(f, &base_keys) || exact(f, &keys_with_label))
+        if !f.as_object().is_some_and(|fields| {
+            base_keys.iter().all(|key| fields.contains_key(*key))
+                && fields.keys().all(|key| {
+                    base_keys.contains(&key.as_str())
+                        || matches!(key.as_str(), "orchestratorTerminalId" | "terminalDisplays")
+                })
+        })
+            || !valid_terminal_displays(f)
             || (f.get("orchestratorTerminalId").is_some()
                 && !(f["orchestratorTerminalId"].is_null()
                     || (uuid(&f["orchestratorTerminalId"])
@@ -2546,6 +2582,44 @@ fn publish(app: &tauri::AppHandle, snapshot: &Value, presentation: u64, epoch: &
     }
     crate::terminal::publish_workspace_projection(app);
 }
+/// Bounded lifecycle facts from an accepted owned PTY reply. No output bytes cross documents.
+pub(crate) fn publish_terminal_lifecycle(
+    app: &tauri::AppHandle,
+    slot: usize,
+    epoch: &str,
+    presentation: u64,
+    evidence: &Value,
+) -> bool {
+    let terminal_id = {
+        let guard = app.state::<Features>();
+        let state = guard.0.lock().unwrap();
+        if !state.preparation_scope.as_ref().is_some_and(|(_, owner, revision)| {
+            owner == epoch && *revision == presentation
+        }) {
+            return false;
+        }
+        state.close_targets.get(&(slot as u64)).cloned()
+    };
+    let Some(terminal_id) = terminal_id else {
+        return false;
+    };
+    let detail = json!({"terminalId":terminal_id, "evidence":evidence});
+    let mut published = false;
+    for label in ["main", "feature-workspace"] {
+        if let Some(view) = app.get_webview(label) {
+            if identity(&view).is_some()
+                && !crate::terminal::presentation_blocked(app)
+                && crate::terminal::metadata_context(app) == Some((epoch.into(), presentation))
+            {
+                published |= view.eval(format!(
+                    "window.dispatchEvent(new CustomEvent('orqst-owned-pty-lifecycle',{{detail:{detail}}}));"
+                )).is_ok();
+            }
+        }
+    }
+    published
+}
+
 pub fn invalidate(app: &tauri::AppHandle, label: &str) {
     let state = app.state::<Features>();
     let mut guard = state.0.lock().unwrap();

@@ -59,12 +59,12 @@ export class TauriFeatureService {
     > & {
       features: Omit<
         Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'],
-        'communication' | 'inspector'
+        'communication' | 'inspector' | 'removeTerminal'
       > &
         Partial<
           Pick<
             Awaited<ReturnType<typeof connectManagedTerminalCore>>['features'],
-            'communication' | 'inspector'
+            'communication' | 'inspector' | 'removeTerminal'
           >
         >;
     },
@@ -363,6 +363,29 @@ export class TauriFeatureService {
           this.generation++;
           break;
         }
+        case 'removeTerminal': {
+          const feature = this.catalog.find(({ featureId }) => featureId === request.featureId);
+          if (
+            !feature ||
+            this.activeFeatureId !== request.featureId ||
+            !this.core.features.removeTerminal ||
+            !feature.terminalDisplays?.some(
+              (entry) => entry.terminalId === request.terminalId && entry.released,
+            )
+          )
+            return { status: 'denied' };
+          if (feature.revision !== request.expectedRevision)
+            return { status: 'stale', snapshot: this.snapshot() };
+          await this.layout.flush();
+          if (presentation !== this.layout.presentationRevision()) return { status: 'stale' };
+          await this.core.features.removeTerminal(
+            request.featureId,
+            request.terminalId,
+            request.expectedRevision,
+          );
+          this.generation++;
+          break;
+        }
         case 'assign': {
           const open = !this.layout.snapshot().suspended;
           if (!this.core.identities.some((identity) => identity.slot === request.slot))
@@ -482,6 +505,7 @@ export class TauriFeatureService {
             if (result !== 'ok') return { status: result };
             this.layout.releaseSlot(request.slot);
             this.generation++;
+            await this.refresh();
             const snapshot = this.snapshot();
             this.changed(snapshot);
             await this.present(
