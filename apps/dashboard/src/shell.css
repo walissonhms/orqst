@@ -432,11 +432,11 @@
   .sidebar-collapsed .brand-tagline,
   .sidebar-collapsed .sidebar-bottom,
   .sidebar-collapsed .nav-heading,
-  .sidebar-collapsed .workspace-link span,
-  .sidebar-collapsed .workspace-link small {
+  .sidebar-collapsed .sidebar .workspace-link span,
+  .sidebar-collapsed .sidebar .workspace-link small {
     display: none;
   }
-  .sidebar-collapsed .workspace-link {
+  .sidebar-collapsed .sidebar .workspace-link {
     justify-content: center;
     padding: 14px 0;
   }
@@ -1080,7 +1080,7 @@ button:disabled {
   }
 }
 
-/* Studio keeps preparation, review and process authority visually distinct. */
+/* The embedded Studio fills the space beneath the dashboard header. */
 .app-shell.studio-shell {
   position: fixed;
   inset: 0;
@@ -1088,11 +1088,10 @@ button:disabled {
   overflow: hidden;
 }
 .studio-shell > .sidebar,
-.studio-shell > .main-shell > .topbar,
 .studio-shell > .main-shell > .app-footer {
   display: none;
 }
-.studio-shell > .main-shell {
+.app-shell.studio-shell > .main-shell {
   margin-left: 0;
   display: flex;
   flex-direction: column;
@@ -1121,12 +1120,20 @@ button:disabled {
   min-height: 0;
   border: 0;
 }
-.studio-workspace .studio-overview {
+/* Compatibility for the embedded Feature workspace until its tree lands. The
+   standalone Feature document owns its own layout and native pane geometry. */
+.studio-workspace > .studio-immersive > .feature-sidebar {
+  display: block;
+}
+.studio-workspace > .studio-immersive > .feature-topbar {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 5px;
+}
+.studio-workspace > .studio-immersive > .feature-studio {
+  grid-column: 2;
+  grid-row: 2 / 5;
+}
+.studio-workspace > .feature-workspace :is(.studio-overview, .ts-panel-toggle) {
+  display: none;
 }
 .studio-workspace .feature-empty {
   min-height: 100%;

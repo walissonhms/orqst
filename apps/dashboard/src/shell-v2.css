@@ -192,6 +192,63 @@
   gap: 12px;
 }
 
+/* The same route links and controls stay in place on Desktop dashboard routes. */
+.managed-shell {
+  --orqst-topbar-height: 45px;
+}
+.managed-shell > .main-shell {
+  padding-top: var(--orqst-topbar-height);
+}
+.managed-shell > .sidebar {
+  top: var(--orqst-topbar-height);
+}
+.managed-shell .topbar {
+  position: fixed;
+  inset: 0 0 auto;
+  padding-inline: 12px;
+}
+.managed-shell .topbar-actions {
+  gap: 6px;
+  margin-inline-start: auto;
+}
+.studio-route-links {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+.studio-route-links .workspace-link {
+  width: auto;
+  gap: 5px;
+  padding: 6px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+@media (max-width: 850px) {
+  .studio-route-links .workspace-link span {
+    display: none;
+  }
+  .studio-route-links .workspace-link {
+    padding: 7px;
+  }
+}
+@media (max-width: 720px) {
+  .studio-shell .topbar > .breadcrumbs,
+  .managed-shell .topbar .language-select > svg,
+  .managed-shell .topbar .connection {
+    display: none;
+  }
+  .managed-shell .topbar {
+    height: var(--orqst-topbar-height);
+    flex-wrap: nowrap;
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .managed-shell .topbar .language-select {
+    display: flex;
+    padding-inline-start: 4px;
+  }
+}
+
 /* Page content */
 main {
   padding: 24px 28px calc(var(--orqst-statusbar-height) + 24px);

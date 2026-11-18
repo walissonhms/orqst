@@ -39,7 +39,11 @@ import type {
   StoredEvent,
   Usage,
 } from '@orqst/protocol';
-import { featurePreparationRequestSchema, type FeaturePreparationRequest } from '@orqst/protocol';
+import {
+  featureDisplayName,
+  featurePreparationRequestSchema,
+  type FeaturePreparationRequest,
+} from '@orqst/protocol';
 import { api } from './api';
 import { ArtifactLibrary } from './ArtifactLibrary';
 import { artifactSelection } from './artifact-library';
@@ -52,7 +56,13 @@ import { SessionTokenBadge } from './SessionTokenBadge';
 import { ModelAnalytics } from './ModelAnalytics';
 import { useObservatory } from './use-observatory';
 import { isSessionLocation, sessionFromLocation } from './session-link';
-import { DashboardHistory, viewFromLocation, viewPath } from './navigation';
+import {
+  DashboardHistory,
+  StudioShellContext,
+  viewFromLocation,
+  viewPath,
+  type StudioTreeProps,
+} from './navigation';
 import { NativeSessionNavigation } from './native-session-navigation';
 import { Agents } from './Agents';
 import { Studio } from './Studio';
@@ -72,6 +82,61 @@ import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
 import { isTemporaryWorkspace, shellSections, shortAge, STALE_MS } from './shell-sections';
 import { appViews, readShellPreferences, shellStorageKey, type AppView } from './shell-preferences';
+
+const viewIcons = {
+  overview: Activity,
+  studio: Terminal,
+  workspaces: Folder,
+  agents: Terminal,
+  models: BarChart3,
+  artifacts: FileText,
+  settings: Settings2,
+} satisfies Record<AppView, typeof Activity>;
+
+const studioRoutes: readonly AppView[] = ['overview', 'studio', 'workspaces', 'settings'];
+
+function RouteLinks({
+  views,
+  current,
+  onNavigate,
+  compact = false,
+}: {
+  views: readonly AppView[];
+  current: AppView;
+  onNavigate: (view: AppView) => void;
+  compact?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <nav
+      aria-label={t('analytics.navigation')}
+      className={compact ? 'studio-route-links' : undefined}
+    >
+      {views.map((view) => {
+        const Icon = viewIcons[view];
+        const label = t(`shell.views.${view}`);
+        return (
+          <a
+            key={view}
+            className={`workspace-link${view === current ? ' active' : ''}`}
+            href={viewPath(view)}
+            title={label}
+            aria-label={label}
+            aria-current={view === current ? 'page' : undefined}
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              onNavigate(view);
+            }}
+          >
+            <Icon size={16} aria-hidden="true" />
+            <span>{label}</span>
+          </a>
+        );
+      })}
+    </nav>
+  );
+}
 
 function useFormatting() {
   const { i18n } = useTranslation();
@@ -574,6 +639,21 @@ export function App() {
     };
   }, []);
   const featureShell = useFeatureShell();
+  const featureSnapshot = featureShell.snapshot;
+  const managedShell = window.orqstFeatures?.contractVersion === 1;
+  const managedStudio = managedShell && view === 'studio';
+  const managedFeature = featureSnapshot?.features.find(
+    (feature) => feature.featureId === featureSnapshot.activeFeatureId,
+  );
+  const studioScope = featureSnapshot
+    ? {
+        workspace: featureSnapshot.workspace,
+        featureId: featureSnapshot.activeFeatureId,
+        featureName: managedFeature
+          ? featureDisplayName(managedFeature, t('features.defaultName'))
+          : undefined,
+      }
+    : undefined;
   const [quitWait, setQuitWait] = useState<QuitBlocked | null>(null);
   const [quitFence, setQuitFence] = useState(false);
   const pendingSessionLink = useRef(isSessionLocation(location));
@@ -976,6 +1056,12 @@ export function App() {
       />
     </>
   );
+  const studioTree: StudioTreeProps = {
+    scope: studioScope,
+    observedWorkspaces: snapshot?.workspaces ?? [],
+    observedWorkspaceId: workspaceId,
+    onObservedWorkspaceChange: (id) => openWorkspace(id),
+  };
   const sideSections = shellSections(snapshot?.sessions ?? [], now);
   const overviewRunning = shellSections(sessions, now, Number.MAX_SAFE_INTEGER);
   const hiddenWorkspaces = snapshot
@@ -988,7 +1074,7 @@ export function App() {
     : 0;
   return (
     <div
-      className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${view === 'studio' && window.orqstFeatures?.contractVersion === 1 ? ' studio-shell' : ''}`}
+      className={`app-shell ${shell.collapsed ? 'sidebar-collapsed' : ''}${managedShell ? ' managed-shell' : ''}${managedStudio ? ' studio-shell' : ''}`}
     >
       <a
         className="skip-link"
@@ -1042,37 +1128,11 @@ export function App() {
             <kbd>⌘N</kbd>
           </button>
         </div>
-        <nav aria-label={t('analytics.navigation')}>
-          {appViews.map((page) => (
-            <a
-              key={page}
-              className={`workspace-link ${view === page ? 'active' : ''}`}
-              href={viewPath(page)}
-              title={t(`shell.views.${page}`)}
-              aria-label={t(`shell.views.${page}`)}
-              aria-current={view === page ? 'page' : undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                navigate(page);
-              }}
-            >
-              {page === 'settings' ? (
-                <Settings2 size={16} />
-              ) : page === 'models' ? (
-                <BarChart3 size={16} />
-              ) : page === 'workspaces' ? (
-                <Folder size={16} />
-              ) : page === 'artifacts' ? (
-                <FileText size={16} />
-              ) : page === 'agents' || page === 'studio' ? (
-                <Terminal size={16} />
-              ) : (
-                <Activity size={16} />
-              )}
-              <span>{t(`shell.views.${page}`)}</span>
-            </a>
-          ))}
-        </nav>
+        <RouteLinks
+          views={managedShell ? appViews.filter((page) => !studioRoutes.includes(page)) : appViews}
+          current={view}
+          onNavigate={navigate}
+        />
         {(
           [
             ['needsYou', sideSections.needsYou],
@@ -1219,40 +1279,34 @@ export function App() {
       </aside>
       <div className="main-shell">
         <header className="topbar">
+          {managedShell && (
+            <RouteLinks views={studioRoutes} current={view} onNavigate={navigate} compact />
+          )}
           <div className="breadcrumbs">
-            <button
-              ref={menuTrigger}
-              className="icon-button menu-toggle"
-              aria-label={t('workspaceNav')}
-              aria-controls="app-sidebar"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <Menu size={18} />
-            </button>
-            <Command size={15} />
-            <span>{currentWorkspace?.name ?? t('allWorkspaces')}</span>
-            <ChevronRight size={14} />
-            <strong>{t(`shell.views.${view}`)}</strong>
-            {featureShell.snapshot && (
-              <>
-                <ChevronRight size={14} />
-                <span>
-                  {featureShell.snapshot.features.find(
-                    (feature) => feature.featureId === featureShell.snapshot?.activeFeatureId,
-                  )?.name ?? t('features.unassigned')}
-                </span>
-                <ChevronRight size={14} />
-                <span>
-                  {t('features.terminalCount', {
-                    count:
-                      featureShell.snapshot.features.find(
-                        (feature) => feature.featureId === featureShell.snapshot?.activeFeatureId,
-                      )?.terminalIds.length ?? 0,
-                  })}
-                </span>
-              </>
+            {!managedStudio && (
+              <button
+                ref={menuTrigger}
+                className="icon-button menu-toggle"
+                aria-label={t('workspaceNav')}
+                aria-controls="app-sidebar"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen(!menuOpen)}
+              >
+                <Menu size={18} />
+              </button>
             )}
+            {!managedStudio && <Command size={15} aria-hidden="true" />}
+            <span>
+              {managedStudio
+                ? (studioScope?.workspace.name ?? currentWorkspace?.name ?? t('features.workspace'))
+                : (currentWorkspace?.name ?? t('allWorkspaces'))}
+            </span>
+            <ChevronRight size={14} aria-hidden="true" />
+            <strong>
+              {managedStudio && studioScope
+                ? (studioScope.featureName ?? t('features.unassigned'))
+                : t(`shell.views.${view}`)}
+            </strong>
           </div>
           <div className="topbar-actions">
             {window.orqstManagedAgents?.contractVersion === 1 && (
@@ -1291,13 +1345,15 @@ export function App() {
               <span className="tiny-dot" />
               {t(connection)}
             </span>
-            <button
-              className="icon-button"
-              aria-label={t('shell.views.settings')}
-              onClick={() => navigate('settings')}
-            >
-              <Settings2 size={17} />
-            </button>
+            {!managedShell && (
+              <button
+                className="icon-button"
+                aria-label={t('shell.views.settings')}
+                onClick={() => navigate('settings')}
+              >
+                <Settings2 size={17} />
+              </button>
+            )}
             <label className="language-select">
               <Globe2 size={14} />
               <select
@@ -1393,15 +1449,24 @@ export function App() {
           )}
 
           {view === 'studio' ? (
-            window.orqstFeatures?.contractVersion === 1 ? (
-              <StudioWorkspace
-                preparationRequest={preparationRequest}
-                onPreparationHandled={() => setPreparationRequest(undefined)}
-                onOverview={() => navigate('overview')}
-                workspaces={snapshot?.workspaces ?? []}
-                workspaceId={workspaceId}
-                onWorkspace={setWorkspaceId}
-              />
+            managedStudio ? (
+              <StudioShellContext.Provider
+                value={{
+                  tree: studioTree,
+                  navigate,
+                  openNotifications: () => setNotificationOpen(true),
+                  openSearch: () => setPaletteOpen(true),
+                }}
+              >
+                <StudioWorkspace
+                  preparationRequest={preparationRequest}
+                  onPreparationHandled={() => setPreparationRequest(undefined)}
+                  onOverview={() => navigate('overview')}
+                  workspaces={studioTree.observedWorkspaces}
+                  workspaceId={studioTree.observedWorkspaceId}
+                  onWorkspace={studioTree.onObservedWorkspaceChange}
+                />
+              </StudioShellContext.Provider>
             ) : (
               <Studio />
             )
@@ -1825,6 +1890,7 @@ export function App() {
       {paletteOpen && (
         <CommandPalette
           snapshot={snapshot}
+          studioScope={studioScope}
           onNavigate={navigate}
           onWorkspace={(id) => openWorkspace(id, 'overview')}
           onSession={openSession}

@@ -1,5 +1,35 @@
-import { dashboardSessionPathSchema } from '@orqst/protocol';
+import { createContext } from 'react';
+import {
+  dashboardSessionPathSchema,
+  type FeatureNativeSnapshot,
+  type Snapshot,
+} from '@orqst/protocol';
 import { appViews, viewFromHash, type AppView } from './shell-preferences';
+
+export interface StudioScope {
+  workspace: FeatureNativeSnapshot['workspace'];
+  featureId: FeatureNativeSnapshot['activeFeatureId'];
+  featureName?: string;
+}
+
+/** Managed scope is host evidence. Directory entries are observed Workspaces. */
+export interface StudioTreeProps {
+  scope?: StudioScope;
+  observedWorkspaces: readonly Pick<Snapshot['workspaces'][number], 'id' | 'name'>[];
+  observedWorkspaceId: string;
+  onObservedWorkspaceChange: (id: string) => void;
+}
+
+/** Dashboard chrome available to the embedded Feature tree and toolbar. */
+export interface StudioShellNavigation {
+  tree: StudioTreeProps;
+  navigate: (view: AppView, focusContent?: boolean) => void;
+  openNotifications: () => void;
+  openSearch: () => void;
+}
+
+// A standalone native Feature document uses its own host presentation.
+export const StudioShellContext = createContext<StudioShellNavigation | null>(null);
 
 export function viewFromLocation(
   location: Pick<Location, 'pathname' | 'hash'>,
