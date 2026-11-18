@@ -117,6 +117,18 @@ failures concern the narrow topbar language control and the sticky token
 popover. The language setting remains reachable through Settings. The token
 popover overlap and wider fixture maintenance remain outside this slice.
 
+A focused final Chromium run passed 7/7. It exercised all three alert categories,
+muted delivery, exact-event deduplication, reload, source navigation and the draft
+guard. It also covered mark-read retry, unread accessibility, offline and mobile
+states, the exact Tauri UA, and the single Overview action and 46 px sidebar at
+390 px. Captures include both supported languages. Compact sidebar text can still
+wrap on a narrow screen, with the terminal action visible.
+
+The source-only dashboard build completed with the existing Vite chunk-size
+advisory. The renderer capture used the production entry and showed zero page or
+console errors. This verification did not open the native Preview or build the
+Tauri app.
+
 ## Owner macOS acceptance
 
 Use an isolated matching package and disposable test Workspace.
