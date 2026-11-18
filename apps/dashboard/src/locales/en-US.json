@@ -1364,6 +1364,12 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "hide": "Hide from view",
+    "closeTerminal": {
+      "title": "Close terminal",
+      "label": "Close terminal {{terminal}}",
+      "message": "Closing this terminal ends its owned CLI process and may interrupt work. ORQST keeps the journal and exit evidence.",
+      "unconfirmed": "ORQST could not confirm that the terminal closed. Check its current state before trying again."
+    },
     "noActivity": "No activity evidence yet",
     "resizeSplit": "Resize terminals",
     "switchTerminal": "Switch terminal",

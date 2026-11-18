@@ -74,6 +74,7 @@ export class TauriFeatureService {
       read(): AccountLimits;
       update(id: string, locked: boolean): AccountLimits;
     },
+    private readonly terminateOwned?: (slot: number) => Promise<'ok' | 'busy' | 'unknown'>,
   ) {}
 
   private releaseBusy(): void {
@@ -107,8 +108,10 @@ export class TauriFeatureService {
     const feature = this.catalog.find((entry) => entry.featureId === featureId);
     if (featureId !== null && !feature) throw new Error('Feature view unavailable');
     const assigned = this.catalog.flatMap((entry) => entry.terminalIds);
-    const ids = this.core.identities.map((identity) => identity.terminalId);
-    const members = feature?.terminalIds ?? ids.filter((id) => !assigned.includes(id));
+    const ids = this.core.identities.map((identity) =>
+      this.layout.releasedSlot(identity.slot) ? '' : identity.terminalId,
+    );
+    const members = feature?.terminalIds ?? ids.filter((id) => id && !assigned.includes(id));
     await this.layout.flush();
     await this.revoke();
     if (feature) {
@@ -131,13 +134,14 @@ export class TauriFeatureService {
       );
     } else {
       // Legacy preferences are never imported into a Feature. Partial unassigned views stay ephemeral.
-      const initial = assigned.length ? undefined : await this.legacy.load();
+      const partial = assigned.length > 0 || ids.includes('');
+      const initial = partial ? undefined : await this.legacy.load();
       const mapping = featureLayout(ids, members, null);
       if (presentation !== this.layout.presentationRevision())
         throw new Error('Stale presentation');
       this.layout.context(
         initial ?? mapping.initial,
-        assigned.length ? () => {} : this.legacy.save,
+        partial ? () => {} : this.legacy.save,
         open,
         canvas,
       );
@@ -179,7 +183,7 @@ export class TauriFeatureService {
     const presentation = this.layout.presentationRevision();
     try {
       const identity = this.core.identities.find((entry) => entry.terminalId === terminalId);
-      if (!identity) return false;
+      if (!identity || this.layout.releasedSlot(identity.slot)) return false;
       await this.refresh();
       const owners = this.catalog.filter((feature) => feature.terminalIds.includes(terminalId));
       if (owners.length > 1 || owners.some((feature) => feature.status === 'archived'))
@@ -220,6 +224,7 @@ export class TauriFeatureService {
           provider,
           workspace: { id: this.view.workspaceId, name: basename(this.project) || this.project },
           agentState: 'unknown',
+          ...(this.layout.releasedSlot(slot) ? { closed: true as const } : {}),
           ...(selectedModel === undefined ? {} : { selectedModel }),
         };
       }),
@@ -233,7 +238,11 @@ export class TauriFeatureService {
     return value;
   }
 
-  async request(raw: unknown, actorId?: string): Promise<FeatureNativeReply> {
+  async request(
+    raw: unknown,
+    actorId?: string,
+    closeReviewed = false,
+  ): Promise<FeatureNativeReply> {
     const parsed = featureNativeRequestSchema
       .or(featurePermissionNativeRequestSchema)
       .safeParse(raw);
@@ -436,6 +445,24 @@ export class TauriFeatureService {
             !state.order.includes(request.slot)
           )
             return { status: 'denied' };
+          if (request.action === 'pane' && request.command === 'close') {
+            if (!closeReviewed || !this.terminateOwned) return { status: 'denied' };
+            const result = await this.terminateOwned(request.slot);
+            if (result !== 'ok') return { status: result };
+            this.layout.releaseSlot(request.slot);
+            this.generation++;
+            const snapshot = this.snapshot();
+            this.changed(snapshot);
+            await this.present(
+              this.activeFeatureId,
+              !state.suspended,
+              presentation,
+              state.canvas === true,
+            ).catch(() => {
+              // The close is committed. A later presentation will retry only the layout.
+            });
+            return { status: 'ok', snapshot };
+          }
           if (
             request.action === 'movePane' &&
             (this.core.identities[request.beforeSlot]?.terminalId !== request.beforeTerminalId ||

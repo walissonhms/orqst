@@ -599,3 +599,22 @@ test('Studio hides before arrange v2 and after native/context fences without los
   assert.equal(f.messages.at(-1)!.focus, null);
   assert.ok(f.revoked.includes(0));
 });
+
+test('hiding another pane preserves maximized focus and an exited slot cannot be restored', () => {
+  const f = fixture(3);
+  f.layout.open(0);
+  assert.equal(f.layout.workspaceAct(0, 'maximize'), true);
+  assert.equal(f.layout.workspaceAct(1, 'hide'), true);
+  assert.equal(f.layout.snapshot().active, 0);
+  assert.equal(f.layout.snapshot().maximized, 0);
+  const before = f.layout.snapshot();
+  f.layout.releaseSlot(1);
+  assert.equal(f.layout.releasedSlot(1), true);
+  assert.equal(f.layout.act(1, 'reopen', 0), false);
+  // Old saved metadata still carries the slot. A context round-trip cannot restore it.
+  f.layout.context(before, () => {});
+  assert.deepEqual(f.layout.snapshot().order, [0, 2]);
+  assert.equal(f.layout.open(1), false);
+  assert.equal(f.layout.workspaceAct(0, 'show-all'), true);
+  assert.deepEqual(f.layout.snapshot().shown, [0, 2]);
+});

@@ -139,6 +139,7 @@ async function start() {
     ),
     (slot) => selection[slot]?.config.model?.value,
     terminalAccountLimits(directory),
+    (slot) => service.terminateOwned(slot),
   );
   await features.initialize();
   if (closed) return;
@@ -423,12 +424,16 @@ async function start() {
         if (feature.success) {
           const message = feature.data;
           const mutable = message.request.action !== 'snapshot';
+          const closedPane =
+            message.request.action === 'pane' && message.request.command === 'close';
+          const closeReviewed =
+            closedPane && message.source === 'orqst-features://local/index.html';
           const actor = 'actorId' in message ? message.actorId : undefined;
           const nativeActorMatches = actor === undefined || actor === `native-${core.epoch}`;
           const allowed = nativeActorMatches && (!mutable || service.beginMetadata());
           void (
             allowed
-              ? features.request(message.request, actor)
+              ? features.request(message.request, actor, closeReviewed)
               : Promise.resolve({
                   status: nativeActorMatches ? ('busy' as const) : ('denied' as const),
                 })
@@ -464,6 +469,12 @@ async function start() {
                 document: message.document,
                 value: featureNativeReplySchema.parse({ ...value, ...(canvas ? { canvas } : {}) }),
               });
+              if (closeReviewed && value.status === 'ok') {
+                const result = await service.retireClosedPool(
+                  selection.some(({ config }) => config.version === 3),
+                );
+                if (result) send({ kind: 'terminal-pool-closed', epoch: core.epoch, result });
+              }
             })
             .catch(shutdown)
             .finally(() => {

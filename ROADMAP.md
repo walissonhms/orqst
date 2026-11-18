@@ -1,5 +1,11 @@
 # ORQST roadmap
 
+## Confirmed terminal close
+
+The V6 Studio separates Hide from native-confirmed Close terminal. The Node
+and Rust terminal Cores retain journal evidence and fence each confirmed closed
+slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
+
 Native startup and terminal-opening performance is measured with [disposable host
 benchmarks](docs/development/native-opening-performance.md). Preview and real CLI
 acceptance are pending.

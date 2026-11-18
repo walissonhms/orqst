@@ -936,3 +936,50 @@ test('only a lifetime pre-fence refusal permits rollback', async () => {
   assert.equal(service.fenced(), false);
   service.close();
 });
+
+test('Studio close signs SIGTERM for the owned slot and waits for its journal before retiring', async () => {
+  const f = coreFixture();
+  try {
+    const attempt = await f.start();
+    const supervisors = [
+      Object.fromEntries(
+        terminalRPCSchema.options.map((schema) => {
+          const operation = schema.shape.operation.value;
+          return [operation, (...args: unknown[]) => f.dispatch(operation, args)];
+        }),
+      ) as TerminalNativeSupervisor,
+    ];
+    const service = new TauriTerminalService(
+      supervisors,
+      f.keys,
+      () => {},
+      (key) => key,
+      undefined,
+      {
+        epoch: f.authority.epoch,
+        ownedSlotInventory: async (slot) => f.pair.ownedSlotInventory(slot),
+        releaseOwnedSlot: async (slot) => f.pair.releaseOwnedSlot(slot),
+        prepareRetire: async () => f.pair.prepareRetire(),
+        retire: async (proof) => f.pair.retire(proof),
+        closeAndWait: async () => {},
+      },
+    );
+    await service.receive({ kind: 'close', slot: 0 });
+    assert.equal(f.signals(), 0, 'renderer close only disconnects its broker');
+    assert.equal(f.pair.ownedSlotInventory(0).attempts[0]?.state, 'running');
+    assert.equal(await service.terminateOwned(0), 'busy');
+    assert.equal(service.beginMetadata(), true);
+    assert.equal(await service.terminateOwned(0), 'ok');
+    assert.equal(f.signals(), 1);
+    assert.equal(f.pair.ownedSlotInventory(0).attempts[0]?.instanceId, attempt);
+    assert.equal(f.pair.ownedSlotInventory(0).attempts[0]?.state, 'exited');
+    assert.equal(await service.terminateOwned(0), 'ok');
+    assert.equal(await service.retireClosedPool(false), 'retired');
+    assert.equal(f.signals(), 1);
+    assert.equal(existsSync(join(f.root, 'admission/active-pair.json')), false);
+    service.endMetadata();
+    service.close();
+  } finally {
+    f.cleanup();
+  }
+});

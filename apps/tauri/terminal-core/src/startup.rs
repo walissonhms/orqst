@@ -812,6 +812,18 @@ impl Extensions for HostExtensions {
         }
     }
 
+    fn slot_released(&mut self, slot: usize) {
+        if let Some(hub) = &self.hub {
+            let mut slots = hub
+                .slots
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            if let Some(member) = slots.get_mut(slot) {
+                *member = None;
+            }
+        }
+    }
+
     fn retire_blocked(&self) -> bool {
         self.selection.iter().any(|c| c.version() == 3)
     }

@@ -1,4 +1,7 @@
-import { OwnedTerminalShutdown } from '../../../packages/core/src/terminal/owned-shutdown.js';
+import {
+  OwnedTerminalShutdown,
+  type OwnedShutdownAttempt,
+} from '../../../packages/core/src/terminal/owned-shutdown.js';
 import type { TerminalCliPolicyStore } from '../../../packages/core/src/terminal/cli-authorization.js';
 import { randomUUID, sign, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
@@ -63,6 +66,8 @@ export class TauriTerminalService {
   private mcpBusy = false;
   private metadataBusy = false;
   private readonly retirement?: TauriTerminalRetirement;
+  private readonly slotShutdowns = new Map<number, OwnedTerminalShutdown>();
+  private readonly releasedSlots = new Set<number>();
   private readonly ownedShutdown?: OwnedTerminalShutdown;
   private shutdownFence = false;
   private shutdownReady = false;
@@ -79,7 +84,10 @@ export class TauriTerminalService {
     private readonly send: (value: object) => void,
     private readonly translate: (key: string) => string,
     private readonly mcp?: TauriTerminalMcp,
-    private readonly core?: TauriTerminalRetirementCore,
+    private readonly core?: TauriTerminalRetirementCore & {
+      ownedSlotInventory?(slot: number): Promise<unknown>;
+      releaseOwnedSlot?(slot: number): Promise<unknown>;
+    },
     private readonly cliPolicy?: TerminalCliPolicyStore,
   ) {
     if (core) this.retirement = new TauriTerminalRetirement(core, keys.privateKey);
@@ -89,35 +97,101 @@ export class TauriTerminalService {
         current: () => !this.closed && this.shutdownFence,
         inventory: () => core.beginOwnedShutdown!(),
         owns: (attempt) => core.epoch === attempt.epoch && this.panes[attempt.slot] !== undefined,
-        stop: async (attempt, current) => {
-          const supervisor = this.panes[attempt.slot]?.supervisor;
-          if (!supervisor || !current()) throw new Error('Shutdown ownership unavailable');
-          const challenge = await supervisor.requestStop(
-            'desktop-managed',
-            attempt.instanceId,
-            'SIGTERM',
-          );
-          if (
-            !current() ||
-            challenge.operation !== 'stop' ||
-            challenge.target !== attempt.instanceId ||
-            challenge.epoch !== attempt.epoch ||
-            challenge.clientId !== 'desktop-managed' ||
-            Date.now() >= challenge.expiresAt
-          )
-            throw new Error('Shutdown stop proof is stale');
-          await supervisor.stop(attempt.instanceId, 'SIGTERM', {
-            challengeId: challenge.challengeId,
-            signature: sign(null, terminalChallengeBytes(challenge), this.keys.privateKey).toString(
-              'base64url',
-            ),
-          });
-        },
+        stop: (attempt, current) => this.stopOwned(attempt, current),
         prepareRetirement: () => core.prepareRetire(),
         ...(core.preserveOwnedShutdown
           ? { preserveExit: () => core.preserveOwnedShutdown!() }
           : {}),
       });
+  }
+
+  private async stopOwned(attempt: OwnedShutdownAttempt, current: () => boolean) {
+    const supervisor = this.panes[attempt.slot]?.supervisor;
+    if (!supervisor || !current()) throw new Error('Shutdown ownership unavailable');
+    const challenge = await supervisor.requestStop(
+      'desktop-managed',
+      attempt.instanceId,
+      'SIGTERM',
+    );
+    if (
+      !current() ||
+      challenge.operation !== 'stop' ||
+      challenge.target !== attempt.instanceId ||
+      challenge.epoch !== attempt.epoch ||
+      challenge.clientId !== 'desktop-managed' ||
+      Date.now() >= challenge.expiresAt
+    )
+      throw new Error('Shutdown stop proof is stale');
+    await supervisor.stop(attempt.instanceId, 'SIGTERM', {
+      challengeId: challenge.challengeId,
+      signature: sign(null, terminalChallengeBytes(challenge), this.keys.privateKey).toString(
+        'base64url',
+      ),
+    });
+  }
+
+  /** The native Studio sheet has been accepted for this exact slot. */
+  async terminateOwned(slot: number): Promise<'ok' | 'busy' | 'unknown'> {
+    const core = this.core;
+    const pane = this.panes[slot];
+    if (!core?.ownedSlotInventory || !core.releaseOwnedSlot || !pane) return 'unknown';
+    if (this.releasedSlots.has(slot)) return 'ok';
+    const current = () => !this.closed && this.metadataBusy && !this.shutdownFence;
+    if (!current() || pane.state.busy) return 'busy';
+    // Exclude even passive broker requests on this slot while querying Core exit evidence.
+    pane.state.busy = true;
+    pane.broker.revokeInput();
+    try {
+      let shutdown = this.slotShutdowns.get(slot);
+      if (!shutdown) {
+        shutdown = new OwnedTerminalShutdown({
+          current,
+          inventory: () => core.ownedSlotInventory!(slot),
+          owns: (attempt) => attempt.slot === slot && attempt.epoch === core.epoch,
+          stop: (attempt, check) => this.stopOwned(attempt, check),
+          prepareRetirement: () => core.releaseOwnedSlot!(slot),
+        });
+        this.slotShutdowns.set(slot, shutdown);
+      }
+      if ((await shutdown.run()).status !== 'ready') return 'unknown';
+      this.releasedSlots.add(slot);
+      pane.state.closed = true;
+      pane.broker.close();
+      return 'ok';
+    } finally {
+      pane.state.busy = false;
+    }
+  }
+
+  /** Release the shared durable reservation only after every admitted pane is closed. */
+  async retireClosedPool(
+    preserveIfRequired: boolean,
+  ): Promise<'retired' | 'preserved' | undefined> {
+    if (!this.retirement || this.releasedSlots.size !== this.panes.length) return;
+    const result = await this.retirement.run({
+      current: () => !this.closed && this.metadataBusy && !this.shutdownFence,
+      allowEmptyEvidence: true,
+      authorizeOwnedRetirement: (evidence) =>
+        evidence.epoch === this.core?.epoch &&
+        evidence.attempts.every((attempt) => this.releasedSlots.has(attempt.slot)),
+      closeBrokers: () => {
+        for (const pane of this.panes) pane.broker.close();
+      },
+    });
+    if (result === 'retired') return result;
+    if (!preserveIfRequired || this.retirement.fenced || !this.ownedShutdown || !this.core) return;
+    // OpenCode leader exits can be preserved in the existing pending namespace.
+    // All dispatched attempts already have exit evidence, so this path adds no signal.
+    this.shutdownFence = true;
+    const outcome = await this.ownedShutdown.run();
+    this.shutdownPreserved = outcome.status === 'exited_retirement_unavailable';
+    if (!this.shutdownPreserved) return;
+    try {
+      await this.core.closeAndWait();
+      return 'preserved';
+    } catch {
+      // The Quit flow may recheck the preserved exit. A lost ACK is not host retirement.
+    }
   }
 
   private pane(supervisor: TerminalNativeSupervisor, slot: number) {

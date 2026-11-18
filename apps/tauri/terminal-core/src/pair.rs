@@ -232,6 +232,7 @@ pub struct Pair {
     attempts: Vec<Vec<String>>,
     state: Rc<RefCell<State>>,
     retirement: Option<Value>,
+    released_slots: HashSet<usize>,
     finish: Option<Box<dyn FnMut() -> R<()>>>,
     pub capacity: usize,
     revision: u64,
@@ -263,6 +264,7 @@ impl Pair {
             attempts: Vec::new(),
             state,
             retirement: None,
+            released_slots: HashSet::new(),
             finish: None,
             capacity,
             revision: 0,
@@ -306,7 +308,9 @@ impl Pair {
     /// Returns `Ok(None)` for operations without a value (the reply omits `value`).
     pub fn dispatch(&mut self, slot: usize, request: &Request) -> R<Option<Value>> {
         self.state.borrow().active()?;
-        if self.slots.get(slot).and_then(Option::as_ref).is_none() {
+        if self.released_slots.contains(&slot)
+            || self.slots.get(slot).and_then(Option::as_ref).is_none()
+        {
             return Err("Unknown terminal slot".into());
         }
         if self.uncertain_slot(slot) {
@@ -423,10 +427,12 @@ impl Pair {
     fn evidence(&mut self) -> R<Value> {
         {
             let state = self.state.borrow();
-            if !state.reserved || state.retired {
+            if state.retired || (!state.reserved && self.released_slots.len() != self.slots.len()) {
                 return Err("No retirable terminal reservation".into());
             }
-            state.admission.assert_owner()?;
+            if state.reserved {
+                state.admission.assert_owner()?;
+            }
         }
         if let Some(evidence) = &self.retirement {
             return Ok(evidence.clone());
@@ -436,16 +442,7 @@ impl Pair {
         }
         self.assert_journals()?;
         let attempts = self.all_snapshots()?;
-        let dispatched = self.state.borrow().dispatched.clone();
-        let unreleased = attempts.iter().any(|a| {
-            let state = a["state"].as_str().unwrap_or("");
-            !["prepared", "exited", "start_failed"].contains(&state)
-                || (a["instanceId"]
-                    .as_str()
-                    .is_some_and(|id| dispatched.contains(id))
-                    && (state != "exited" || a.get("exit").is_none()))
-        });
-        if unreleased {
+        if attempts.iter().any(|attempt| self.unreleased(attempt)) {
             return Err("Every dispatched terminal requires its owned exit".into());
         }
         Ok(json!({"epoch": self.authority.borrow().epoch, "attempts": attempts}))
@@ -463,6 +460,56 @@ impl Pair {
         self.assert_journals()?;
         let attempts = self.all_snapshots()?;
         Ok(json!({"epoch": self.authority.borrow().epoch, "attempts": attempts}))
+    }
+
+    pub fn owned_slot_inventory(&mut self, slot: usize) -> R<Value> {
+        {
+            let state = self.state.borrow();
+            state.active()?;
+            if state.reserved {
+                state.admission.assert_owner()?;
+            }
+        }
+        if self.uncertain_slot(slot) {
+            return Err("Terminal enrollment uncertain".into());
+        }
+        let supervisor = self
+            .slots
+            .get(slot)
+            .and_then(Option::as_ref)
+            .ok_or("Unknown terminal slot")?;
+        if let Some(journal) = supervisor_journal(supervisor) {
+            journal.assert_owner()?;
+        }
+        let attempts = self.attempts[slot]
+            .clone()
+            .into_iter()
+            .map(|id| self.authority_snapshot(slot, &id))
+            .collect::<R<Vec<_>>>()?;
+        Ok(json!({"epoch": self.authority.borrow().epoch, "attempts": attempts}))
+    }
+
+    pub fn release_owned_slot(&mut self, slot: usize) -> R<Value> {
+        let evidence = self.owned_slot_inventory(slot)?;
+        if evidence["attempts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|attempt| self.unreleased(attempt))
+        {
+            return Err("Every dispatched terminal requires its owned exit".into());
+        }
+        self.released_slots.insert(slot);
+        Ok(json!({"evidence": evidence}))
+    }
+
+    fn unreleased(&self, attempt: &Value) -> bool {
+        let state = attempt["state"].as_str().unwrap_or("");
+        !["prepared", "exited", "start_failed"].contains(&state)
+            || (attempt["instanceId"]
+                .as_str()
+                .is_some_and(|id| self.state.borrow().dispatched.contains(id))
+                && (state != "exited" || attempt.get("exit").is_none()))
     }
 
     pub fn owned_exit_evidence(&mut self) -> R<Value> {
@@ -492,11 +539,14 @@ impl Pair {
         let binding = self.retire_binding(&evidence);
         self.authority.borrow_mut().consume(proof, &binding)?;
         if self.finish.is_none() {
-            let finish = self
-                .state
-                .borrow_mut()
-                .admission
-                .prepare_release(&evidence)?;
+            let finish = if self.reserved() {
+                self.state
+                    .borrow_mut()
+                    .admission
+                    .prepare_release(&evidence)?
+            } else {
+                Box::new(|| Ok(()))
+            };
             self.retirement = Some(evidence);
             self.finish = Some(finish);
             self.close(); // Fence all dispatch before releasing shared capacity.

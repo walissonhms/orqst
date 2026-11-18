@@ -152,7 +152,15 @@ export const featureNativeRequestSchema = z.discriminatedUnion('action', [
     action: z.literal('pane'),
     slot: z.number().int().min(0).max(7),
     terminalId: z.uuid(),
-    command: z.enum(['focus', 'hide', 'maximize', 'restore', 'move-earlier', 'move-later']),
+    command: z.enum([
+      'focus',
+      'hide',
+      'maximize',
+      'restore',
+      'move-earlier',
+      'move-later',
+      'close',
+    ]),
   }),
   z.strictObject({
     ...base,
@@ -217,6 +225,7 @@ export const featureNativeSnapshotSchema = z
           slot: z.number().int().min(0).max(7),
           terminalId: z.uuid(),
           provider: z.enum(['codex', 'claude', 'opencode']),
+          closed: z.literal(true).optional(),
           workspace: z
             .strictObject({
               id: featureViewStateSchema.shape.workspaceId,
@@ -329,7 +338,16 @@ export const featureCanvasEvidenceSchema = z
 export type FeatureCanvasEvidence = z.infer<typeof featureCanvasEvidenceSchema>;
 export const featureNativeReplySchema = z
   .strictObject({
-    status: z.enum(['ok', 'denied', 'stale', 'busy', 'unavailable', 'unknown', 'archive_blocked']),
+    status: z.enum([
+      'ok',
+      'denied',
+      'stale',
+      'busy',
+      'unavailable',
+      'unknown',
+      'archive_blocked',
+      'cancelled',
+    ]),
     snapshot: featureNativeSnapshotSchema.optional(),
     permissions: featurePermissionStateSchema.optional(),
     canvas: featureCanvasEvidenceSchema.optional(),

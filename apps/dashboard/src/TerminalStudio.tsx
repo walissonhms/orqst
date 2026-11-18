@@ -131,6 +131,8 @@ interface Props {
   onNewTerminal?: () => void;
   /** Return `'minimize'` when the host keeps the terminal (hide from view only). */
   onClose?: (id: string) => void | 'minimize';
+  onCloseTerminal?: (id: string) => void;
+  closePending?: boolean;
   /** Local storage key for the arrangement of this Feature. */
   storageKey: string;
   now?: number;
@@ -353,6 +355,8 @@ export function TerminalStudio({
   renderBody,
   onNewTerminal,
   onClose,
+  onCloseTerminal,
+  closePending,
   storageKey,
   now: fixedNow,
   onStatusEvent,
@@ -1144,6 +1148,26 @@ export function TerminalStudio({
                       <SizeIcon size={14} />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    title={t('terminalStudio.minimize')}
+                    aria-label={t('terminalStudio.minimize')}
+                    onClick={() => setState((current) => minimize(current, pane.id))}
+                  >
+                    <Minus size={14} />
+                  </button>
+                  {state.mode !== 'focus' && (
+                    <button
+                      type="button"
+                      title={isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')}
+                      aria-label={
+                        isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')
+                      }
+                      onClick={() => setState((current) => toggleMaximize(current, pane.id))}
+                    >
+                      {isMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                    </button>
+                  )}
                   <PaneMenu
                     terminal={terminal}
                     accounts={accounts}
@@ -1166,34 +1190,18 @@ export function TerminalStudio({
                           }
                     }
                   />
-                  <button
-                    type="button"
-                    title={t('terminalStudio.minimize')}
-                    aria-label={t('terminalStudio.minimize')}
-                    onClick={() => setState((current) => minimize(current, pane.id))}
-                  >
-                    <Minus size={14} />
-                  </button>
-                  {state.mode !== 'focus' && (
-                    <button
-                      type="button"
-                      title={isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')}
-                      aria-label={
-                        isMax ? t('terminalStudio.restore') : t('terminalStudio.maximize')
-                      }
-                      onClick={() => setState((current) => toggleMaximize(current, pane.id))}
-                    >
-                      {isMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-                    </button>
-                  )}
-                  {onClose && (
+                  {(onCloseTerminal || onClose) && (
                     <button
                       type="button"
                       className="ts-close"
-                      title={t('terminalStudio.hide')}
-                      aria-label={t('terminalStudio.hide')}
+                      title={t('terminalStudio.closeTerminal.title')}
+                      aria-label={t('terminalStudio.closeTerminal.label', {
+                        terminal: terminal.label,
+                      })}
+                      disabled={closePending}
                       onClick={() => {
-                        if (onClose(pane.id) === 'minimize')
+                        if (onCloseTerminal) return onCloseTerminal(pane.id);
+                        if (onClose?.(pane.id) === 'minimize')
                           setState((current) => minimize(current, pane.id));
                         else setState((current) => removePane(current, pane.id));
                       }}

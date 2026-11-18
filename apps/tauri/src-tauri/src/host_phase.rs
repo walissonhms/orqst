@@ -81,6 +81,15 @@ impl HostPhase {
         }
     }
 
+    pub fn selection_closed(&self) -> bool {
+        let mut phase = self.0.lock().unwrap();
+        if !matches!(*phase, Phase::Active | Phase::ShutdownInFlight) {
+            return false;
+        }
+        *phase = Phase::NotStarted;
+        true
+    }
+
     pub fn consume_exit_evidence(&self) -> bool {
         let mut phase = self.0.lock().unwrap();
         if *phase != Phase::ExitEvidenceConfirmed {

@@ -14,6 +14,12 @@ Feature and opens the existing native one-time delegation review. Opted-in PTY
 relays expose Feature-local peers, inboxes and task receipts. See the
 [workflow and native acceptance checklist](docs/development/feature-mention-routing.md).
 
+## Confirmed terminal close
+
+The V6 Studio separates Hide from native-confirmed Close terminal. The Node
+and Rust terminal Cores retain journal evidence and fence each confirmed closed
+slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

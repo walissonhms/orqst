@@ -51,6 +51,7 @@ struct Running {
     generations: Vec<u64>,
     loaded: Vec<bool>,
     revoked: Vec<bool>,
+    released_slots: Vec<usize>,
     pending_open: Vec<Option<OpeningIntent>>,
     // Optional diagnostic correlation only; never consulted by an authority/lifecycle gate.
     opening_diagnostics: Vec<Option<Attempt>>,
@@ -444,14 +445,23 @@ pub(crate) async fn permission_review_request(
             let focused = unsafe { native_focus::chrome_first_responder(native.inner().cast()) };
             if !focused
                 || !permission_review_current(&app, &epoch, generation, &owner)
-                || !envelope["request"]["featureId"]
-                    .as_str()
-                    .zip(envelope["request"]["generation"].as_u64())
-                    .is_some_and(|(feature, logical)| {
-                        crate::features::permission_capture_current(
-                            &app, feature, &epoch, generation, logical,
-                        )
-                    })
+                || !(if crate::features::is_terminal_close(&envelope["request"]) {
+                    crate::features::close_target_current(
+                        &app,
+                        &envelope["request"],
+                        &epoch,
+                        generation,
+                    )
+                } else {
+                    envelope["request"]["featureId"]
+                        .as_str()
+                        .zip(envelope["request"]["generation"].as_u64())
+                        .is_some_and(|(feature, logical)| {
+                            crate::features::permission_capture_current(
+                                &app, feature, &epoch, generation, logical,
+                            )
+                        })
+                })
             {
                 let _ = sender.send(None);
                 return;
@@ -503,8 +513,12 @@ async fn metadata_request_inner(
 ) -> Value {
     let unavailable = || json!({"status":"unavailable"});
     let permission = crate::features::valid_permission_envelope(&envelope);
+    let close = crate::features::is_terminal_close(&envelope["request"]);
     if !(permission || crate::features::valid_envelope(&envelope))
-        || (review_owner.is_some() && !permission)
+        || (review_owner.is_some() && !permission && !close)
+        || (close
+            && (review_owner.is_none()
+                || envelope["source"] != "orqst-features://local/index.html"))
         || (permission && envelope["actorId"] != format!("native-{epoch}"))
         || presentation_blocked(app)
     {
@@ -1592,21 +1606,24 @@ pub async fn terminal_restore(window: Webview, slot: u64, generation: u64) -> Va
         &terminal.0,
         slot,
         generation,
-        |running| running.as_ref().map(|r| RestoreContext {
-            count: r.documents.len(),
-            visible: r.layout["visible"]
-                .as_array()
-                .map(|items| items.iter().filter_map(Value::as_u64).collect())
-                .unwrap_or_default(),
-            generation: r.layout_generation,
-            suspended: r.presentation_suspended,
-            fenced: r.confirming_quit
-                || r.exit_authorized
-                || crate::renderer::unavailable()
-                || crate::agents::exit_pending(app)
-                || phase_blocks_presentation(crate::host_phase::phase()),
-            document_current: crate::features::document_version_current(app, &source, document),
-        }),
+        |running| running
+            .as_ref()
+            .filter(|r| { !r.released_slots.contains(&(slot as usize)) })
+            .map(|r| RestoreContext {
+                count: r.documents.len(),
+                visible: r.layout["visible"]
+                    .as_array()
+                    .map(|items| items.iter().filter_map(Value::as_u64).collect())
+                    .unwrap_or_default(),
+                generation: r.layout_generation,
+                suspended: r.presentation_suspended,
+                fenced: r.confirming_quit
+                    || r.exit_authorized
+                    || crate::renderer::unavailable()
+                    || crate::agents::exit_pending(app)
+                    || phase_blocks_presentation(crate::host_phase::phase()),
+                document_current: crate::features::document_version_current(app, &source, document),
+            }),
         |running, value| crate::features::with_chrome_document(app, document, || {
             running
                 .as_mut()
@@ -1836,6 +1853,40 @@ pub(crate) async fn confirm_permission_sheet(
         generation: logical_generation,
     } = context;
     let current_app = app.clone();
+    let current_epoch = epoch.clone();
+    confirm_studio_sheet(
+        app,
+        view,
+        labels,
+        epoch,
+        generation,
+        document,
+        id,
+        move || {
+            crate::features::permission_capture_current(
+                &current_app,
+                &feature_id,
+                &current_epoch,
+                generation,
+                logical_generation,
+            )
+        },
+    )
+    .await
+}
+
+#[cfg(target_os = "macos")]
+async fn confirm_studio_sheet(
+    app: &tauri::AppHandle,
+    view: Webview,
+    labels: [String; 5],
+    epoch: String,
+    generation: u64,
+    document: u64,
+    id: String,
+    target_current: impl FnOnce() -> bool + Send + 'static,
+) -> bool {
+    let current_app = app.clone();
     let sheet_app = app.clone();
     let current_epoch = epoch.clone();
     let current_id = id.clone();
@@ -1850,13 +1901,7 @@ pub(crate) async fn confirm_permission_sheet(
                     document,
                 )
                 && permission_review_current(&current_app, &current_epoch, generation, &current_id)
-                && crate::features::permission_capture_current(
-                    &current_app,
-                    &feature_id,
-                    &current_epoch,
-                    generation,
-                    logical_generation,
-                )
+                && target_current()
                 && !presentation_blocked(&current_app)
         },
         move |sheet| {
@@ -1917,6 +1962,60 @@ fn resize(app: &tauri::AppHandle, window: &Window) {
     }
 }
 
+/// Native Studio confirmation, bound to the current epoch, document and owned terminal UUID.
+pub(crate) async fn confirm_terminal_close(
+    app: &tauri::AppHandle,
+    view: Webview,
+    request: Value,
+    epoch: &str,
+    presentation: u64,
+    document: u64,
+    id: &str,
+) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use crate::terminal_creation::translate;
+        let Some(slot) = request["slot"].as_u64() else {
+            return false;
+        };
+        let Some(terminal_id) = request["terminalId"].as_str() else {
+            return false;
+        };
+        let labels = [
+            translate("terminalStudio.closeTerminal.title"),
+            translate("terminalStudio.closeTerminal.message"),
+            format!("T-{:03} · {terminal_id}", slot + 1),
+            translate("cancel"),
+            translate("terminalStudio.closeTerminal.title"),
+        ];
+        let current_app = app.clone();
+        let current_epoch = epoch.to_owned();
+        confirm_studio_sheet(
+            app,
+            view,
+            labels,
+            epoch.into(),
+            presentation,
+            document,
+            id.into(),
+            move || {
+                crate::features::close_target_current(
+                    &current_app,
+                    &request,
+                    &current_epoch,
+                    presentation,
+                )
+            },
+        )
+        .await
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, view, request, epoch, presentation, document, id);
+        false
+    }
+}
+
 /// Snapshot membership is a hide-only native guard; it never starts/focuses a surface.
 fn feature_member_slots(snapshot: &Value) -> Option<Vec<usize>> {
     if !crate::features::valid_snapshot(snapshot) {
@@ -1930,6 +2029,7 @@ fn feature_member_slots(snapshot: &Value) -> Option<Vec<usize>> {
         snapshot["slots"]
             .as_array()?
             .iter()
+            .filter(|slot| slot["closed"] != true)
             .filter(|slot| {
                 active.map_or_else(
                     || {
@@ -1998,7 +2098,7 @@ pub(crate) fn restrict_feature_members(
     let Some(members) = feature_member_slots(snapshot) else {
         return;
     };
-    let count = {
+    let (count, closed) = {
         let state = app.state::<Terminals>();
         let mut guard = state.0.lock().unwrap();
         let Some(r) = guard.as_mut() else {
@@ -2006,16 +2106,29 @@ pub(crate) fn restrict_feature_members(
         };
         if r.epoch != epoch
             || r.layout_generation != presentation
-            || members.iter().any(|slot| *slot >= r.documents.len())
+            || snapshot["slots"].as_array().unwrap().len() != r.documents.len()
         {
             return;
         }
-        if r.feature_members.as_ref() == Some(&members) {
+        let closed = snapshot["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|item| item["closed"] == true)
+            .map(|item| item["slot"].as_u64().unwrap() as usize)
+            .filter(|slot| !r.released_slots.contains(slot))
+            .collect::<Vec<_>>();
+        for &slot in &closed {
+            r.revoked[slot] = true;
+            invalidate_opening(&mut r.generations[slot], &mut r.pending_open[slot]);
+        }
+        r.released_slots.extend(&closed);
+        if r.feature_members.as_ref() == Some(&members) && closed.is_empty() {
             return;
         }
         r.feature_members = Some(members.clone());
         restrict_layout_members(&mut r.layout, &members);
-        r.documents.len()
+        (r.documents.len(), closed)
     };
     let handle = app.clone();
     let epoch = epoch.to_owned();
@@ -2032,6 +2145,22 @@ pub(crate) fn restrict_feature_members(
                         && r.layout_generation == presentation
                         && r.feature_members.as_ref() == Some(&members)
                 });
+            // Released views stay closed even if another layout generation arrived.
+            for slot in closed {
+                let label = format!("terminal-{slot}");
+                if let Some(view) = handle.get_webview(&label) {
+                    let _ = view.close();
+                }
+                if let Some(menu) = handle.menu() {
+                    if let Some(entry) = menu.get("orqst-owned-terminals") {
+                        if let Some(submenu) = entry.as_submenu() {
+                            if let Some(item) = submenu.get(&label) {
+                                let _ = submenu.remove(&item);
+                            }
+                        }
+                    }
+                }
+            }
             if !current {
                 return;
             }
@@ -3366,6 +3495,7 @@ async fn start_selected_inner(
         generations: vec![0; count],
         loaded: vec![false; count],
         revoked: vec![false; count],
+        released_slots: Vec::new(),
         pending_open: (0..count).map(|_| None).collect(),
         opening_diagnostics: (0..count).map(|_| Some(diagnostic.clone())).collect(),
         pending: HashMap::new(),
@@ -3400,7 +3530,12 @@ async fn start_selected_inner(
         Some(menu) => menu,
         None => Menu::default(app)?,
     };
-    let submenu = Submenu::new(app, ready["title"].as_str().unwrap_or("ORQST"), true)?;
+    let submenu = Submenu::with_id(
+        app,
+        "orqst-owned-terminals",
+        ready["title"].as_str().unwrap_or("ORQST"),
+        true,
+    )?;
     submenu.append(&MenuItem::with_id(
         app,
         "terminal-retire-selection",
@@ -3513,8 +3648,11 @@ async fn start_selected_inner(
                 .lock()
                 .unwrap()
                 .as_ref()
-                .is_some_and(|r| {
-                    r.retiring || r.metadata_mutating.is_some() || r.enrollment_pending
+                .is_none_or(|r| {
+                    r.retiring
+                        || r.metadata_mutating.is_some()
+                        || r.enrollment_pending
+                        || r.released_slots.contains(&slot)
                 })
             {
                 return;
@@ -3535,6 +3673,7 @@ async fn start_selected_inner(
     let diagnostic = diagnostic.clone();
     tauri::async_runtime::spawn(async move {
         let mut stream_outcome = Outcome::Eof;
+        let mut selection_closed = false;
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) if bytes.len() <= 512 * 1024 => {
@@ -3554,6 +3693,52 @@ async fn start_selected_inner(
                             break;
                         };
                         crate::desktop::notify_owned(&app, alert);
+                    } else if value["kind"] == "terminal-pool-closed"
+                        && value["epoch"] == host_epoch
+                        && matches!(value["result"].as_str(), Some("retired" | "preserved"))
+                        && value.as_object().is_some_and(|fields| fields.len() == 3)
+                    {
+                        let running = {
+                            let state = app.state::<Terminals>();
+                            let mut guard = state.0.lock().unwrap();
+                            take_host(
+                                &mut guard,
+                                AdmissionIdentity {
+                                    owner: &host_owner,
+                                    epoch: &host_epoch,
+                                    initial_files: &host_initial_files,
+                                },
+                                running_identity,
+                            )
+                        };
+                        if let Some(running) = running {
+                            selection_closed =
+                                crate::quit_orchestration::QUIT.host.selection_closed();
+                            let count = running.documents.len();
+                            let handle = app.clone();
+                            let _ = app.run_on_main_thread(move || {
+                                if let Some(menu) = handle.menu() {
+                                    if let Some(entry) = menu.get("orqst-owned-terminals") {
+                                        let _ = menu.remove(&entry);
+                                    }
+                                }
+                                for slot in 0..count {
+                                    if let Some(view) =
+                                        handle.get_webview(&format!("terminal-{slot}"))
+                                    {
+                                        let _ = view.close();
+                                    }
+                                }
+                                if let Some(chrome) = handle.get_webview("feature-workspace") {
+                                    let _ = chrome.hide();
+                                }
+                                if let Some(main) = handle.get_webview("main") {
+                                    let _ = main.show();
+                                    let _ = main.set_focus();
+                                }
+                            });
+                            stop_running(Some(running));
+                        }
                     } else if value["kind"] == "feature-state" {
                         if !crate::features::valid_state_push(&value) {
                             stream_outcome = Outcome::ProtocolRejected;
@@ -3711,7 +3896,9 @@ async fn start_selected_inner(
         };
         stop_running(running);
         // Losing the handle after a start is unknown, never proof of a clean exit.
-        crate::host_phase::lost();
+        if !selection_closed {
+            crate::host_phase::lost();
+        }
     });
     if operational_open {
         metadata_view_begin(&opening_app);
@@ -3748,6 +3935,9 @@ pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u
     let state = app.state::<Terminals>();
     let guard = state.0.lock().unwrap();
     let running = guard.as_ref()?;
+    if running.released_slots.contains(&slot) {
+        return None;
+    }
     let document = running.documents.get(slot)?;
     match parts[1] {
         "index.html" => Some((document.as_bytes().to_vec(), "text/html; charset=utf-8")),

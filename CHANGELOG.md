@@ -9,6 +9,12 @@ metadata with Codex and OpenCode turns and exposes bounded refusal codes.
 Delegation still uses a native one-time grant and correlated result evidence.
 See the [pilot record](docs/design/structured-codex-pilot.md#diag21-findings--2026-11-17).
 
+## Confirmed terminal close
+
+The V6 Studio separates Hide from native-confirmed Close terminal. The Node
+and Rust terminal Cores retain journal evidence and fence each confirmed closed
+slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
+
 ## Native startup and terminal opening — 2026-11-17
 
 The native dashboard can load during the initial Codex history scan. Terminal
