@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Lock, LockOpen, RefreshCw, X } from 'lucide-react';
 import type { TerminalProvider } from './TerminalStudio';
 import './account-limits.css';
-import { expiredWindow, level, renewsIn, worstWindow } from './account-limits-model';
+import { expiredWindow, level, providerWindow, renewsIn } from './account-limits-model';
 
 export type { AccountLimit, LimitCaps, LimitWindow } from './account-limits-model';
 import type { AccountLimit, LimitCaps } from './account-limits-model';
@@ -39,7 +39,7 @@ function ProviderMark({ provider }: { provider: TerminalProvider }) {
   return <span className={`al-mark al-mark-${provider}`} aria-hidden="true" />;
 }
 
-export function AccountLimits({
+export function LimitsChip({
   accounts,
   shown,
   caps,
@@ -56,6 +56,9 @@ export function AccountLimits({
     style: 'percent',
     maximumSignificantDigits: 15,
   });
+  function formatUsage(percent: number) {
+    return percent === 0 ? t('accountLimits.unused') : percentFormat.format(percent / 100);
+  }
   const panelId = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -150,36 +153,26 @@ export function AccountLimits({
       >
         {providerOrder.map((provider) => {
           const list = visible.filter((account) => account.provider === provider);
-          if (list.length === 0) return null;
+          if (!list.length) return null;
+          const window = providerWindow(list, now);
           return (
             <span key={provider} className="al-trigger-group">
               <ProviderMark provider={provider} />
-              {list.map((account) => {
-                const worst = worstWindow(account, now);
-                return (
-                  <span key={account.id} className="al-trigger-account">
-                    <span className="al-sr-only">{t(`terminalStudio.providers.${provider}`)} </span>
-                    <span className="al-index">{account.index}</span>
-                    {worst?.usedPercent !== undefined && (
-                      <>
-                        <Bar percent={worst.usedPercent} caps={caps} />
-                        <span className="al-sr-only">
-                          {percentFormat.format(worst.usedPercent / 100)}
-                        </span>
-                      </>
-                    )}
-                    {worst?.resetsAt !== undefined && (
-                      <span className="al-reset">{renewsIn(worst.resetsAt, now)}</span>
-                    )}
-                  </span>
-                );
-              })}
+              <span>{t(`terminalStudio.providers.${provider}`)}</span>
+              <span className={`al-percent al-${level(window?.usedPercent, caps)}`}>
+                {window?.usedPercent === undefined ? '—' : formatUsage(window.usedPercent)}
+              </span>
+              {window && <span className="al-reset">· {window.label}</span>}
             </span>
           );
         })}
-        <span className={visible.length ? 'al-sr-only' : undefined}>
-          {t('accountLimits.title')}
-        </span>
+        {!visible.length && (
+          <>
+            <span className="al-sr-only">{t('accountLimits.title')} </span>
+            <span aria-hidden="true">—</span>
+            <span className="al-sr-only">{t('accountLimits.unknown')}</span>
+          </>
+        )}
       </button>
       {open &&
         createPortal(
@@ -299,7 +292,7 @@ export function AccountLimits({
                             </span>
                             {percent !== undefined && (
                               <span className={`al-percent al-${level(percent, caps)}`}>
-                                {percentFormat.format(percent / 100)}
+                                {formatUsage(percent)}
                               </span>
                             )}
                           </div>
@@ -401,3 +394,5 @@ export function AccountLimits({
     </>
   );
 }
+
+export { LimitsChip as AccountLimits };

@@ -60,6 +60,16 @@ export function worstWindow(account: AccountLimit, now: number): LimitWindow | u
     .sort((a, b) => b.usedPercent! - a.usedPercent!)[0];
 }
 
+/** Select the highest evidenced usage across the accounts shown for one provider. */
+export function providerWindow(accounts: AccountLimit[], now: number): LimitWindow | undefined {
+  let highest: LimitWindow | undefined;
+  for (const account of accounts) {
+    const window = worstWindow(account, now);
+    if (window && (window.usedPercent ?? -1) > (highest?.usedPercent ?? -1)) highest = window;
+  }
+  return highest;
+}
+
 const providers = new Set(['codex', 'claude', 'opencode', 'antigravity', 'shell']);
 const finite = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER) =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;

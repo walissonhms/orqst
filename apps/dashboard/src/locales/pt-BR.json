@@ -1700,6 +1700,7 @@
     "recentActivity": "Com atividade nos últimos 15 min"
   },
   "accountLimits": {
+    "unused": "Sem uso",
     "title": "Limites das contas",
     "open": "Mostrar limites das contas",
     "sourcePreview": "prévia sintética",
@@ -1721,6 +1722,22 @@
     "critical": "Crítico a partir de",
     "hidden_one": "{{count}} conta oculta da barra",
     "hidden_other": "{{count}} contas ocultas da barra"
+  },
+  "studioNotifications": {
+    "empty": "Nenhuma notificação",
+    "observedHistory": "Notificações de sessões observadas",
+    "settings": "Configurações de notificações",
+    "clearAll": "Limpar tudo",
+    "markRead": "Marcar como lida",
+    "focusFailed": "Não foi possível focar o terminal.",
+    "events": {
+      "completed": "Tarefa concluída",
+      "failed": "Falhou",
+      "waiting_for_user": "Aguardando você",
+      "delivery_failed": "Falha na entrega",
+      "recipient_ended": "Destinatário encerrou",
+      "limit_threshold": "Limite de uso atingido"
+    }
   },
   "dock": {
     "title": "Minimizados",

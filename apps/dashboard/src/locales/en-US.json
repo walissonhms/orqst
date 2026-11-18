@@ -1700,6 +1700,7 @@
     "recentActivity": "With activity in the last 15 min"
   },
   "accountLimits": {
+    "unused": "Unused",
     "title": "Account limits",
     "open": "Show account limits",
     "sourcePreview": "synthetic preview",
@@ -1721,6 +1722,22 @@
     "critical": "Critical from",
     "hidden_one": "{{count}} account hidden from the toolbar",
     "hidden_other": "{{count}} accounts hidden from the toolbar"
+  },
+  "studioNotifications": {
+    "empty": "No notifications",
+    "observedHistory": "Observed session notifications",
+    "settings": "Notification settings",
+    "clearAll": "Clear all",
+    "markRead": "Mark read",
+    "focusFailed": "The terminal could not be focused.",
+    "events": {
+      "completed": "Task completed",
+      "failed": "Failed",
+      "waiting_for_user": "Waiting for you",
+      "delivery_failed": "Delivery failed",
+      "recipient_ended": "Recipient ended",
+      "limit_threshold": "Account limit threshold"
+    }
   },
   "dock": {
     "title": "Minimized",
