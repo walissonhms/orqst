@@ -69,6 +69,7 @@ test('host data is validated; malformed values are dropped, not guessed', () => 
       id: 'synthetic-1',
       provider: 'codex',
       index: 1,
+      label: 'Equipe de revisão',
       plan: 'PRO',
       locked: true,
       windows: [
@@ -81,9 +82,19 @@ test('host data is validated; malformed values are dropped, not guessed', () => 
   ]);
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0]!.locked, true);
+  assert.equal(parsed[0]!.label, 'Equipe de revisão');
   assert.deepEqual(parsed[0]!.windows, [
     { id: 'week', label: 'Week', usedPercent: 20, resetsAt: 5 },
     { id: 'bad', label: 'Bad' },
   ]);
   assert.deepEqual(parseAccountLimits(undefined), []);
+});
+
+test('the UI falls back when the provider sends no email-free account label', () => {
+  const account = { id: 'synthetic-1', provider: 'codex', index: 1, locked: false, windows: [] };
+  for (const label of [undefined, '', 'user@example.invalid', ' Team ', '<b>Team</b>']) {
+    const parsed = parseAccountLimits([{ ...account, label }]);
+    assert.equal(parsed.length, 1);
+    assert.equal(parsed[0]?.label, undefined);
+  }
 });

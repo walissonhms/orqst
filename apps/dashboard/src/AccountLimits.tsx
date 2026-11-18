@@ -15,12 +15,13 @@ export interface AccountLimitsProps {
   shown: string[];
   caps: LimitCaps;
   now: number;
-  /** Who reads the numbers, shown as the source label. */
-  source: string;
+  /** Label for the synthetic preview. Production uses the provider report time. */
+  source?: string;
   onRefresh?: (id: string) => void;
+  canRefresh?: (id: string) => boolean;
   onToggleLock?: (id: string) => void;
-  onShownChange: (ids: string[]) => void;
-  onCapsChange: (caps: LimitCaps) => void;
+  onShownChange?: (ids: string[]) => void;
+  onCapsChange?: (caps: LimitCaps) => void;
   /** Native hosts hide terminal views while the panel covers them. */
   onOpenChange?: (open: boolean) => void;
 }
@@ -46,6 +47,7 @@ export function LimitsChip({
   now,
   source,
   onRefresh,
+  canRefresh,
   onToggleLock,
   onShownChange,
   onCapsChange,
@@ -133,6 +135,23 @@ export function LimitsChip({
     nextCaps.warn < nextCaps.critical &&
     nextCaps.critical <= 100;
 
+  const latestReport = accounts.reduce<number | undefined>(
+    (latest, { updatedAt }) =>
+      updatedAt !== undefined && updatedAt <= now && (latest === undefined || updatedAt > latest)
+        ? updatedAt
+        : latest,
+    undefined,
+  );
+  const reportAge =
+    latestReport === undefined
+      ? undefined
+      : now - latestReport < 60_000
+        ? t('accountLimits.now')
+        : t('accountLimits.ago', { time: renewsIn(now + (now - latestReport), now) });
+  const accountLabel = (account: AccountLimit) =>
+    account.label ?? t('accountLimits.account', { index: account.index });
+  const unknown = t('accountLimits.unknown');
+  const unknownDetail = t('accountLimits.unknownDetail');
   const visible = accounts.filter((account) => shown.includes(account.id));
   const hidden = accounts.length - visible.length;
   const groups = providerOrder
@@ -206,7 +225,13 @@ export function LimitsChip({
           >
             <header className="al-head">
               <h2>{t('accountLimits.title')}</h2>
-              {accounts.length > 0 && <span>{source}</span>}
+              {source ? (
+                <span>{source}</span>
+              ) : latestReport !== undefined && reportAge !== undefined ? (
+                <time dateTime={new Date(latestReport).toISOString()}>
+                  {t('accountLimits.lastReport', { time: reportAge })}
+                </time>
+              ) : null}
               <button
                 ref={closeButton}
                 type="button"
@@ -218,7 +243,11 @@ export function LimitsChip({
               </button>
             </header>
             <div className="al-body">
-              {accounts.length === 0 && <p className="al-unknown">{t('accountLimits.unknown')}</p>}
+              {accounts.length === 0 && (
+                <p className="al-unknown" title={unknownDetail}>
+                  {unknown}
+                </p>
+              )}
               {groups.map(({ provider, list }) => (
                 <section key={provider} className="al-provider">
                   <h3>
@@ -228,17 +257,8 @@ export function LimitsChip({
                   {list.map((account) => (
                     <article key={account.id} className="al-account">
                       <div className="al-account-head">
-                        <span className="al-index">{account.index}</span>
+                        <span className="al-account-name">{accountLabel(account)}</span>
                         {account.plan && <span className="al-plan">{account.plan}</span>}
-                        <span className="al-updated">
-                          {account.updatedAt === undefined || account.updatedAt > now
-                            ? null
-                            : now - account.updatedAt < 60_000
-                              ? t('accountLimits.now')
-                              : t('accountLimits.ago', {
-                                  time: renewsIn(now + (now - account.updatedAt), now),
-                                })}
-                        </span>
                         {onToggleLock && (
                           <button
                             type="button"
@@ -255,7 +275,7 @@ export function LimitsChip({
                             {account.locked ? <Lock size={14} /> : <LockOpen size={14} />}
                           </button>
                         )}
-                        {onRefresh && (
+                        {onRefresh && (canRefresh?.(account.id) ?? true) && (
                           <button
                             type="button"
                             className="al-icon"
@@ -263,12 +283,14 @@ export function LimitsChip({
                             aria-label={t('accountLimits.refresh')}
                             onClick={() => onRefresh(account.id)}
                           >
-                            <RefreshCw size={14} />
+                            <RefreshCw size={14} aria-hidden="true" />
                           </button>
                         )}
                       </div>
                       {account.windows.length === 0 && (
-                        <p className="al-unknown">{t('accountLimits.unknown')}</p>
+                        <p className="al-unknown" title={unknownDetail}>
+                          {unknown}
+                        </p>
                       )}
                       {account.windows.map((window) => {
                         const expired = expiredWindow(window, now);
@@ -278,11 +300,15 @@ export function LimitsChip({
                             <span className="al-window-label">{window.label}</span>
                             <span className="al-window-bar">
                               {percent !== undefined && <Bar percent={percent} caps={caps} />}
-                              <small>
+                              <small
+                                title={
+                                  !expired && percent === undefined ? unknownDetail : undefined
+                                }
+                              >
                                 {expired
                                   ? t('accountLimits.awaitingReport')
                                   : percent === undefined
-                                    ? t('accountLimits.unknown')
+                                    ? unknown
                                     : window.resetsAt === undefined
                                       ? t('accountLimits.renewUnknown')
                                       : t('accountLimits.renews', {
@@ -302,7 +328,7 @@ export function LimitsChip({
                   ))}
                 </section>
               ))}
-              {editing === 'accounts' && (
+              {editing === 'accounts' && onShownChange && (
                 <section
                   ref={accountsEditor}
                   className="al-editor"
@@ -323,13 +349,13 @@ export function LimitsChip({
                         }
                       />
                       <ProviderMark provider={account.provider} />
-                      {t(`terminalStudio.providers.${account.provider}`)} {account.index}
+                      {t(`terminalStudio.providers.${account.provider}`)} · {accountLabel(account)}
                       {account.plan && <span className="al-plan">{account.plan}</span>}
                     </label>
                   ))}
                 </section>
               )}
-              {editing === 'caps' && (
+              {editing === 'caps' && onCapsChange && (
                 <form
                   ref={capsEditor}
                   className="al-editor"
@@ -366,28 +392,36 @@ export function LimitsChip({
                 </form>
               )}
             </div>
-            <footer className="al-foot">
-              <span>{hidden > 0 ? t('accountLimits.hidden', { count: hidden }) : ''}</span>
-              <button
-                type="button"
-                disabled={accounts.length === 0}
-                aria-expanded={editing === 'accounts'}
-                onClick={() => setEditing((value) => (value === 'accounts' ? 'none' : 'accounts'))}
-              >
-                {t('accountLimits.choose')}
-              </button>
-              <button
-                type="button"
-                className="al-edit-caps"
-                aria-expanded={editing === 'caps'}
-                onClick={() => {
-                  setDraftCaps({ warn: String(caps.warn), critical: String(caps.critical) });
-                  setEditing(editing === 'caps' ? 'none' : 'caps');
-                }}
-              >
-                {t('accountLimits.caps')}
-              </button>
-            </footer>
+            {(onShownChange || onCapsChange) && (
+              <footer className="al-foot">
+                <span>{hidden > 0 ? t('accountLimits.hidden', { count: hidden }) : ''}</span>
+                {onShownChange && (
+                  <button
+                    type="button"
+                    disabled={accounts.length === 0}
+                    aria-expanded={editing === 'accounts'}
+                    onClick={() =>
+                      setEditing((value) => (value === 'accounts' ? 'none' : 'accounts'))
+                    }
+                  >
+                    {t('accountLimits.choose')}
+                  </button>
+                )}
+                {onCapsChange && (
+                  <button
+                    type="button"
+                    className="al-edit-caps"
+                    aria-expanded={editing === 'caps'}
+                    onClick={() => {
+                      setDraftCaps({ warn: String(caps.warn), critical: String(caps.critical) });
+                      setEditing(editing === 'caps' ? 'none' : 'caps');
+                    }}
+                  >
+                    {t('accountLimits.caps')}
+                  </button>
+                )}
+              </footer>
+            )}
           </div>,
           document.body,
         )}

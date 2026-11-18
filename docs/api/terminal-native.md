@@ -665,12 +665,14 @@ The macOS private `confirm` review now keeps complete title/message/detail in a 
 ## Account limits — 2026-11-05
 
 Successful `snapshot` and `canvas` replies can include `accountLimits: { readAt, accounts }`.
-Each account is `{ id, provider: 'codex' | 'claude' | 'opencode', index,
-plan?, updatedAt?, locked, windows }`; each window is `{ id, label,
-usedPercent?, resetsAt? }`. Timestamps are epoch milliseconds and percentages
-are 0–100. `plan` is at most 16 characters and `label` at most 24. Empty or
-absent evidence never becomes zero. The native and protocol validators enforce
-bounded fields and lists.
+Each account is `{ id, provider: 'codex' | 'claude' | 'opencode' | 'antigravity',
+index, label?, plan?, updatedAt?, locked, windows }`. The optional account label
+is a provider-supplied display alias of up to 48 UTF-16 units. It accepts letters,
+numbers, spaces, underscores, periods and hyphens. An absent label uses the
+localized account number. Each window is `{ id, label, usedPercent?, resetsAt? }`.
+Timestamps are epoch milliseconds and percentages are 0–100. `plan` is at most
+16 characters and a window's `label` at most 24. Empty or absent evidence never
+becomes zero. The native and protocol validators enforce bounded fields and lists.
 
 `{ contractVersion: 1, generation, action: 'accountLimits', command: 'refresh' |
 'lock' | 'unlock', accountId }` refreshes or updates a local ORQST preference.

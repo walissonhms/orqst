@@ -1,3 +1,4 @@
+import { accountLimitDisplayLabelSchema } from '@orqst/protocol';
 import type { TerminalProvider } from './TerminalStudio';
 
 /** One usage window reported by a provider (e.g. 5 hours, week, a model-specific cap). */
@@ -15,6 +16,8 @@ export interface AccountLimit {
   provider: TerminalProvider;
   /** Stable visible number of the account inside its CLI. */
   index: number;
+  /** Optional, email-free account label reported by the provider. */
+  label?: string;
   plan?: string;
   /** Epoch ms of the latest evidenced reading. */
   updatedAt?: number;
@@ -85,6 +88,7 @@ export function parseAccountLimits(value: unknown): AccountLimit[] {
     const entry = raw as Record<string, unknown>;
     if (typeof entry.id !== 'string' || !providers.has(entry.provider as string)) return [];
     if (!finite(entry.index, 1, 99) || !Number.isInteger(entry.index)) return [];
+    const label = accountLimitDisplayLabelSchema.safeParse(entry.label);
     const windows = Array.isArray(entry.windows)
       ? entry.windows.slice(0, 8).flatMap((w): LimitWindow[] => {
           if (!w || typeof w !== 'object') return [];
@@ -107,6 +111,7 @@ export function parseAccountLimits(value: unknown): AccountLimit[] {
         id: entry.id.slice(0, 64),
         provider: entry.provider as TerminalProvider,
         index: entry.index as number,
+        ...(label.success ? { label: label.data } : {}),
         ...(typeof entry.plan === 'string' ? { plan: entry.plan.slice(0, 16) } : {}),
         ...(finite(entry.updatedAt) ? { updatedAt: entry.updatedAt as number } : {}),
         locked: entry.locked === true,

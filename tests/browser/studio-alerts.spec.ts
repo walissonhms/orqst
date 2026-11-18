@@ -77,38 +77,42 @@ async function openStudio(page: Page, locale = 'pt-BR') {
   await expect(page.locator('.feature-core')).toHaveAttribute('data-state', 'online');
 }
 
-async function reportLimits(page: Page, usedPercent: number) {
-  await page.evaluate((usedPercent) => {
-    const readAt = Date.now();
-    const previous = Reflect.get(window, 'studioLimits')?.accounts[0]?.windows[0]?.resetsAt;
-    Reflect.set(window, 'studioLimits', {
-      readAt,
-      accounts: [
-        {
-          id: 'synthetic-codex',
-          provider: 'codex',
-          index: 1,
-          locked: false,
-          updatedAt: readAt,
-          windows: [
-            {
-              id: 'window-300m',
-              label: '5h',
-              usedPercent,
-              resetsAt: previous ?? readAt + 4 * 3_600_000,
-            },
-          ],
-        },
-        {
-          id: 'synthetic-claude',
-          provider: 'claude',
-          index: 1,
-          locked: false,
-          windows: [],
-        },
-      ],
-    });
-  }, usedPercent);
+async function reportLimits(page: Page, usedPercent: number, ageMs = 0) {
+  await page.evaluate(
+    ({ usedPercent, ageMs }) => {
+      const readAt = Date.now();
+      const previous = Reflect.get(window, 'studioLimits')?.accounts[0]?.windows[0]?.resetsAt;
+      Reflect.set(window, 'studioLimits', {
+        readAt,
+        accounts: [
+          {
+            id: 'codex-default',
+            provider: 'codex',
+            index: 1,
+            locked: false,
+            label: 'Equipe de revisão',
+            updatedAt: readAt - ageMs,
+            windows: [
+              {
+                id: 'window-300m',
+                label: '5h',
+                usedPercent,
+                resetsAt: previous ?? readAt + 4 * 3_600_000,
+              },
+            ],
+          },
+          {
+            id: 'synthetic-claude',
+            provider: 'claude',
+            index: 1,
+            locked: false,
+            windows: [],
+          },
+        ],
+      });
+    },
+    { usedPercent, ageMs },
+  );
 }
 
 async function ownedAlerts(page: Page) {
@@ -176,6 +180,24 @@ test('alerts deduplicate, navigate by immutable terminal ID and persist read and
   await expect(bell).toHaveAttribute('title', /0 unread/);
 });
 
+test('limits use localized account fallbacks and the provider report age in English', async ({
+  page,
+}) => {
+  await openStudio(page, 'en-US');
+  await reportLimits(page, 45, 125_000);
+  const chip = page.locator('.al-trigger');
+  await expect(chip).toContainText('Claude');
+  await expect(chip).not.toContainText('Claude Code');
+  await chip.click();
+  const dialog = page.getByRole('dialog', { name: 'Account limits' });
+  await expect(dialog.getByText('Account 1', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('— no CLI data')).toHaveAttribute(
+    'title',
+    'No limits reported yet',
+  );
+  await expect(dialog.locator('time')).toHaveText('CLI · 2m ago');
+});
+
 for (const [width, height] of [
   [1440, 900],
   [1280, 800],
@@ -190,6 +212,14 @@ for (const [width, height] of [
     };
     const chip = page.locator('.al-trigger');
     await expect(chip).toHaveText(/—/);
+    await chip.click();
+    const popover = page.locator('.al-panel');
+    await expect(popover.getByText('— sem dados da CLI')).toHaveAttribute(
+      'title',
+      'Nenhum limite informado ainda',
+    );
+    await expect(popover.locator('time')).toHaveCount(0);
+    await page.keyboard.press('Escape');
     await capture('01-limits-unavailable');
     await reportLimits(page, 55);
     await expect(chip).toContainText(/Codex\s*55\s*%\s*· 5h/);
@@ -198,10 +228,47 @@ for (const [width, height] of [
     await expect(chip).toContainText(/Claude.*—/);
     await capture('02-limits-reported');
     await chip.click();
-    const popover = page.locator('.al-panel');
     await expect(popover).toBeVisible();
     await expect(popover).toContainText(/renova em/i);
-    await expect(popover).toContainText(/CLI/);
+    const claude = popover
+      .locator('.al-provider')
+      .filter({ has: page.getByRole('heading', { name: 'Claude', exact: true }) });
+    await expect(claude.getByText('Conta 1', { exact: true })).toBeVisible();
+    await expect(claude.getByText('— sem dados da CLI')).toHaveAttribute(
+      'title',
+      'Nenhum limite informado ainda',
+    );
+    await expect(claude.getByRole('button')).toHaveCount(0);
+    const codex = popover
+      .locator('.al-provider')
+      .filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) });
+    await expect(codex.getByText('Equipe de revisão', { exact: true })).toBeVisible();
+    await expect(codex.getByRole('button')).toHaveCount(1);
+    const refresh = codex.getByRole('button', { name: 'Ler os limites de novo', exact: true });
+    await expect(refresh).toHaveAttribute('title', 'Ler os limites de novo');
+    await expect(popover.locator('time')).toHaveText('CLI · agora');
+    await expect(popover.locator('time')).toHaveAttribute(
+      'datetime',
+      await page.evaluate(() =>
+        new Date(Reflect.get(window, 'studioLimits').accounts[0].updatedAt).toISOString(),
+      ),
+    );
+    await expect(chip).not.toContainText('Claude Code');
+    await expect(popover.getByRole('button', { name: 'Escolher contas' })).toHaveCount(0);
+    await expect(popover.getByRole('button', { name: 'Ajustar tetos' })).toHaveCount(0);
+    await refresh.click();
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (Reflect.get(window, 'studioAlertRequests') as FeatureNativeRequest[]).some(
+            (input) =>
+              input.action === 'accountLimits' &&
+              input.command === 'refresh' &&
+              input.accountId === 'codex-default',
+          ),
+        ),
+      )
+      .toBe(true);
     await capture('03-limits-popover');
     await page.keyboard.press('Escape');
     await expect(chip).toBeFocused();

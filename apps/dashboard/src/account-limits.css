@@ -357,7 +357,8 @@
   font-weight: 600;
   margin-right: auto;
 }
-.al-head span {
+.al-head span,
+.al-head time {
   color: var(--v6-muted);
   font-size: 11px;
 }
@@ -387,8 +388,10 @@
   gap: 8px;
   margin-bottom: 6px;
 }
-.al-index {
-  font-weight: 700;
+.al-account-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .al-plan {
   padding: 1px 6px;
@@ -399,11 +402,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.al-updated {
-  margin-left: auto;
-  color: var(--v6-muted);
+.al-account-head .al-icon:first-of-type {
+  margin-inline-start: auto;
 }
 .al-icon {
+  flex: none;
   display: grid;
   place-items: center;
   width: 28px;

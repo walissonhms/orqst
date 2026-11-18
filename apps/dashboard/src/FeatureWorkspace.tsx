@@ -122,7 +122,7 @@ export function FeatureWorkspace({
         .map(({ id, from, to, kind }) => ({ id, from, to, kind })),
     [communication, openedAt],
   );
-  const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
+  const [limitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
         shown?: unknown;
@@ -143,14 +143,6 @@ export function FeatureWorkspace({
       return { caps: { warn: 60, critical: 85 } };
     }
   });
-  const saveLimitPrefs = (next: { shown?: string[]; caps: LimitCaps }) => {
-    setLimitPrefs(next);
-    try {
-      localStorage.setItem('orqst.accountLimits', JSON.stringify(next));
-    } catch {
-      // The choice still applies to this window.
-    }
-  };
   const capsForAlerts = useRef(limitPrefs.caps);
   capsForAlerts.current = limitPrefs.caps;
   const [now, setNow] = useState(Date.now);
@@ -1581,21 +1573,10 @@ export function FeatureWorkspace({
                       shown={limitPrefs.shown ?? limits.map((entry) => entry.id)}
                       caps={limitPrefs.caps}
                       now={now}
-                      source={t('accountLimits.sourceApp')}
-                      onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
-                      onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
                       onRefresh={(accountId) =>
                         void request({ action: 'accountLimits', command: 'refresh', accountId })
                       }
-                      onToggleLock={(accountId) =>
-                        void request({
-                          action: 'accountLimits',
-                          command: limits.find((entry) => entry.id === accountId)?.locked
-                            ? 'unlock'
-                            : 'lock',
-                          accountId,
-                        })
-                      }
+                      canRefresh={(accountId) => accountId === 'codex-default'}
                     />
                   </span>
                 )}

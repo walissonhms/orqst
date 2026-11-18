@@ -910,7 +910,7 @@ fn valid_account_limits(value: &Value) -> bool {
         if !fields.keys().all(|key| {
             matches!(
                 key.as_str(),
-                "id" | "provider" | "index" | "plan" | "updatedAt" | "locked" | "windows"
+                "id" | "provider" | "index" | "label" | "plan" | "updatedAt" | "locked" | "windows"
             )
         }) || !account_limit_id(&account["id"])
             || !ids.insert(account["id"].to_string())
@@ -922,6 +922,16 @@ fn valid_account_limits(value: &Value) -> bool {
                 .as_u64()
                 .is_some_and(|n| (1..=99).contains(&n))
             || !account["locked"].is_boolean()
+            || account.get("label").is_some_and(|label| {
+                !label.as_str().is_some_and(|text| {
+                    text.encode_utf16().count() <= 48
+                        && text.chars().next().is_some_and(char::is_alphanumeric)
+                        && !text.ends_with(' ')
+                        && text
+                            .chars()
+                            .all(|c| c.is_alphanumeric() || " _.-".contains(c))
+                })
+            })
             || account
                 .get("plan")
                 .is_some_and(|plan| !account_limit_label(plan, 16))
@@ -3825,6 +3835,11 @@ mod layout_tests {
         assert!(!valid_request(&request));
         let mut limits = json!({"readAt":100,"accounts":[{"id":"codex-default","provider":"codex","index":1,"plan":"pro","updatedAt":90,"locked":false,"windows":[{"id":"primary","label":"5h","usedPercent":0,"resetsAt":200}]}]});
         assert!(valid_account_limits(&limits));
+        limits["accounts"][0]["label"] = json!("Equipe de revisão");
+        assert!(valid_account_limits(&limits));
+        limits["accounts"][0]["label"] = json!("alias@example.invalid");
+        assert!(!valid_account_limits(&limits));
+        limits["accounts"][0]["label"] = json!("Equipe de revisão");
         limits["accounts"][0]["windows"][0]["usedPercent"] = json!(101);
         assert!(!valid_account_limits(&limits));
         limits["accounts"][0]["windows"][0]["usedPercent"] = json!(0);

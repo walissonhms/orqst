@@ -39,7 +39,7 @@ export function studioTerminals(
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
       const fallback = {
         codex: 'Codex',
-        claude: 'Claude Code',
+        claude: 'Claude',
         opencode: 'OpenCode',
         antigravity: 'Antigravity',
       }[slot.provider];
