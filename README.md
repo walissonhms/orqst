@@ -8,13 +8,12 @@ The row opens reviewed terminal creation and Feature-local delegation. The
 pane menu holds layout choices and the dock shows minimized panes and the
 current Feature. See the [integrated visual comparisons](docs/development/v6-parity/integrated/README.md).
 
-## V6 Studio terminal cards — 2026-11-18
+## Feature Studio pane controls — 2026-11-18
 
-Open a terminal from Studio to connect its live PTY output. The native terminal
-context menu (right-click or Shift+F10) separates hiding the pane, disconnecting
-output, stopping the process and forcing termination. It uses the existing
-native process reviews. See the
-[visual comparison and verification limits](docs/development/v6-visual-parity.md).
+The Feature Studio renders the pane cards, menus, layout controls and minimized
+dock. Embedded terminal documents render the PTY and opening recovery controls.
+The card's close dialog can hide a pane and the native broker reviews process
+termination. See the [dashboard and V6 comparisons](docs/development/spec-l2/README.md).
 
 ## Structured Claude Studio pilot — 2026-11-18 (protocol increment)
 
