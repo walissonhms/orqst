@@ -194,3 +194,4 @@ export * from './composer-mentions.js';
 export * from './owned-turn.js';
 export * from './structured-agents.js';
 export * from './structured-agent-handles.js';
+export * from './communication-inspector.js';

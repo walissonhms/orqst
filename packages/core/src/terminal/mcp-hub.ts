@@ -4,6 +4,7 @@
 // Pure in-memory logic: no socket, PTY, process or persistence of message content.
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import type { InspectorCommand, InspectorReply, InspectorRow } from '@orqst/protocol';
 
 export const HUB_LIMITS = Object.freeze({
   inbox: 20,
@@ -106,6 +107,20 @@ type Message = {
   taskId?: string;
   status?: 'done' | 'failed' | 'blocked';
 };
+type HistoryEntry = {
+  id: string;
+  from: string;
+  target: HubMember;
+  featureId: string;
+  kind: Message['kind'];
+  text: string;
+  truncated: boolean;
+  at: number;
+  taskId?: string;
+  delivery: InspectorRow['delivery'];
+  retried?: boolean;
+};
+
 type Task = {
   id: string;
   from: string;
@@ -138,6 +153,7 @@ export class TerminalMessageHub {
   // Depth of what each terminal last read, and when; a stale chain counts as a new one.
   private chain = new Map<string, { depth: number; at: number }>();
   private tasks = new Map<string, Task>();
+  private history = new Map<string, HistoryEntry>();
   private relays = new Set<string>();
   private closed = false;
 
@@ -152,12 +168,17 @@ export class TerminalMessageHub {
     for (const resolvers of this.waiters.values()) for (const resolve of resolvers) resolve();
     this.waiters.clear();
     this.inboxes.clear();
+    this.history.clear();
     this.relays.clear();
   }
 
   /** Forget a terminal's queue and waits (closed, reloaded or left its Feature). */
   forget(terminalId: string) {
     this.inboxes.delete(terminalId);
+    this.relays.delete(terminalId);
+    for (const entry of this.history.values())
+      if (entry.target.terminalId === terminalId && entry.delivery === 'queued')
+        entry.delivery = 'target_ended';
     for (const resolve of this.waiters.get(terminalId) ?? []) resolve();
     this.waiters.delete(terminalId);
     this.chain.delete(terminalId);
@@ -176,6 +197,7 @@ export class TerminalMessageHub {
   }
 
   private resolveTarget(sender: HubMember, members: HubMember[], raw: string) {
+    if (raw.includes('/')) throw new HubRefusal('not_permitted');
     const wanted = raw.replace(/^@/, '').toLowerCase();
     const targets = this.peers(sender, members).filter(
       (member) =>
@@ -195,6 +217,11 @@ export class TerminalMessageHub {
             (sender) => sender.terminalId === item.from && sender.featureId === item.featureId,
           )),
     );
+    const kept = new Set(queue.map(({ id }) => id));
+    for (const item of this.inboxes.get(target.terminalId) ?? []) {
+      const entry = this.history.get(item.id);
+      if (entry && !kept.has(item.id)) entry.delivery = 'unknown';
+    }
     this.inboxes.set(target.terminalId, queue);
     return queue;
   }
@@ -233,6 +260,19 @@ export class TerminalMessageHub {
       at,
     });
     this.inboxes.set(target.terminalId, inbox);
+    this.history.set(message.id, {
+      id: message.id,
+      target: { ...target },
+      from: sender.terminalId,
+      featureId: target.featureId!,
+      kind: message.kind,
+      at,
+      text: message.text,
+      truncated: message.truncated,
+      taskId: message.taskId,
+      delivery: 'queued',
+    });
+    if (this.history.size > 128) this.history.delete(this.history.keys().next().value!);
     this.evidence({
       messageId: message.id,
       kind: message.kind,
@@ -283,7 +323,112 @@ export class TerminalMessageHub {
     return { messageId: id, state: 'queued' as const };
   }
 
+  inspect(command: InspectorCommand): InspectorReply {
+    if (this.closed) return { status: 'refused', code: 'unavailable' };
+    const members = this.members();
+    const member = (id: string) =>
+      members.find((entry) => entry.terminalId === id && entry.featureId === command.featureId);
+    const live = (id: string) => !!member(id)?.running && this.relays.has(id);
+    const allowedRetry = (entry: HistoryEntry) =>
+      !entry.retried &&
+      entry.kind !== 'result' &&
+      (entry.delivery === 'target_ended' ||
+        (entry.taskId !== undefined && this.tasks.get(entry.taskId)?.state === 'failed')) &&
+      live(entry.target.terminalId) &&
+      member(entry.target.terminalId)?.provider === entry.target.provider &&
+      (entry.from === OWNER_SENDER || live(entry.from));
+    if (command.kind === 'read') {
+      const rows = [...this.history.values()]
+        .reverse()
+        .filter((entry) => entry.featureId === command.featureId)
+        .slice(0, 20)
+        .map((entry): InspectorRow => {
+          const preview = truncateText(entry.text, 1200);
+          const task = entry.taskId ? this.tasks.get(entry.taskId)?.state : undefined;
+          return {
+            id: entry.id,
+            from: entry.from,
+            to: entry.target.terminalId,
+            kind: entry.kind,
+            at: entry.at,
+            text: preview.text,
+            truncated: entry.truncated || preview.truncated,
+            delivery:
+              entry.delivery === 'queued' &&
+              (!member(entry.target.terminalId) ||
+                (entry.from !== OWNER_SENDER && !member(entry.from)))
+                ? 'unknown'
+                : entry.delivery,
+            ...(entry.taskId ? { taskId: entry.taskId } : {}),
+            ...(task ? { task } : {}),
+            retryable: allowedRetry(entry),
+          };
+        });
+      const recipients = members
+        .filter((entry) => entry.featureId === command.featureId)
+        .map(({ terminalId }) => terminalId);
+      return {
+        status: 'ok',
+        featureId: command.featureId,
+        rows,
+        recipients,
+        senders: recipients.filter(live),
+      };
+    }
+    const previous = command.kind === 'retry' ? this.history.get(command.id) : undefined;
+    if (
+      command.kind === 'retry' &&
+      (!previous || previous.featureId !== command.featureId || !allowedRetry(previous))
+    )
+      return { status: 'refused', code: 'not_permitted' };
+    if (previous) previous.retried = true;
+    try {
+      if (command.kind === 'send' && command.targetFeatureId !== command.featureId)
+        throw new HubRefusal('not_permitted');
+      const from = command.kind === 'send' ? command.from : previous!.from;
+      const to = command.kind === 'send' ? command.to : [previous!.target.terminalId];
+      const text = command.kind === 'send' ? command.text : previous!.text;
+      const task = command.kind === 'send' ? command.task : previous!.kind === 'task';
+      if (from !== OWNER_SENDER && !member(from)) throw new HubRefusal('sender_unassigned');
+      if (to.some((id) => !member(id) || id === from)) throw new HubRefusal('unknown_terminal');
+      if (from !== OWNER_SENDER && !live(from)) throw new HubRefusal('not_permitted');
+      if (task && (to.length !== 1 || from === OWNER_SENDER)) throw new HubRefusal('not_permitted');
+      if (from === OWNER_SENDER) {
+        this.admit(
+          from,
+          to.map((id) => member(id)!),
+          members,
+        );
+        for (const id of to) this.ownerSend(command.featureId, id, text);
+      } else if (task) {
+        this.dispatch(from, { name: 'delegate_task', arguments: { to: to[0], task: text } }, true);
+      } else {
+        this.dispatch(from, { name: 'send_message', arguments: { to, text } }, true);
+      }
+      return { status: 'queued' };
+    } catch (error) {
+      if (previous && error instanceof HubRefusal) previous.retried = false;
+      if (!(error instanceof HubRefusal)) throw error;
+      const code = error.code;
+      if (
+        code === 'sender_unassigned' ||
+        code === 'unknown_terminal' ||
+        code === 'not_permitted' ||
+        code === 'inbox_full' ||
+        code === 'rate_limited' ||
+        code === 'too_many_tasks' ||
+        code === 'chain_too_deep'
+      )
+        return { status: 'refused', code };
+      return { status: 'refused', code: 'unavailable' };
+    }
+  }
+
   async call(senderId: string, raw: unknown): Promise<unknown> {
+    return this.dispatch(senderId, raw);
+  }
+
+  private dispatch(senderId: string, raw: unknown, ownerInitiated = false): unknown {
     if (this.closed) throw new HubRefusal('unavailable');
     const members = this.members();
     const sender = members.find((member) => member.terminalId === senderId);
@@ -318,28 +463,32 @@ export class TerminalMessageHub {
             }),
           ).values(),
         ];
-        const depth = this.nextDepth(senderId);
+        const depth = ownerInitiated ? 0 : this.nextDepth(senderId);
         this.admit(senderId, targets, members);
         const cut = truncateText(call.arguments.text, HUB_LIMITS.textBytes);
         const ids = targets.map((target) => {
           const id = randomUUID();
-          this.deliver(sender, target, {
-            id,
-            kind: 'message',
-            text: cut.text,
-            truncated: cut.truncated,
-            depth,
-          });
+          this.deliver(
+            ownerInitiated ? { ...sender, alias: 'owner via ' + sender.alias } : sender,
+            target,
+            {
+              id,
+              kind: 'message',
+              text: cut.text,
+              truncated: cut.truncated,
+              depth,
+            },
+          );
           return { to: target.alias, messageId: id };
         });
         // The chain travels with the recipients; the sender's next message starts over.
-        this.chain.delete(senderId);
+        if (!ownerInitiated) this.chain.delete(senderId);
         return { sent: ids, state: 'queued', truncated: cut.truncated };
       }
       case 'delegate_task': {
         if (!sender.featureId) throw new HubRefusal('sender_unassigned');
         const target = this.resolveTarget(sender, members, call.arguments.to);
-        const depth = this.nextDepth(senderId);
+        const depth = ownerInitiated ? 0 : this.nextDepth(senderId);
         const pending = (task: Task) =>
           (task.state === 'queued' || task.state === 'dequeued') && this.taskScope(task, members);
         const open = [...this.tasks.values()].filter(pending);
@@ -362,15 +511,19 @@ export class TerminalMessageHub {
           state: 'queued',
           updatedAt: this.now(),
         });
-        this.deliver(sender, target, {
-          id: randomUUID(),
-          kind: 'task',
-          text: cut.text,
-          truncated: cut.truncated,
-          depth,
-          taskId,
-        });
-        this.chain.delete(senderId);
+        this.deliver(
+          ownerInitiated ? { ...sender, alias: 'owner via ' + sender.alias } : sender,
+          target,
+          {
+            id: randomUUID(),
+            kind: 'task',
+            text: cut.text,
+            truncated: cut.truncated,
+            depth,
+            taskId,
+          },
+        );
+        if (!ownerInitiated) this.chain.delete(senderId);
         return { taskId, to: target.alias, state: 'queued' };
       }
       case 'submit_result': {
@@ -417,41 +570,47 @@ export class TerminalMessageHub {
       }
       case 'read_messages':
         return this.take(sender, members, call.arguments.limit);
-      case 'wait_messages': {
-        if (!this.inbox(sender, members).length) {
-          const timeout = call.arguments.timeout_ms ?? 30_000;
-          await new Promise<void>((resolve) => {
-            const waiters = this.waiters;
-            const timer = setTimeout(done, timeout);
-            function done() {
-              clearTimeout(timer);
-              // A timed-out wait removes itself; nothing accumulates across calls.
-              const current = waiters.get(senderId);
-              if (current) {
-                const rest = current.filter((entry) => entry !== done);
-                if (rest.length) waiters.set(senderId, rest);
-                else waiters.delete(senderId);
-              }
-              resolve();
-            }
-            const list = waiters.get(senderId) ?? [];
-            list.push(done);
-            waiters.set(senderId, list);
-          });
-        }
-        const current = this.members();
-        const member = current.find((entry) => entry.terminalId === senderId);
-        if (!member?.running || member.featureId !== sender.featureId)
-          throw new HubRefusal('not_member');
-        return this.take(member, current);
-      }
+      case 'wait_messages':
+        return this.wait(sender, members, call.arguments.timeout_ms);
     }
+  }
+
+  private async wait(sender: HubMember, members: HubMember[], timeoutMs?: number) {
+    const senderId = sender.terminalId;
+    if (!this.inbox(sender, members).length) {
+      const timeout = timeoutMs ?? 30_000;
+      await new Promise<void>((resolve) => {
+        const waiters = this.waiters;
+        const timer = setTimeout(done, timeout);
+        function done() {
+          clearTimeout(timer);
+          // A timed-out wait removes itself; nothing accumulates across calls.
+          const current = waiters.get(senderId);
+          if (current) {
+            const rest = current.filter((entry) => entry !== done);
+            if (rest.length) waiters.set(senderId, rest);
+            else waiters.delete(senderId);
+          }
+          resolve();
+        }
+        const list = waiters.get(senderId) ?? [];
+        list.push(done);
+        waiters.set(senderId, list);
+      });
+    }
+    const current = this.members();
+    const member = current.find((entry) => entry.terminalId === senderId);
+    if (!member?.running || member.featureId !== sender.featureId)
+      throw new HubRefusal('not_member');
+    return this.take(member, current);
   }
 
   private take(sender: HubMember, members: HubMember[], limit: number = HUB_LIMITS.readBatch) {
     const inbox = this.inbox(sender, members);
     const items = inbox.splice(0, limit);
     for (const item of items) {
+      const entry = this.history.get(item.id);
+      if (entry) entry.delivery = 'delivered';
       const task = item.kind === 'task' && item.taskId ? this.tasks.get(item.taskId) : undefined;
       if (task?.state === 'queued') {
         task.state = 'dequeued';

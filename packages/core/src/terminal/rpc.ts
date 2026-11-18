@@ -8,6 +8,7 @@ import {
   TERMINAL_SLOT_CEILING,
   terminalEnrollmentInputSchema,
   composerMentionInputSchema,
+  inspectorCommandSchema,
 } from '@orqst/protocol';
 import { z } from 'zod';
 import { terminalStartupIdSchema } from './startup-failure.js';
@@ -104,6 +105,11 @@ export const terminalPairRPCSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('featureViewRead'), id }),
   z.strictObject({ kind: z.literal('featureViewSave'), id, input: featureViewSaveSchema }),
   z.strictObject({ kind: z.literal('featureList'), id }),
+  z.strictObject({
+    kind: z.literal('communicationInspector'),
+    id,
+    command: inspectorCommandSchema,
+  }),
   z.strictObject({ kind: z.literal('communicationProjection'), id, featureId: id.nullable() }),
   z.strictObject({
     kind: z.literal('composerMention'),

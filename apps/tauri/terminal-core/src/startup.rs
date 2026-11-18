@@ -789,6 +789,11 @@ impl Extensions for HostExtensions {
             "enrollmentInspect" => self.enrollment_inspect(request, pair),
             "enroll" => self.enroll(request, pair),
             "composerMention" => self.composer_mention(request),
+            "communicationInspector" => {
+                exact(request, &["kind", "id", "command"]).then(|| self.assert_owner().map(|()|
+                    Some(self.hub.as_ref().map_or_else(|| json!({"status":"refused","code":"unavailable"}),
+                        |hub| hub.hub.inspect(&request["command"])))))
+            }
             "communicationProjection" => self.communication_projection(request),
             // Called by the Core after it set `draining`; `None` answers with the inventory.
             "beginOwnedShutdown" => self.begin_preserved(),
@@ -825,7 +830,11 @@ impl Extensions for HostExtensions {
                 .lock()
                 .unwrap_or_else(|poison| poison.into_inner());
             if let Some(member) = slots.get_mut(slot) {
-                *member = None;
+                let released = member.take();
+                drop(slots);
+                if let Some(released) = released {
+                    hub.hub.forget(&released.terminal_id);
+                }
             }
         }
     }
