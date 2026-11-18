@@ -12,8 +12,12 @@ retained native Studio also links to Settings.
 - Mount `LimitsChip` from `AccountLimits.tsx` with the validated provider accounts
   and existing account preferences. The chip shows the highest unexpired
   reported usage for each displayed provider. A missing reading displays `—`.
-  An explicit zero displays a localized “Unused”. The popover keeps the reported
-  windows, renewal countdowns, source and account controls.
+  An explicit zero displays a localized “Unused”. The popover shows the reported
+  account label or a localized account number and uses the latest provider
+  timestamp for the report age. A tooltip explains missing readings. The
+  default Codex account can reread locally observed evidence. Account selection
+  and cap editing are absent from the production popover because this branch has
+  no Metrics and Limits settings page.
 - Mount `NotificationsDrawer` with `useStudioNotifications().items` and
   `.unreadCount`, plus its mark-read and clear actions. The history keeps the
   most recent 200 entries. Read and clear persist for that Studio renderer
@@ -103,3 +107,11 @@ macOS Preview with notifications enabled. Tap the delivered banner and check
 the saved terminal UUID, Feature and keyboard focus. The browser fixture and
 Rust unit tests cover the renderer and native gates independently; OS delivery,
 permissions, native app focus and a real tap require the integrated Preview.
+
+## Follow-up verification
+
+The follow-up passed lint, typecheck, 22 focused Node tests, seven focused
+Chromium tests, and the targeted Rust account-limits validator test. The
+dashboard build and isolated Tauri resource staging passed. The capture run
+regenerated both sets of five dashboard images and reproduced both V6
+references. Account labels in these captures are synthetic fixture values.
