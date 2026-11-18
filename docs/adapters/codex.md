@@ -133,7 +133,8 @@ without a parseable `timestamp` are dropped.
 | `event_msg`          | `payload.type: task_complete`                                   | `agent.completed`             | `status: completed`, `result: last_agent_message`                                                                               |
 | `event_msg`          | `payload.type: turn_aborted`                                    | `agent.updated`               | `status: interrupted`                                                                                                           |
 | `event_msg`          | `payload.type: error` or `task_failed`                          | `agent.failed`                | `status: failed`, `text` from `message` or `error.message`                                                                      |
-| `event_msg`          | `payload.type: token_count`                                     | `agent.tokens.updated`        | `info.total_token_usage` as `session_cumulative`, `model`                                                                       |
+| `event_msg`          | `payload.type: token_count` with valid usage                    | `agent.tokens.updated`        | `info.total_token_usage` as `session_cumulative`, `model`                                                                       |
+| `event_msg`          | `payload.type: token_count` with rate limits and no valid usage | `agent.rate_limits.updated`   | source reference for the private rate-limit reader                                                                              |
 | `response_item`      | `payload.type: message`, role `user`/`assistant`                | `agent.message`               | `role`, `text`, `phase`                                                                                                         |
 | `response_item`      | `payload.type: agent_message`                                   | `agent.message`               | `role: agent`, `text`, `recipient`, `name` from `author`                                                                        |
 | `response_item`      | `function_call` / `custom_tool_call` named `request_user_input` | `agent.intervention.required` | `status: waiting_for_user`, `name`, `callId`, `text` from arguments/input                                                       |
@@ -258,8 +259,10 @@ Counters are cumulative for the process lifetime, not persisted.
   for every Codex version or every error shape.
 - **Turn completion is not process completion.** `task_complete` ends a turn.
 - **Token totals are snapshots.** ORQST keeps the largest accepted cumulative
-  snapshot. It does not sum records, estimate cost, enforce budgets, or report
-  provider quota.
+  snapshot. The native account panel reads the latest verified provider
+  `rate_limits` evidence independently of token accounting. Quota is unavailable
+  when the window has elapsed and no newer provider evidence is present.
+  The observer has no API price or spend evidence.
 - **No intervention delivery.** A detected request is displayed; the user must
   return to the original terminal.
 - **Schema drift.** Unknown record types are ignored. A future Codex format

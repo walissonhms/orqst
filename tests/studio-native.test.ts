@@ -73,6 +73,7 @@ test('studio terminals use only evidenced snapshot facts', () => {
             bindingEvidence: 'claude-argv-receipt-transcript',
           },
           activities: [{ at: 2000, kind: 'tool', label: 'Read' }],
+          usage: { input: 8, output: 2, cached: 3, total: 10 },
           agentState: 'completed',
           turnId: '00000000-0000-4000-8000-0000000000bb',
         },
@@ -89,6 +90,8 @@ test('studio terminals use only evidenced snapshot facts', () => {
   assert.equal(terminals[0]!.name, 'Codex', 'the CLI name is shown, not the ID twice');
   assert.equal(terminals[0]!.startedAt, undefined);
   assert.equal(terminals[1]!.model, null, 'CLI default stays explicit');
+  assert.equal(terminals[0]!.tokens, undefined);
+  assert.deepEqual(terminals[1]!.tokens, { input: 8, output: 2, cached: 3, total: 10 });
   assert.equal(terminals[1]!.startedAt, 1000);
   assert.equal(terminals[1]!.lastActivity, 'Read');
   assert.equal(terminals[1]!.orchestrator, true);

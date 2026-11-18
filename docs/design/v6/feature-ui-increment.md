@@ -4,6 +4,11 @@ The [2026-11-17 audit](../../development/workspace-agentic-audit.md) records the
 current Workspace scope, layout persistence and Agentic Mode limits. Managed
 Studio uses the Core's saved Feature orchestrator label.
 
+The native Feature toolbar shows reported terminal tokens and coverage when
+scoped usage is available. The structured Studio shows its own measured
+sessions and the OpenCode estimate. See the
+[usage boundaries](../../architecture/data-model.md#token-accounting).
+
 The official source HTML remains unchanged. `FeatureWorkspace` implements its
 compact Workspace/Feature hierarchy, breadcrumb, dense terminal frame and member
 counts with real selected-Core metadata. The shared 31px chrome/xterm remains the

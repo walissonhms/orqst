@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Lock, LockOpen, RefreshCw } from 'lucide-react';
 import type { TerminalProvider } from './TerminalStudio';
 import './account-limits.css';
-import { level, renewsIn, worstWindow } from './account-limits-model';
+import { expiredWindow, level, renewsIn, worstWindow } from './account-limits-model';
 
 export type { AccountLimit, LimitCaps, LimitWindow } from './account-limits-model';
 import type { AccountLimit, LimitCaps } from './account-limits-model';
@@ -104,7 +104,6 @@ export function AccountLimits({
     .map((provider) => ({ provider, list: accounts.filter((a) => a.provider === provider) }))
     .filter((group) => group.list.length > 0);
 
-  if (accounts.length === 0) return null;
   return (
     <>
       <button
@@ -123,7 +122,7 @@ export function AccountLimits({
             <span key={provider} className="al-trigger-group">
               <ProviderMark provider={provider} />
               {list.map((account) => {
-                const worst = worstWindow(account);
+                const worst = worstWindow(account, now);
                 return (
                   <span key={account.id} className="al-trigger-account">
                     <span className="al-index">{account.index}</span>
@@ -152,6 +151,7 @@ export function AccountLimits({
               <span>{source}</span>
             </header>
             <div className="al-body">
+              {accounts.length === 0 && <p className="al-unknown">{t('accountLimits.unknown')}</p>}
               {groups.map(({ provider, list }) => (
                 <section key={provider} className="al-provider">
                   <h3>
@@ -203,26 +203,30 @@ export function AccountLimits({
                       {account.windows.length === 0 && (
                         <p className="al-unknown">{t('accountLimits.unknown')}</p>
                       )}
-                      {account.windows.map((window) => (
-                        <div key={window.id} className="al-window">
-                          <span className="al-window-label">{window.label}</span>
-                          <span className="al-window-bar">
-                            <Bar percent={window.usedPercent} caps={caps} />
-                            <small>
-                              {window.resetsAt === undefined
-                                ? t('accountLimits.renewUnknown')
-                                : t('accountLimits.renews', {
-                                    time: renewsIn(window.resetsAt, now),
-                                  })}
-                            </small>
-                          </span>
-                          <span className={`al-percent al-${level(window.usedPercent, caps)}`}>
-                            {window.usedPercent === undefined
-                              ? '—'
-                              : `${Math.round(window.usedPercent)}%`}
-                          </span>
-                        </div>
-                      ))}
+                      {account.windows.map((window) => {
+                        const expired = expiredWindow(window, now);
+                        const percent = expired ? undefined : window.usedPercent;
+                        return (
+                          <div key={window.id} className="al-window">
+                            <span className="al-window-label">{window.label}</span>
+                            <span className="al-window-bar">
+                              <Bar percent={percent} caps={caps} />
+                              <small>
+                                {expired
+                                  ? t('accountLimits.awaitingReport')
+                                  : window.resetsAt === undefined
+                                    ? t('accountLimits.renewUnknown')
+                                    : t('accountLimits.renews', {
+                                        time: renewsIn(window.resetsAt, now),
+                                      })}
+                              </small>
+                            </span>
+                            <span className={`al-percent al-${level(percent, caps)}`}>
+                              {percent === undefined ? '—' : `${Math.round(percent)}%`}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </article>
                   ))}
                 </section>

@@ -29,10 +29,10 @@ import { terminalAccountLimits } from '../packages/core/src/terminal/account-lim
 const line = (value: unknown) => JSON.stringify(value) + '\n';
 const timestamp = '2026-11-02T15:00:00.000Z';
 const observed = Date.parse(timestamp) + 2000;
-function quota(percent: number) {
+function quota(percent: number, withUsage = true) {
   return record('event_msg', {
     type: 'token_count',
-    info: { total_token_usage: token(100, 20) },
+    ...(withUsage && { info: { total_token_usage: token(100, 20) } }),
     rate_limits: {
       plan_type: 'pro',
       primary: { used_percent: percent, window_minutes: 300, resets_in_seconds: 100 },
@@ -86,6 +86,33 @@ test('only exact indexed source bytes project bounded limits, without modifying 
   }
 });
 
+test('a quota-only Codex record remains indexed without creating or overwriting usage', async () => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), 'orqst-synthetic-quota-only-')));
+  const root = join(dir, 'sessions');
+  const file = join(root, 'rollout.jsonl');
+  await mkdir(root, { mode: 0o700 });
+  await writeFile(file, line(meta()) + line(quota(76.5, false)), { mode: 0o600 });
+  const store = new Store(join(dir, 'db', 'orqst.db'));
+  const observer = new CodexObserver({ root, store });
+  try {
+    await observer.scan();
+    assert.equal(store.events().at(-1)?.type, 'agent.rate_limits.updated');
+    assert.equal(store.events().at(-1)?.payload.usage, undefined);
+    assert.equal(store.sessions()[0]?.usageRecorded, false);
+    assert.equal(
+      readObservedCodexLimits(join(dir, 'db', 'orqst.db'), root, observed)?.windows[0]?.usedPercent,
+      76.5,
+    );
+    const cursor = store.cursor();
+    await observer.scan();
+    assert.equal(store.cursor(), cursor);
+  } finally {
+    await observer.stop();
+    store.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('partial, future and unverified provider data never become zero or a valid account', () => {
   assert.deepEqual(
     parseCodexRateLimitRecord(quota(101), observed)?.windows.map((window) => window.id),
@@ -111,6 +138,13 @@ test('partial, future and unverified provider data never become zero or a valid 
       observed,
     ),
     undefined,
+  );
+  assert.deepEqual(
+    parseCodexRateLimitRecord(
+      record('event_msg', { type: 'token_count', rate_limits: { plan_type: 'plus' } }),
+      observed,
+    ),
+    { plan: 'plus', updatedAt: Date.parse(timestamp), windows: [] },
   );
   const missing = record('event_msg', {
     type: 'token_count',

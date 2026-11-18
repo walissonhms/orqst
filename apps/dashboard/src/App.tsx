@@ -126,9 +126,10 @@ function Status({ status, lastActivity }: { status: AgentStatus; lastActivity?: 
     </span>
   );
 }
-function TokenSummary({ usage }: { usage: Usage }) {
+function TokenSummary({ usage }: { usage: Usage | undefined }) {
   const { t } = useTranslation();
   const f = useFormatting();
+  if (!usage) return <p className="empty-copy">{t('tokensUnavailable')}</p>;
   return (
     <>
       <div className="token-total">
@@ -883,7 +884,11 @@ export function App() {
     (session) => session.status === 'waiting_for_user' || session.status === 'failed',
   );
   const selectedSession = snapshot?.sessions.find((session) => session.id === selected);
-  const usage = sessions.reduce(
+  // Older bridges cannot distinguish a recorded zero from missing telemetry.
+  const measuredSessions = sessions.filter(
+    (session) => session.usageRecorded ?? session.usage.total > 0,
+  );
+  const usage = measuredSessions.reduce(
     (sum, session) => ({
       input: sum.input + session.usage.input,
       output: sum.output + session.usage.output,
@@ -1488,8 +1493,10 @@ export function App() {
                     {t('tokens')}
                     <Zap size={15} />
                   </span>
-                  <strong>{f.compact(usage.total)}</strong>
-                  <small>{t('tokenScope')}</small>
+                  <strong>{measuredSessions.length ? f.compact(usage.total) : '—'}</strong>
+                  <small>
+                    {t('tokenScope', { measured: measuredSessions.length, total: sessions.length })}
+                  </small>
                 </div>
               </section>
               <section className="panel agents-panel">
@@ -1608,7 +1615,9 @@ export function App() {
                               {f.date(session.lastActivity)}
                             </td>
                             <td className="mono token-cell" data-label={t('tokens')}>
-                              {f.compact(session.usage.total)}
+                              {(session.usageRecorded ?? session.usage.total > 0)
+                                ? f.compact(session.usage.total)
+                                : '—'}
                             </td>
                             <td>
                               <button
@@ -1706,7 +1715,7 @@ export function App() {
                           </h2>
                         </div>
                         <div className="usage-body">
-                          <TokenSummary usage={usage} />
+                          <TokenSummary usage={measuredSessions.length ? usage : undefined} />
                         </div>
                       </section>
                     ),

@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   eventSchema,
+  confirmedUsageSchema,
   emptyUsage,
   preferencesSchema,
   modelAnalyticsQuerySchema,
@@ -377,17 +378,18 @@ export class Store {
           event.sessionId,
           event.timestamp,
         );
-      if (p.usage && p.usageKind === 'session_cumulative') {
+      const usage = p.usageKind === 'session_cumulative' && confirmedUsageSchema.safeParse(p.usage);
+      if (usage && usage.success) {
         const priority = event.source.recordType === 'token_usage_record' ? 2 : 1;
         this.run(
           `INSERT INTO token_usage VALUES (?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET
           input=excluded.input,output=excluded.output,cached=excluded.cached,total=excluded.total,source_priority=excluded.source_priority,timestamp=excluded.timestamp
           WHERE excluded.timestamp>=token_usage.timestamp AND (excluded.total>token_usage.total OR (excluded.total=token_usage.total AND excluded.source_priority>=token_usage.source_priority))`,
           event.sessionId,
-          p.usage.input,
-          p.usage.output,
-          p.usage.cached,
-          p.usage.total,
+          usage.data.input,
+          usage.data.output,
+          usage.data.cached,
+          usage.data.total,
           priority,
           event.timestamp,
         );
@@ -484,6 +486,12 @@ export class Store {
       parentSessionId: row.parent_session_id as string | null,
       manualWorkspace: Boolean(row.manual_workspace),
       usage: this.usage(row),
+      usageRecorded: confirmedUsageSchema.safeParse({
+        input: row.input,
+        output: row.output,
+        cached: row.cached,
+        total: row.total,
+      }).success,
     }));
   }
   sessionMetrics(sessionId: string): SessionMetricsResult {

@@ -78,7 +78,12 @@ function synthetic(index: number): StudioTerminal {
     lastActivity: 'Synthetic activity line',
     workspace: syntheticWorkspaces[index % 2]!,
     uuid: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`,
-    tokens: { total: 1_310_000 + n * 9_000, input: 1_200_000, output: 70_000 + n, cached: 707_000 },
+    tokens: {
+      total: 1_270_000 + n * 9_000,
+      input: 1_200_000,
+      output: 70_000 + n * 9_000,
+      cached: 707_000,
+    },
     account: firstAccount(providers[index % providers.length]!),
   };
 }

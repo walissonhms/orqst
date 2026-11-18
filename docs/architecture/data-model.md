@@ -281,7 +281,47 @@ Consequences:
   sum of every record".
 - Turn-level usage contributes no canonical totals. Compact evidence retains only
   the primary `usage` and its `usageKind`, not auxiliary turn/response usage fields.
-- There is no cost, budget, quota, or context-window calculation.
+- The observer's `SessionView.usageRecorded` distinguishes a valid zero snapshot
+  from missing counters. The overview and workspace views show the number of
+  observed sessions with counters. Invalid usage can remain as evidence of a
+  gap, but it cannot replace the valid canonical row on write.
+- Core indexes Codex `event_msg/token_count` carrying only `rate_limits` as
+  `agent.rate_limits.updated`. Its envelope stores source provenance and no
+  rate-limit payload. The existing private per-account reader rechecks the
+  indexed source bytes and their digest before projecting the default Codex
+  bucket's reported plan, utilization and reset times. No token count is inferred
+  from subscription utilization, and an elapsed reset makes utilization
+  unavailable until a new report arrives. Already checkpointed rollouts are
+  not rescanned to find older quota-only records.
+
+### Owned runtime usage projections
+
+These projections are ephemeral, travel on the existing scoped native reads, and
+do not update observer `token_usage` or Analytics.
+
+- Codex Studio accepts the App Server's `thread/tokenUsage/updated` cumulative
+  `total` for the owned thread and preserves the accompanying turn ID. The
+  `last` breakdown is excluded from accounting.
+- OpenCode Studio accepts `session.usage.updated` and a session-bound GET
+  snapshot from its owned server. Uncategorized input, cache reads and cache
+  writes make up input. Non-reasoning output and reasoning make up output.
+  Cache reads are the displayed cached subset. The session estimate is passed
+  through with its upstream USD denomination when positive. OpenCode can
+  emit zero for models with no configured rate, so zero pricing is unavailable.
+- The owned Claude PTY uses the existing bound transcript. Claude's wire
+  counters are response scoped, so the reader accounts each response ID once
+  and uses the most complete compatible counter set from duplicate fragments.
+  It excludes synthetic, error and sidechain records and adds cache reads and
+  writes into input. Partial files, oversized data and transcripts above the
+  512-line accounting bound leave usage unavailable. Neither turns nor
+  model-derived prices are inferred from these counters.
+- The Feature toolbar sums measured PTY sessions in the selected Feature.
+  The structured dialog sums the measured structured sessions in that Feature.
+  Each view reports its coverage and updates snapshots by replacement. Workspace
+  overview totals cover observed sessions associated in SQLite. There is no
+  identity join between separately owned and observed scopes.
+
+See [provider usage sources and validation limits](../research/token-and-plan-accounting.md).
 
 ## Retention
 

@@ -114,3 +114,11 @@ Feature IDs and one action from `structuredAgentsRequestSchema`. Studio reads
 bounded snapshots and proposes start, turn, grant, approval, interrupt and stop.
 All mutations go through a native sheet and a private one-shot review token.
 See the [pilot design and evidence limits](../design/structured-codex-pilot.md).
+
+## Runtime usage
+
+Structured snapshots may include a session `usage` with `usageKind` set to
+`session_cumulative`. Codex includes the source turn ID when supplied. OpenCode
+may include its USD estimate with `source: "opencode_estimate"`. Bound Claude PTY
+canvas entries may supply a normalized usage total. For the source and coverage
+of each projection, see [token accounting](../architecture/data-model.md#token-accounting).

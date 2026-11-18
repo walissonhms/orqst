@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  expiredWindow,
   level,
   parseAccountLimits,
   renewsIn,
@@ -28,19 +29,38 @@ test('renewal countdowns are compact and never negative', () => {
 
 test('the most used window represents the account', () => {
   assert.equal(
-    worstWindow({
-      id: 'a',
-      provider: 'claude',
-      index: 1,
-      locked: false,
-      windows: [
-        { id: 'w', label: 'Week', usedPercent: 46 },
-        { id: 'm', label: 'Model', usedPercent: 81 },
-        { id: 'u', label: 'Unknown' },
-      ],
-    })?.id,
+    worstWindow(
+      {
+        id: 'a',
+        provider: 'claude',
+        index: 1,
+        locked: false,
+        windows: [
+          { id: 'w', label: 'Week', usedPercent: 46 },
+          { id: 'm', label: 'Model', usedPercent: 81 },
+          { id: 'u', label: 'Unknown' },
+        ],
+      },
+      0,
+    )?.id,
     'm',
   );
+});
+
+test('expired counters never win the live toolbar even when they were the highest', () => {
+  const expired = { id: 'x', label: '5h', usedPercent: 100, resetsAt: 30 };
+  const live = { id: 'y', label: '7d', usedPercent: 11, resetsAt: 300 };
+  const account = {
+    id: 'a',
+    provider: 'codex' as const,
+    index: 1,
+    locked: false,
+    windows: [expired, live],
+  };
+  assert.equal(expiredWindow(expired, 29), false);
+  assert.equal(expiredWindow(expired, 30), true);
+  assert.equal(worstWindow(account, 30)?.id, 'y');
+  assert.equal(worstWindow(account, 300), undefined);
 });
 
 test('host data is validated; malformed values are dropped, not guessed', () => {

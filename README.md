@@ -28,6 +28,12 @@ saved Core snapshot. The observer Workspace directory is a separate session
 filter. The [source audit and native checklist](docs/development/workspace-agentic-audit.md)
 describe the available manual and scoped controls and the planned Agentic workflow.
 
+## Token accounting and plan evidence
+
+The observer, owned terminals and structured sessions report usage within their
+measured scopes. See the [data model](docs/architecture/data-model.md#token-accounting)
+and [provider coverage](docs/research/token-and-plan-accounting.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

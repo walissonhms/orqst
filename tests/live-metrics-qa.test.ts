@@ -427,7 +427,7 @@ test('unsupported adapters, invalid usage rows and incremental usage stay unavai
         usage: { input: 5, output: 1, cached: 9, total: 6 },
       }),
     );
-    unavailable(store.sessionMetrics(cached), 'invalid_evidence');
+    unavailable(store.sessionMetrics(cached), 'usage_not_recorded');
 
     const total = 'session-total-mismatch';
     store.ingest(
@@ -437,7 +437,7 @@ test('unsupported adapters, invalid usage rows and incremental usage stay unavai
         usage: { input: 5, output: 1, cached: 0, total: 99 },
       }),
     );
-    unavailable(store.sessionMetrics(total), 'invalid_evidence');
+    unavailable(store.sessionMetrics(total), 'usage_not_recorded');
   });
 });
 

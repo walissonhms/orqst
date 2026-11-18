@@ -35,6 +35,53 @@ test('cumulative and mirror records never double count input, output or cache', 
     store.close();
   }
 });
+test('unknown, measured zero and measured usage remain distinct in workspace rollups', () => {
+  const store = new Store(':memory:');
+  try {
+    const [start] = normalized([meta()]);
+    assert.ok(start);
+    store.ingest(start);
+    const other = {
+      ...start,
+      id: 'other-start',
+      sessionId: 'other-session',
+      agentId: 'other-agent',
+    };
+    store.ingest(other);
+    store.ingest({
+      ...start,
+      id: 'response',
+      type: 'agent.tokens.updated',
+      payload: {
+        usage: { input: 100, output: 10, cached: 30, total: 110 },
+        usageKind: 'response_incremental',
+      },
+    });
+    assert.equal(store.sessions().find(({ id }) => id === start.sessionId)?.usageRecorded, false);
+    store.ingest({
+      ...start,
+      id: 'zero',
+      type: 'agent.tokens.updated',
+      payload: {
+        usage: { input: 0, output: 0, cached: 0, total: 0 },
+        usageKind: 'session_cumulative',
+      },
+    });
+    const usage = { input: 100, output: 10, cached: 30, total: 110 };
+    store.ingest({
+      ...other,
+      id: 'other-usage',
+      type: 'agent.tokens.updated',
+      payload: { usage, usageKind: 'session_cumulative' },
+    });
+    assert.equal(store.sessions().find(({ id }) => id === start.sessionId)?.usageRecorded, true);
+    assert.deepEqual(store.workspaces()[0]?.usage, usage);
+    assert.deepEqual(store.totals(), usage);
+  } finally {
+    store.close();
+  }
+});
+
 test('restart preserves usage, source checkpoints, settings, notifications and workspace overrides', () => {
   const dir = mkdtempSync(join(tmpdir(), 'orqst-store-'));
   const file = join(dir, 'db');

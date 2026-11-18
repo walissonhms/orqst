@@ -87,7 +87,9 @@ export function normalizeRecord(
         state.sessionId!,
         type!,
         str(p.type) ?? '',
-        str(p.response_id) ?? str(p.id) ?? source.hash,
+        eventType === 'agent.rate_limits.updated'
+          ? source.hash
+          : (str(p.response_id) ?? str(p.id) ?? source.hash),
         eventType,
       ),
       type: eventType,
@@ -118,7 +120,7 @@ export function normalizeRecord(
     return emit('session.started', { status: 'unknown', parentSessionId: state.parentSessionId });
   if (type === 'turn_context') return emit('session.updated', { model: state.model });
   if (type === 'token_usage_record') {
-    if (str(p.thread_id) && p.thread_id !== state.sessionId) return [];
+    if (p.thread_id != null && p.thread_id !== state.sessionId) return [];
     const snapshot = usage(p.thread_token_usage);
     if (!snapshot) return [];
     return emit('agent.tokens.updated', {
@@ -152,7 +154,9 @@ export function normalizeRecord(
             usageKind: 'session_cumulative',
             model: state.model,
           })
-        : [];
+        : p.rate_limits && typeof p.rate_limits === 'object' && !Array.isArray(p.rate_limits)
+          ? emit('agent.rate_limits.updated', {})
+          : [];
     }
   }
   if (type === 'response_item') {

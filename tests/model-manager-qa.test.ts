@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path: string) => readFile(path, 'utf8');
 
-test('SessionView carries no availability, capability, catalogue or selection field', async () => {
+test('SessionView carries no model availability, capability, catalogue or selection field', async () => {
   const protocol = await read('packages/protocol/src/index.ts');
   const start = protocol.indexOf('export interface SessionView {');
   assert.notEqual(start, -1);
@@ -25,6 +25,7 @@ test('SessionView carries no availability, capability, catalogue or selection fi
     'model',
     'parentSessionId',
     'usage',
+    'usageRecorded',
     'manualWorkspace',
   ]);
   // No payload expansion for discovery, availability, capabilities or selection.

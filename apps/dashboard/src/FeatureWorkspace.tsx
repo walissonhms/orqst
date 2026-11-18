@@ -59,7 +59,7 @@ export function FeatureWorkspace({
   workspaceId?: string;
   onWorkspace?: (id: string) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
@@ -247,6 +247,10 @@ export function FeatureWorkspace({
     () => (studio ? studioTerminals(snapshot, panes, evidence, now) : []),
     [studio, snapshot, panes, evidence, now],
   );
+  const measuredTerminals = terminals.flatMap(({ tokens }) =>
+    tokens?.total === undefined ? [] : [tokens.total],
+  );
+  const featureTokens = measuredTerminals.reduce((sum, total) => sum + total, 0);
   // Full-window terminals like the preview; the Feature panel opens on request.
   const [immersive, setImmersive] = useState(() => {
     try {
@@ -418,6 +422,7 @@ export function FeatureWorkspace({
       setBusy(true);
       setOperation(action.action);
       setNotice('');
+      const readsLimits = ['accountLimits', 'snapshot', 'canvas'].includes(action.action);
       try {
         const reply = await native.request({
           ...action,
@@ -426,7 +431,12 @@ export function FeatureWorkspace({
         } as FeatureNativeRequest);
         if (!live.current) return;
         if (reply.canvas) setEvidence(reply.canvas);
-        if (reply.accountLimits) setLimits(parseAccountLimits(reply.accountLimits.accounts));
+        if (
+          reply.accountLimits ||
+          action.action === 'accountLimits' ||
+          ((action.action === 'snapshot' || action.action === 'canvas') && reply.status === 'ok')
+        )
+          setLimits(parseAccountLimits(reply.accountLimits?.accounts));
         if (reply.mention) lastMention.current = reply.mention;
         if (reply.communication) setCommunication(reply.communication.events);
         if (reply.snapshot) acceptSnapshot(reply.snapshot);
@@ -443,7 +453,10 @@ export function FeatureWorkspace({
         }
         return reply.status;
       } catch {
-        if (live.current) setNotice('unavailable');
+        if (live.current) {
+          if (readsLimits) setLimits([]);
+          setNotice('unavailable');
+        }
         return 'unavailable';
       } finally {
         working.current = false;
@@ -1110,7 +1123,18 @@ export function FeatureWorkspace({
                       : t('terminalStudio.arrangeIssue', { status: arrangeIssue })}
                   </span>
                 )}
-                {limits.length > 0 ? (
+                {selected &&
+                  measuredTerminals.length > 0 &&
+                  Number.isSafeInteger(featureTokens) && (
+                    <span className="fine-print">
+                      {t('terminalStudio.featureTokens', {
+                        tokens: new Intl.NumberFormat(i18n.resolvedLanguage).format(featureTokens),
+                        measured: measuredTerminals.length,
+                        total: terminals.length,
+                      })}
+                    </span>
+                  )}
+                {nativeWorkspace ? (
                   <AccountLimits
                     accounts={limits}
                     shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}

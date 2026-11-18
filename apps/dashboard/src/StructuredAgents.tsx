@@ -43,7 +43,8 @@ function sessionState(session: StructuredSession): string {
 }
 
 export function StructuredAgents({ client, scope, featureName, onClose }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage);
   const [snapshot, setSnapshot] = useState<StructuredAgentsSnapshot>();
   const [sessionId, setSessionId] = useState('');
   const [workerHandle, setWorkerHandle] = useState('');
@@ -114,8 +115,11 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
     }
   }
 
-  const session = snapshot?.sessions.find((entry) => entry.sessionId === sessionId);
-  const workerId = resolveStructuredHandle(scope, snapshot?.sessions ?? [], workerHandle);
+  const sessions = snapshot?.sessions ?? [];
+  const session = sessions.find((entry) => entry.sessionId === sessionId);
+  const measuredSessions = sessions.flatMap(({ usage }) => (usage ? [usage.usage.total] : []));
+  const featureTokens = measuredSessions.reduce((sum, total) => sum + total, 0);
+  const workerId = resolveStructuredHandle(scope, sessions, workerHandle);
   const workers =
     snapshot?.sessions.filter(
       (entry) => entry.sessionId !== sessionId && entry.lifecycle === 'ready' && !entry.busy,
@@ -180,6 +184,15 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
         </label>
         <button disabled={busy || !snapshot || !label.trim()}>{t('structuredAgents.start')}</button>
       </form>
+      {measuredSessions.length > 0 && Number.isSafeInteger(featureTokens) && (
+        <p className="fine-print">
+          {t('structuredAgents.featureUsage', {
+            tokens: number.format(featureTokens),
+            measured: measuredSessions.length,
+            total: sessions.length,
+          })}
+        </p>
+      )}
       {session && (
         <>
           <section className="structured-agents-actions">
@@ -221,6 +234,24 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
               {t('structuredAgents.stop')}
             </button>
           </section>
+          <p className="fine-print">
+            {session.usage
+              ? t('structuredAgents.sessionUsage', {
+                  tokens: number.format(session.usage.usage.total),
+                })
+              : t('tokensUnavailable')}
+            {' · '}
+            {session.usage?.cost
+              ? t('structuredAgents.costEstimate', {
+                  cost: new Intl.NumberFormat(i18n.resolvedLanguage, {
+                    style: 'currency',
+                    currency: session.usage.cost.currency,
+                    currencyDisplay: 'code',
+                    maximumSignificantDigits: 6,
+                  }).format(session.usage.cost.amount),
+                })
+              : t('structuredAgents.costUnavailable')}
+          </p>
           {session.approvals
             .filter(({ state }) => state === 'pending')
             .map((approval) => (

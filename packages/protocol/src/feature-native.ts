@@ -4,6 +4,7 @@ import {
   communicationProjectionSchema,
 } from './composer-mentions.js';
 import { z } from 'zod';
+import { confirmedUsageSchema } from './live-metrics.js';
 import {
   featureCreateSchema,
   featureUpdateSchema,
@@ -287,6 +288,7 @@ export const featureCanvasSessionEvidenceSchema = z.strictObject({
     )
     .max(3),
   agentState: z.enum(['running', 'waiting_for_user', 'completed', 'failed', 'unknown']),
+  usage: confirmedUsageSchema.optional(),
   turnId: z.uuid().optional(),
 });
 /** Display-only owned PTY evidence, never a session status or execution grant. */
@@ -305,6 +307,7 @@ export const featureCanvasEvidenceSchema = z
           activities: featureCanvasSessionEvidenceSchema.shape.activities.optional(),
           agentState: featureCanvasSessionEvidenceSchema.shape.agentState.optional(),
           turnId: featureCanvasSessionEvidenceSchema.shape.turnId,
+          usage: featureCanvasSessionEvidenceSchema.shape.usage,
         }),
       )
       .max(8),
@@ -318,7 +321,8 @@ export const featureCanvasEvidenceSchema = z
           (entry.session === undefined
             ? entry.activities === undefined &&
               entry.agentState === undefined &&
-              entry.turnId === undefined
+              entry.turnId === undefined &&
+              entry.usage === undefined
             : entry.state !== 'unknown' &&
               entry.activities !== undefined &&
               entry.agentState !== undefined &&

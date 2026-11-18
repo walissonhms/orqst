@@ -42,6 +42,7 @@ export const eventTypes = [
   'agent.tool.completed',
   'agent.intervention.required',
   'agent.tokens.updated',
+  'agent.rate_limits.updated',
   'workspace.updated',
 ] as const;
 export const payloadSchema = z.object({
@@ -120,6 +121,8 @@ export interface SessionView {
   model: string | null;
   parentSessionId: string | null;
   usage: Usage;
+  /** False for sessions without a valid cumulative snapshot. Absent on older servers. */
+  usageRecorded?: boolean;
   manualWorkspace: boolean;
 }
 export interface WorkspaceView {
