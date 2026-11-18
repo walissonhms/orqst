@@ -1,0 +1,23 @@
+{
+  "studio": {
+    "pane": {
+      "settings": "Settings / rename",
+      "editAlias": "Edit mention alias",
+      "alias": "Mention alias",
+      "float": "Make floating",
+      "dock": "Dock in grid",
+      "gridFull": "The grid has no free position",
+      "hide": "Minimize pane",
+      "maximize": "Maximize / restore",
+      "duplicateConfig": "Duplicate configuration",
+      "layouts": "Arrangements",
+      "emptySlot": "＋ Free position"
+    }
+  },
+  "dock": {
+    "title": "Minimized",
+    "restore": "Restore {{name}}",
+    "total_one": "{{count}} terminal",
+    "total_other": "{{count}} terminals"
+  }
+}

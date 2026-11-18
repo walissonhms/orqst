@@ -2,10 +2,12 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type Ref,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -33,6 +35,11 @@ import {
 } from 'lucide-react';
 import {
   addPane,
+  assignStudioSlots,
+  dockStudioPane,
+  restoreStudioLayout,
+  studioDockedMode,
+  studioDockGeometry,
   arrange,
   arrangementModes,
   containRect,
@@ -65,7 +72,14 @@ import {
   type Rect,
 } from './terminal-arrangement';
 import type { NativePaneLayout } from './studio-native';
-import { PaneMenu, type AccountOption, type PaneAction, type PaneActionType } from './PaneMenu';
+import { nativeHiddenTerminals } from './feature-workspace-dock';
+import {
+  PaneMenu,
+  useStudioPaneText,
+  type AccountOption,
+  type PaneAction,
+  type PaneActionType,
+} from './PaneMenu';
 import { TerminalDetails } from './TerminalDetails';
 import { MentionComposer, type DeliveryState, type MentionSend } from './MentionComposer';
 import './terminal-studio.css';
@@ -81,6 +95,10 @@ export interface StudioTerminal {
   /** Stable visible label such as `T-001`. */
   label: string;
   name: string;
+  /** Scoped host-supplied display alias. */
+  alias?: string;
+  active?: boolean;
+  nativeMinimized?: boolean;
   provider: TerminalProvider;
   /** `undefined` = unknown, `null` = CLI default, string = selected model. */
   model?: string | null;
@@ -124,7 +142,28 @@ export interface StudioMessage {
   kind: 'message' | 'delegation' | 'result';
 }
 
+export interface StudioLayoutControls {
+  toggleGrid(): void;
+  restore(): void;
+}
+
+export interface StudioDuplicateConfig {
+  sourceTerminalId: string;
+  name: string;
+  provider: TerminalProvider;
+  model: string | null;
+}
+
+export interface StudioPaneChrome {
+  featureName?: string;
+  layoutControlsRef?: Ref<StudioLayoutControls>;
+  onRename?(terminalId: string): void;
+  onEditAlias?(terminalId: string): void;
+  onDuplicateConfig?(draft: StudioDuplicateConfig): void;
+}
+
 interface Props {
+  v6?: StudioPaneChrome;
   terminals: StudioTerminal[];
   messages: StudioMessage[];
   renderBody: (terminal: StudioTerminal) => ReactNode;
@@ -275,7 +314,7 @@ function reconcile(state: ArrangementState, terminals: StudioTerminal[]): Arrang
   const marked = terminals.find((terminal) => terminal.orchestrator);
   if (marked) next = { ...next, orchestrator: marked.id };
   else if (next.orchestrator && !ids.has(next.orchestrator)) next = { ...next, orchestrator: null };
-  return next;
+  return assignStudioSlots(next);
 }
 
 function validGrid(value: unknown): ArrangementState['grid'] {
@@ -290,9 +329,10 @@ function validGrid(value: unknown): ArrangementState['grid'] {
   return { cols: numbers(record.cols), rows: numbers(record.rows) };
 }
 
-function initialState(key: string, terminals: StudioTerminal[]): ArrangementState {
+function initialState(key: string, terminals: StudioTerminal[], v6: boolean): ArrangementState {
   const stored = loadState(key);
   const base: ArrangementState = {
+    ...(v6 ? { template: 'v6' } : {}),
     mode: arrangementModes.includes(stored?.mode as ArrangementMode)
       ? (stored!.mode as ArrangementMode)
       : 'mosaic',
@@ -349,11 +389,13 @@ interface Drag {
   origin: Rect;
   kind: 'move' | 'resize';
   edge?: Edge;
+  floating?: boolean;
   dx: number;
   dy: number;
 }
 
 export function TerminalStudio({
+  v6,
   terminals,
   messages,
   renderBody,
@@ -379,6 +421,10 @@ export function TerminalStudio({
   emptyHint,
 }: Props) {
   const { t } = useTranslation();
+  const paneText = useStudioPaneText();
+  const canonical = v6 !== undefined;
+  const MaximizeIcon = canonical ? Square : Maximize2;
+  const RestoreIcon = canonical ? SquareStack : Minimize2;
   const stageRef = useRef<HTMLDivElement>(null);
   const [scope, setScope] = useState<string>('all');
   const [composer, setComposer] = useState<{ from: string | null } | null>(null);
@@ -393,7 +439,7 @@ export function TerminalStudio({
   const [notices, setNotices] = useState<StudioStatusEvent[]>([]);
   const [flash, setFlash] = useState<Set<string>>(new Set());
   const [view, setView] = useState<Rect>({ x: 0, y: 0, width: 1200, height: 700 });
-  const [localState, setState] = useState(() => initialState(storageKey, terminals));
+  const [localState, setState] = useState(() => initialState(storageKey, terminals, canonical));
   const state = useMemo(
     () =>
       orchestratorLabel === undefined
@@ -402,6 +448,24 @@ export function TerminalStudio({
     [localState, orchestratorLabel],
   );
   const [stack, setStack] = useState<string[]>([]);
+  const [activePane, setActivePane] = useState<string>();
+  useImperativeHandle(
+    v6?.layoutControlsRef,
+    () => ({
+      toggleGrid: () =>
+        setState((current) => ({
+          ...current,
+          mode: current.mode === 'mosaic' ? 'columns' : 'mosaic',
+          maximized: null,
+          grid: undefined,
+        })),
+      restore: () => {
+        setState(restoreStudioLayout);
+        setStack([]);
+      },
+    }),
+    [],
+  );
   const [drag, setDrag] = useState<Drag | null>(null);
   const [split, setSplit] = useState<{ index: number; last: number; pointer: number } | null>(null);
   const [track, setTrack] = useState<{
@@ -427,12 +491,25 @@ export function TerminalStudio({
   }, [fixedNow]);
 
   useEffect(() => setState((current) => reconcile(current, terminals)), [terminals]);
+  const nativeActiveId = terminals.find((terminal) => terminal.active)?.id;
+  const nativeHidden = useRef(new Set<string>());
+  useEffect(() => {
+    if (canonical) setActivePane(nativeActiveId);
+  }, [canonical, nativeActiveId]);
+  useEffect(() => {
+    if (!canonical) return;
+    const next = nativeHiddenTerminals(terminals);
+    const hidden = [...next].filter((id) => !nativeHidden.current.has(id));
+    nativeHidden.current = next;
+    if (hidden.length)
+      setState((current) => hidden.reduce((layout, id) => minimize(layout, id), current));
+  }, [canonical, terminals]);
   // Each Feature keeps its own arrangement: load the new key's state before saving again.
   const stateKey = useRef(storageKey);
   useEffect(() => {
     if (stateKey.current !== storageKey) {
       stateKey.current = storageKey;
-      setState(initialState(storageKey, terminals));
+      setState(initialState(storageKey, terminals, canonical));
       return;
     }
     saveState(storageKey, localState);
@@ -557,6 +634,8 @@ export function TerminalStudio({
     [state, scope, byId],
   );
   const placed = useMemo(() => arrange(scoped, view, stack), [scoped, view, stack]);
+  const dockGeometry = studioDockedMode(scoped) ? studioDockGeometry(scoped, view) : undefined;
+  const wireMode = placed.some((pane) => pane.floating) ? 'free' : scoped.mode;
   const placedById = useMemo(() => new Map(placed.map((pane) => [pane.id, pane])), [placed]);
   const minimized = state.panes
     .filter((pane) => pane.minimized && inScope(byId.get(pane.id)))
@@ -601,6 +680,7 @@ export function TerminalStudio({
     event.preventDefault();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     bringToFront(pane.id);
+    setActivePane(pane.id);
     setDrag({
       id: pane.id,
       pointer: event.pointerId,
@@ -609,6 +689,7 @@ export function TerminalStudio({
       origin: pane.rect,
       kind,
       edge,
+      floating: pane.floating,
       dx: 0,
       dy: 0,
     });
@@ -624,7 +705,7 @@ export function TerminalStudio({
     const { id, origin, dx, dy, kind, edge } = drag;
     setDrag(null);
     if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
-    if (state.mode === 'free') {
+    if (state.mode === 'free' || drag.floating) {
       const rect =
         kind === 'move'
           ? { ...origin, x: origin.x + dx, y: origin.y + dy }
@@ -632,19 +713,29 @@ export function TerminalStudio({
       setState((current) => updatePane(current, id, { free: containRect(rect, view) }));
       return;
     }
-    const stage = stageRef.current?.getBoundingClientRect();
+    const stage = stageRef.current;
     if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    const x = event.clientX - rect.left + stage.scrollLeft;
+    const y = event.clientY - rect.top + stage.scrollTop;
+    if (dockGeometry && !state.maximized) {
+      const slot = dockGeometry.slots.findIndex(
+        (box) => x >= box.x && x < box.x + box.width && y >= box.y && y < box.y + box.height,
+      );
+      if (slot >= 0) setState((current) => dockStudioPane(current, id, slot));
+      return;
+    }
     const target = dropTarget(
       placed.filter((pane) => pane.id !== id),
-      event.clientX - stage.left,
-      event.clientY - stage.top,
+      x,
+      y,
     );
     if (target) setState((current) => reorder(current, id, orderIndex(current, target)));
   };
 
   const liveRect = (pane: PlacedPane): Rect => {
     if (!drag || drag.id !== pane.id) return pane.rect;
-    if (state.mode === 'free') {
+    if (state.mode === 'free' || pane.floating) {
       return drag.kind === 'move'
         ? containRect(
             { ...drag.origin, x: drag.origin.x + drag.dx, y: drag.origin.y + drag.dy },
@@ -656,7 +747,7 @@ export function TerminalStudio({
   };
 
   const splitHandles =
-    (state.mode === 'columns' || state.mode === 'rows') && !state.maximized
+    !dockGeometry && (state.mode === 'columns' || state.mode === 'rows') && !state.maximized
       ? placed.slice(0, -1).map((pane, index) => {
           const rect = pane.rect;
           const style =
@@ -705,10 +796,13 @@ export function TerminalStudio({
 
   // Mosaic: drag the borders between terminals to resize columns and rows.
   const trackHandles = (() => {
-    if (scoped.mode !== 'mosaic' || scoped.maximized || placed.length < 2) return null;
-    const g = mosaicGeometry(visiblePanes(scoped), paneView(scoped, view), state.grid);
+    if ((!dockGeometry && (scoped.mode !== 'mosaic' || placed.length < 2)) || scoped.maximized)
+      return null;
+    const g =
+      dockGeometry ?? mosaicGeometry(visiblePanes(scoped), paneView(scoped, view), state.grid);
+    const cells = 'cells' in g ? g.cells : [];
     const spans = (axis: 'cols' | 'rows', border: number, at: number) =>
-      g.cells.some((cell) =>
+      cells.some((cell) =>
         axis === 'cols'
           ? cell.col <= border &&
             cell.col + cell.w - 1 >= border + 1 &&
@@ -737,13 +831,18 @@ export function TerminalStudio({
       if (delta) setState((current) => resizeTrack(current, view, axis, index, delta));
     };
     for (let c = 0; c < g.colW.length - 1; c++)
-      for (let r = 0; r < g.rowH.length; r++) {
+      for (let r = 0; r < (dockGeometry ? 1 : g.rowH.length); r++) {
         if (spans('cols', c, r)) continue;
         handles.push(
           <div
             key={`col-${c}-${r}`}
             className="ts-split ts-split-columns ts-track"
-            style={{ left: g.colX[c]! + g.colW[c]!, top: g.rowY[r], width: GAP, height: g.rowH[r] }}
+            style={{
+              left: g.colX[c]! + g.colW[c]!,
+              top: g.rowY[r],
+              width: GAP,
+              height: dockGeometry ? view.height : g.rowH[r],
+            }}
             role="separator"
             aria-orientation="vertical"
             aria-label={t('terminalStudio.resizeColumns')}
@@ -756,13 +855,18 @@ export function TerminalStudio({
         );
       }
     for (let r = 0; r < g.rowH.length - 1; r++)
-      for (let c = 0; c < g.colW.length; c++) {
+      for (let c = 0; c < (dockGeometry ? 1 : g.colW.length); c++) {
         if (spans('rows', r, c)) continue;
         handles.push(
           <div
             key={`row-${r}-${c}`}
             className="ts-split ts-split-rows ts-track"
-            style={{ left: g.colX[c], top: g.rowY[r]! + g.rowH[r]!, width: g.colW[c], height: GAP }}
+            style={{
+              left: g.colX[c],
+              top: g.rowY[r]! + g.rowH[r]!,
+              width: dockGeometry ? view.width : g.colW[c],
+              height: GAP,
+            }}
             role="separator"
             aria-orientation="horizontal"
             aria-label={t('terminalStudio.resizeRows')}
@@ -821,16 +925,26 @@ export function TerminalStudio({
           element.getBoundingClientRect(),
         )
       : [];
-    const underOverlay = (box: DOMRect) =>
-      overlays.some(
-        (o) =>
-          o.width > 0 &&
-          o.height > 0 &&
-          box.left < o.right &&
-          o.left < box.right &&
-          box.top < o.bottom &&
-          o.top < box.bottom,
-      );
+    const intersects = (box: DOMRect, o: DOMRect) =>
+      o.width > 0 &&
+      o.height > 0 &&
+      box.left < o.right &&
+      o.left < box.right &&
+      box.top < o.bottom &&
+      o.top < box.bottom;
+    const stageBox = stage.getBoundingClientRect();
+    const front = placed
+      .filter((pane) => pane.floating)
+      .map((pane) => ({
+        z: drag?.id === pane.id ? 255 : pane.z,
+        chrome: Array.from(
+          stage.querySelectorAll<HTMLElement>(
+            `[data-pane-id="${CSS.escape(pane.id)}"] .ts-head,` +
+              `[data-pane-id="${CSS.escape(pane.id)}"] .ts-edge`,
+          ),
+          (element) => element.getBoundingClientRect(),
+        ),
+      }));
     const layout: NativePaneLayout[] = placed.map((pane) => {
       const hole = stage.querySelector<HTMLElement>(
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
@@ -838,12 +952,37 @@ export function TerminalStudio({
       const box = hole?.getBoundingClientRect();
       // Tiled modes may not overlap natively, and a null rect revokes the view (and its
       // pending opening). Keep the dragged view at its last sent place until it drops.
-      if (drag?.id === pane.id && scoped.mode !== 'free' && !covered) {
+      if (
+        drag?.id === pane.id &&
+        !pane.floating &&
+        scoped.mode !== 'free' &&
+        !covered &&
+        !overlays.length
+      ) {
         const kept = lastRects.current.get(pane.id);
         if (kept) return { id: pane.id, z: pane.z, rect: kept };
       }
+      const z = drag?.id === pane.id && wireMode === 'free' ? 255 : pane.z;
+      // A retained sibling webview can cover React chrome underneath it. Yield
+      // only the covered lower PTY while a higher pane's controls intersect it.
+      const occluded =
+        box &&
+        front.some((item) => item.z > z && item.chrome.some((chrome) => intersects(box, chrome)));
+      const outside =
+        canonical &&
+        box &&
+        (box.left < stageBox.left ||
+          box.top < stageBox.top ||
+          box.right > stageBox.right + 0.05 ||
+          box.bottom > stageBox.bottom + 0.05);
       const rect =
-        covered || !box || box.width < 1 || box.height < 1 || underOverlay(box)
+        covered ||
+        !box ||
+        box.width < 1 ||
+        box.height < 1 ||
+        outside ||
+        occluded ||
+        overlays.some((overlay) => intersects(box, overlay))
           ? null
           : {
               x: box.left - origin.left,
@@ -852,12 +991,12 @@ export function TerminalStudio({
               height: box.height,
             };
       if (rect) lastRects.current.set(pane.id, rect);
-      return { id: pane.id, z: drag?.id === pane.id ? 255 : pane.z, rect };
+      return { id: pane.id, z, rect };
     });
-    const key = JSON.stringify([scoped.mode, layout]);
+    const key = JSON.stringify([wireMode, layout]);
     if (key === lastLayout.current) return;
     lastLayout.current = key;
-    nativeLayout.current(layout, scoped.mode);
+    nativeLayout.current(layout, wireMode);
   });
 
   const style = linkStyle(scoped);
@@ -888,7 +1027,7 @@ export function TerminalStudio({
 
   return (
     <section
-      className={`ts-root${fullScreen ? ' ts-fullscreen' : ''}${native ? ' ts-native' : ''}`}
+      className={`ts-root${fullScreen ? ' ts-fullscreen' : ''}${native ? ' ts-native' : ''}${canonical ? ' ts-v6' : ''}`}
       aria-label={t('terminalStudio.title')}
       onKeyDown={(event) => {
         if (event.key === 'Escape' && fullScreen) {
@@ -900,26 +1039,28 @@ export function TerminalStudio({
       <header className="ts-toolbar">
         {toolbarStart}
         {toolbarScopes}
-        <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
-          {arrangementModes.map((mode) => {
-            const Icon = modeIcons[mode];
-            return (
-              <button
-                key={mode}
-                type="button"
-                role="radio"
-                aria-checked={state.mode === mode}
-                className={state.mode === mode ? 'active' : ''}
-                title={t(`terminalStudio.mode.${mode}`)}
-                onClick={() => setMode(mode)}
-              >
-                <Icon size={15} />
-                <span>{t(`terminalStudio.mode.${mode}`)}</span>
-              </button>
-            );
-          })}
-        </div>
-        {minimized.length > 0 && (
+        {!canonical && (
+          <div className="ts-modes" role="radiogroup" aria-label={t('terminalStudio.layout')}>
+            {arrangementModes.map((mode) => {
+              const Icon = modeIcons[mode];
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  role="radio"
+                  aria-checked={state.mode === mode}
+                  className={state.mode === mode ? 'active' : ''}
+                  title={t(`terminalStudio.mode.${mode}`)}
+                  onClick={() => setMode(mode)}
+                >
+                  <Icon size={15} />
+                  <span>{t(`terminalStudio.mode.${mode}`)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {!canonical && minimized.length > 0 && (
           <button
             type="button"
             className="ts-ghost"
@@ -940,7 +1081,7 @@ export function TerminalStudio({
           </button>
         )}
         {toolbarEnd}
-        {onNewTerminal && (
+        {!canonical && onNewTerminal && (
           <button type="button" className="ts-primary" onClick={onNewTerminal}>
             <Plus size={15} />
             {t('terminalStudio.newTerminal')}
@@ -991,6 +1132,7 @@ export function TerminalStudio({
         onPointerMove={moveDrag}
         onPointerUp={endDrag}
         onPointerCancel={() => setDrag(null)}
+        onScroll={native ? () => setOverlayTick((tick) => tick + 1) : undefined}
       >
         {terminals.length === 0 && (
           <div className="ts-empty">
@@ -1004,7 +1146,7 @@ export function TerminalStudio({
             )}
           </div>
         )}
-        {terminals.length > 0 && visibleCount === 0 && (
+        {!canonical && terminals.length > 0 && visibleCount === 0 && (
           <div className="ts-empty">
             <p>{t('terminalStudio.allMinimized')}</p>
             <button type="button" className="ts-ghost" onClick={() => setState(restoreAll)}>
@@ -1013,6 +1155,25 @@ export function TerminalStudio({
           </div>
         )}
 
+        {dockGeometry &&
+          !scoped.maximized &&
+          terminals.length > 0 &&
+          dockGeometry.slots.map((rect, slot) =>
+            placed.some((pane) => !pane.floating && pane.z === slot) ? null : (
+              <div
+                key={slot}
+                className="ts-dock-slot"
+                style={{
+                  left: rect.x,
+                  top: rect.y,
+                  width: rect.width,
+                  height: rect.height,
+                }}
+              >
+                {paneText('studio.pane.emptySlot')}
+              </div>
+            ),
+          )}
         {placed.map((pane) => {
           const terminal = byId.get(pane.id);
           const arranged = state.panes.find((entry) => entry.id === pane.id);
@@ -1023,6 +1184,10 @@ export function TerminalStudio({
           const SizeIcon = sizeIcons[arranged.size];
           const classes = [
             'ts-pane',
+            pane.floating ? 'ts-floating' : '',
+            canonical && (activePane ? activePane === pane.id : terminal.active)
+              ? 'ts-active-pane'
+              : '',
             pane.compact ? 'ts-compact' : '',
             drag?.id === pane.id ? 'ts-lifted' : '',
             receiving.has(pane.id) ? 'ts-receiving' : '',
@@ -1047,7 +1212,11 @@ export function TerminalStudio({
                 ['--ts-ws' as string]: workspaceHue(terminal.workspace.id),
               }}
               aria-label={`${terminal.label} ${terminal.name}`}
-              onPointerDown={() => state.mode === 'free' && bringToFront(pane.id)}
+              data-pane-id={pane.id}
+              onPointerDown={() => {
+                if (state.mode === 'free' || pane.floating) bringToFront(pane.id);
+                if (canonical) setActivePane(pane.id);
+              }}
             >
               <div
                 className="ts-head"
@@ -1063,8 +1232,14 @@ export function TerminalStudio({
                     {t('terminalStudio.orchestrator')}
                   </span>
                 )}
+                {canonical && terminal.alias && (
+                  <span className="ts-alias" title={terminal.alias}>
+                    @{terminal.alias.replace(/^@/, '')}
+                  </span>
+                )}
                 <span className="ts-label">{terminal.label}</span>
-                {terminal.name !== t(`terminalStudio.providers.${terminal.provider}`) && (
+                {(canonical ||
+                  terminal.name !== t(`terminalStudio.providers.${terminal.provider}`)) && (
                   <span className="ts-name">{terminal.name}</span>
                 )}
                 {workspaces.length > 1 && (
@@ -1074,16 +1249,18 @@ export function TerminalStudio({
                   </span>
                 )}
                 <FlowBadge {...flowFor(pane.id)} labelOf={(id) => byId.get(id)?.label ?? '?'} />
-                <span className="ts-meta">
-                  {terminal.model !== undefined && (
-                    <span>{terminal.model ?? t('terminalStudio.defaultModel')}</span>
-                  )}
-                  {time !== undefined && (
-                    <span className="ts-time" title={t('terminalStudio.processTime')}>
-                      {time}
-                    </span>
-                  )}
-                </span>
+                {!canonical && (
+                  <span className="ts-meta">
+                    {terminal.model !== undefined && (
+                      <span>{terminal.model ?? t('terminalStudio.defaultModel')}</span>
+                    )}
+                    {time !== undefined && (
+                      <span className="ts-time" title={t('terminalStudio.processTime')}>
+                        {time}
+                      </span>
+                    )}
+                  </span>
+                )}
                 {pane.compact && (
                   <span className="ts-compact-activity">
                     {unassignedMove
@@ -1109,7 +1286,7 @@ export function TerminalStudio({
                       {t('terminalStudio.unassigned.moveAction')}
                     </button>
                   )}
-                  {onMention && terminals.length > 1 && (
+                  {!canonical && onMention && terminals.length > 1 && (
                     <button
                       type="button"
                       className="ts-secondary"
@@ -1120,7 +1297,7 @@ export function TerminalStudio({
                       <AtSign size={14} />
                     </button>
                   )}
-                  {onOrchestratorChange && (
+                  {!canonical && onOrchestratorChange && (
                     <button
                       type="button"
                       className={`ts-crown${state.orchestrator === pane.id ? ' active' : ''}`}
@@ -1145,7 +1322,7 @@ export function TerminalStudio({
                       <Crown size={14} />
                     </button>
                   )}
-                  {state.mode === 'mosaic' && !isMax && (
+                  {!canonical && state.mode === 'mosaic' && !isMax && (
                     <button
                       className="ts-secondary"
                       type="button"
@@ -1185,10 +1362,57 @@ export function TerminalStudio({
                       }
                       onClick={() => setState((current) => toggleMaximize(current, pane.id))}
                     >
-                      {isMax ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+                      {isMax ? <RestoreIcon size={14} /> : <MaximizeIcon size={14} />}
                     </button>
                   )}
                   <PaneMenu
+                    orchestrator={state.orchestrator === pane.id}
+                    v6={
+                      v6 && {
+                        onRename: v6.onRename ? () => v6.onRename!(pane.id) : undefined,
+                        onEditAlias: v6.onEditAlias ? () => v6.onEditAlias!(pane.id) : undefined,
+                        onDuplicate:
+                          v6.onDuplicateConfig && terminal.model !== undefined
+                            ? () =>
+                                v6.onDuplicateConfig!({
+                                  sourceTerminalId: terminal.id,
+                                  name: terminal.name,
+                                  provider: terminal.provider,
+                                  model: terminal.model!,
+                                })
+                            : undefined,
+                        onHide: () => setState((current) => minimize(current, pane.id)),
+                        onMention:
+                          onMention && terminals.length > 1
+                            ? () => setComposer({ from: pane.id })
+                            : undefined,
+                        onRole: onOrchestratorChange
+                          ? () =>
+                              onOrchestratorChange(state.orchestrator === pane.id ? null : pane.id)
+                          : undefined,
+                        onFloat: !arranged.floating
+                          ? () => {
+                              bringToFront(pane.id);
+                              setState((current) => ({
+                                ...updatePane(current, pane.id, { floating: true }),
+                                mode: studioDockedMode(current) ? current.mode : 'mosaic',
+                                maximized: null,
+                              }));
+                            }
+                          : undefined,
+                        onDock: arranged.floating
+                          ? () =>
+                              setState((current) => ({
+                                ...dockStudioPane(current, pane.id),
+                                mode: studioDockedMode(current) ? current.mode : 'mosaic',
+                                maximized: null,
+                              }))
+                          : undefined,
+                        canDock: state.panes.filter((item) => !item.floating).length < 4,
+                        mode: state.mode,
+                        onLayoutMode: setMode,
+                      }
+                    }
                     terminal={terminal}
                     accounts={accounts}
                     supported={supported}
@@ -1210,7 +1434,7 @@ export function TerminalStudio({
                           }
                     }
                   />
-                  {(onCloseTerminal || onClose) && (
+                  {(onCloseTerminal || (onClose && !(canonical && native))) && (
                     <button
                       type="button"
                       className="ts-close"
@@ -1321,9 +1545,9 @@ export function TerminalStudio({
                   {renderBody(terminal)}
                 </div>
               )}
-              {state.mode === 'free' &&
+              {(state.mode === 'free' || pane.floating) &&
                 !isMax &&
-                edges.map((edge) => (
+                (canonical ? (['se'] as const) : edges).map((edge) => (
                   <div
                     key={edge}
                     className={`ts-edge ts-edge-${edge}`}
@@ -1405,8 +1629,13 @@ export function TerminalStudio({
         />
       )}
 
-      <footer className="ts-dock" aria-label={t('terminalStudio.dock')}>
-        <span className="ts-dock-title">{t('terminalStudio.minimized')}</span>
+      <footer
+        className="ts-dock"
+        aria-label={canonical ? paneText('dock.title') : t('terminalStudio.dock')}
+      >
+        <span className="ts-dock-title">
+          {canonical ? paneText('dock.title') : t('terminalStudio.minimized')}
+        </span>
         {minimized.map((pane) => {
           const terminal = byId.get(pane.id);
           if (!terminal) return null;
@@ -1418,11 +1647,20 @@ export function TerminalStudio({
               onClick={() =>
                 setState((current) => updatePane(current, pane.id, { minimized: false }))
               }
-              title={t('terminalStudio.restore')}
+              title={
+                canonical
+                  ? paneText('dock.restore', { name: terminal.name })
+                  : t('terminalStudio.restore')
+              }
             >
-              <StatusIcon status={terminal.status} />
-              <span className="ts-label">{terminal.label}</span>
+              {canonical ? (
+                <span aria-hidden="true">▣</span>
+              ) : (
+                <StatusIcon status={terminal.status} />
+              )}
+              {!canonical && <span className="ts-label">{terminal.label}</span>}
               {terminal.name}
+              {canonical && <span aria-hidden="true">↗</span>}
             </button>
           );
         })}
@@ -1436,22 +1674,29 @@ export function TerminalStudio({
             {t('terminalStudio.mention.open')}
           </button>
         )}
-        <span className="ts-summary">
-          {working > 0 && (
-            <span className="ts-sum-working">
-              <span className="ts-spinner" aria-hidden="true" />
-              {t('terminalStudio.summary.working', { count: working })}
-            </span>
-          )}
-          {needsYou > 0 && (
-            <span className="ts-sum-attention">
-              {t('terminalStudio.summary.needsYou', { count: needsYou })}
-            </span>
-          )}
-          <span className="ts-count">
-            {t('terminalStudio.count', { visible: visibleCount, total: scopedTotal })}
+        {canonical ? (
+          <span className="ts-summary">
+            {paneText('dock.total', { count: scopedTotal })}
+            {v6.featureName && <span>· {v6.featureName}</span>}
           </span>
-        </span>
+        ) : (
+          <span className="ts-summary">
+            {working > 0 && (
+              <span className="ts-sum-working">
+                <span className="ts-spinner" aria-hidden="true" />
+                {t('terminalStudio.summary.working', { count: working })}
+              </span>
+            )}
+            {needsYou > 0 && (
+              <span className="ts-sum-attention">
+                {t('terminalStudio.summary.needsYou', { count: needsYou })}
+              </span>
+            )}
+            <span className="ts-count">
+              {t('terminalStudio.count', { visible: visibleCount, total: scopedTotal })}
+            </span>
+          </span>
+        )}
         <div className="ts-toasts">
           {notices.map((notice) => {
             const terminal = byId.get(notice.terminalId);

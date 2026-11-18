@@ -26,10 +26,13 @@ export interface ArrangedPane {
   minimized: boolean;
   /** Last free-mode geometry, in viewport pixels. */
   free?: Rect;
+  floating?: boolean;
+  dockSlot?: number;
 }
 
 export interface ArrangementState {
   mode: ArrangementMode;
+  template?: 'v6';
   panes: ArrangedPane[];
   /** Pane shown in focus mode or maximized over any other mode. */
   maximized: string | null;
@@ -51,6 +54,7 @@ export interface PlacedPane {
   rect: Rect;
   /** Compact panes show only the header line (list mode). */
   compact: boolean;
+  floating?: boolean;
   z: number;
 }
 
@@ -225,12 +229,19 @@ export function resizeTrack(
   index: number,
   delta: number,
 ): ArrangementState {
-  const g = mosaicGeometry(visiblePanes(state), paneView(state, view), state.grid);
+  const docked = studioDockedMode(state);
+  const g = docked
+    ? studioDockGeometry(state, view)
+    : mosaicGeometry(visiblePanes(state), paneView(state, view), state.grid);
   const sizes = axis === 'cols' ? g.colW : g.rowH;
   const a = sizes[index];
   const b = sizes[index + 1];
   if (a === undefined || b === undefined) return state;
-  const min = axis === 'cols' ? MIN_PANE.width : MIN_PANE.height;
+  const min = docked
+    ? Math.min(axis === 'cols' ? 250 : 160, (a + b) / 2)
+    : axis === 'cols'
+      ? MIN_PANE.width
+      : MIN_PANE.height;
   const shift = clamp(delta, min - a, b - min);
   const next = sizes.map((size, i) =>
     i === index ? a + shift : i === index + 1 ? b - shift : size,
@@ -330,12 +341,23 @@ export function containRect(rect: Rect, view: Rect): Rect {
   };
 }
 
-function free(panes: ArrangedPane[], view: Rect, stack: string[]): PlacedPane[] {
+function free(panes: ArrangedPane[], view: Rect, stack: string[], v6 = false): PlacedPane[] {
   return panes.map((pane, index) => ({
     id: pane.id,
     compact: false,
     z: Math.max(0, stack.indexOf(pane.id)),
-    rect: containRect(pane.free ?? cascade(index, view), view),
+    rect: containRect(
+      pane.free ??
+        (v6
+          ? {
+              x: view.x + view.width * 0.18 + index * 24,
+              y: view.y + view.height * 0.18 + index * 18,
+              width: view.width * 0.46,
+              height: view.height * 0.44,
+            }
+          : cascade(index, view)),
+      view,
+    ),
   }));
 }
 
@@ -352,6 +374,24 @@ export function arrange(state: ArrangementState, view: Rect, stack: string[] = [
   if (focusId && panes.some((pane) => pane.id === focusId)) {
     return [{ id: focusId, rect: { ...view }, compact: false, z: panes.length }];
   }
+  if (studioDockedMode(state)) {
+    const { slots } = studioDockGeometry(state, view);
+    const docked = panes.filter((pane) => !pane.floating);
+    return [
+      ...docked.flatMap((pane) => {
+        const rect = slots[pane.dockSlot ?? -1];
+        return rect ? [{ id: pane.id, rect, compact: false, z: pane.dockSlot! }] : [];
+      }),
+      ...free(
+        panes.filter((pane) => pane.floating),
+        view,
+        stack,
+        true,
+      )
+        .sort((a, b) => a.z - b.z)
+        .map((pane, index) => ({ ...pane, z: index + 4, floating: true })),
+    ];
+  }
   switch (state.mode) {
     case 'mosaic':
     case 'focus':
@@ -365,6 +405,99 @@ export function arrange(state: ArrangementState, view: Rect, stack: string[] = [
     case 'free':
       return free(panes, view, stack);
   }
+}
+
+/** Stable four-slot V6 grid. A hidden or floating document leaves its slot open. */
+export function studioDockGeometry(state: ArrangementState, view: Rect) {
+  const columns = state.mode === 'columns' ? 4 : view.width < 640 ? 1 : 2;
+  const rows = 4 / columns;
+  const cx = tracks(state.grid?.cols, columns, view.width, 1);
+  const ry = tracks(state.grid?.rows, rows, view.height, 1);
+  const slots = Array.from({ length: 4 }, (_, index) => {
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      x: view.x + cx.starts[col]!,
+      y: view.y + ry.starts[row]!,
+      width: cx.sizes[col]!,
+      height: ry.sizes[row]!,
+    };
+  });
+  return {
+    slots,
+    colX: cx.starts.map((x) => x + view.x),
+    colW: cx.sizes,
+    rowY: ry.starts.map((y) => y + view.y),
+    rowH: ry.sizes,
+  };
+}
+
+export function studioDockedMode(state: ArrangementState): boolean {
+  return state.template === 'v6' && (state.mode === 'mosaic' || state.mode === 'columns');
+}
+
+/** Preserve known slots and assign vacant positions to terminals saved before V6. */
+export function assignStudioSlots(state: ArrangementState): ArrangementState {
+  if (state.template !== 'v6') return state;
+  const used = new Set<number>();
+  const panes = state.panes.map((pane) => {
+    if (pane.floating) return pane;
+    const slot = pane.dockSlot;
+    if (Number.isInteger(slot) && slot! >= 0 && slot! < 4 && !used.has(slot!)) {
+      used.add(slot!);
+      return pane;
+    }
+    return { ...pane, dockSlot: undefined };
+  });
+  return {
+    ...state,
+    panes: panes.map((pane) => {
+      if (pane.floating || pane.dockSlot !== undefined) return pane;
+      const slot = [0, 1, 2, 3].find((index) => !used.has(index));
+      if (slot === undefined) return { ...pane, floating: true };
+      used.add(slot);
+      return { ...pane, dockSlot: slot };
+    }),
+  };
+}
+
+/** Swap dock positions, or move into an empty position, without changing identity. */
+export function dockStudioPane(
+  state: ArrangementState,
+  id: string,
+  slot?: number,
+): ArrangementState {
+  const pane = state.panes.find((item) => item.id === id);
+  if (!pane) return state;
+  const other = state.panes.filter((item) => item.id !== id && !item.floating);
+  const target =
+    slot ?? [0, 1, 2, 3].find((index) => !other.some((item) => item.dockSlot === index));
+  if (target === undefined || target < 0 || target > 3) return state;
+  const occupied = other.find((item) => item.dockSlot === target);
+  let next = updatePane(state, id, { dockSlot: target, floating: false });
+  if (occupied)
+    next = updatePane(next, occupied.id, {
+      dockSlot: pane.floating ? undefined : pane.dockSlot,
+      floating: pane.floating === true,
+    });
+  return next;
+}
+
+/** The V6 Restore control returns all members to their initial layout. */
+export function restoreStudioLayout(state: ArrangementState): ArrangementState {
+  return assignStudioSlots({
+    ...state,
+    mode: 'mosaic',
+    maximized: null,
+    weights: {},
+    grid: undefined,
+    panes: state.panes.map((pane, order) => ({
+      id: pane.id,
+      order,
+      size: 'small',
+      minimized: false,
+    })),
+  });
 }
 
 /** Move a pane to a new position in the visible order (drag to reorder). */

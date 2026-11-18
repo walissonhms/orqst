@@ -84,3 +84,10 @@ export function dockPanes(detail: unknown): DockPane[] {
   }
   return panes;
 }
+
+/** Reuse the native dock projection for view-only hide while keeping UUIDs in Studio. */
+export function nativeHiddenTerminals(
+  terminals: ReadonlyArray<{ id: string; nativeMinimized?: boolean }>,
+): Set<string> {
+  return new Set(terminals.filter(({ nativeMinimized }) => nativeMinimized).map(({ id }) => id));
+}

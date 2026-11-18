@@ -361,6 +361,12 @@ fn valid_arrangement_request(value: &Value) -> bool {
         {
             return false;
         }
+        // The single-row V6 frame leaves the card chrome and stage gutter to React.
+        if value["chrome"]["top"] == 45
+            && (x < 4.0 || y < 35.0 || x + w > width - 4.0 || y + h > height - 4.0)
+        {
+            return false;
+        }
         if value["mode"] != "free"
             && rects
                 .iter()
@@ -376,9 +382,10 @@ fn valid_arrangement_request(value: &Value) -> bool {
 fn valid_chrome(value: &Value) -> bool {
     exact(value, &["sidebar", "top", "bottom"])
         && matches!(value["sidebar"].as_u64(), Some(0 | 46 | 155))
-        // 47/92 and 38 match the approved preview; 36/81 and 34 stay accepted.
-        && matches!(value["top"].as_u64(), Some(36 | 47 | 81 | 92))
-        && matches!(value["bottom"].as_u64(), Some(34 | 38))
+        && matches!(value["top"].as_u64(), Some(36 | 45 | 47 | 81 | 92))
+        && matches!(value["bottom"].as_u64(), Some(33 | 34 | 38))
+        && ((value["top"] == 45) == (value["bottom"] == 33))
+        && (value["top"] != 45 || value["sidebar"] != 0)
 }
 pub(crate) fn valid_envelope(value: &Value) -> bool {
     exact(value, &["kind", "id", "document", "source", "request"])
@@ -3720,6 +3727,14 @@ pub(crate) fn valid_layout(
         {
             return false;
         }
+        if top == 45
+            && (x < u64::from(left + 4)
+                || y < u64::from(top + 35)
+                || x + w > u64::from(width.saturating_sub(4))
+                || y + h > u64::from((height - bottom).saturating_sub(4)))
+        {
+            return false;
+        }
         for &(px, py, pw, ph) in &rectangles {
             if x < px + pw
                 && px < x + w
@@ -3848,6 +3863,29 @@ mod layout_tests {
         assert!(!valid_request(&request));
         request.as_object_mut().unwrap().remove("chrome");
         assert!(valid_request(&request));
+    }
+
+    #[test]
+    fn single_row_v6_bounds_leave_the_card_chrome_and_stage_gutters_clear() {
+        use super::valid_chrome;
+        assert!(valid_chrome(&json!({"sidebar":155,"top":45,"bottom":33})));
+        assert!(valid_chrome(&json!({"sidebar":46,"top":45,"bottom":33})));
+        assert!(!valid_chrome(&json!({"sidebar":155,"top":45,"bottom":34})));
+        assert!(!valid_chrome(&json!({"sidebar":0,"top":45,"bottom":33})));
+        let id = "00000000-0000-4000-8000-000000000011";
+        let mut request = json!({
+            "action":"arrange","contractVersion":1,"generation":1,"layoutVersion":2,
+            "mode":"mosaic","chrome":{"sidebar":155,"top":45,"bottom":33},
+            "viewport":{"width":1285,"height":822},"panes":[
+                {"slot":0,"terminalId":id,"visible":true,"z":0,"rect":{"x":5,"y":36,"width":636,"height":367}}
+            ]
+        });
+        assert!(super::valid_arrangement_request(&request));
+        request["panes"][0]["rect"]["y"] = json!(34);
+        assert!(!super::valid_arrangement_request(&request));
+        request["panes"][0]["rect"]["y"] = json!(36);
+        request["panes"][0]["rect"]["height"] = json!(783);
+        assert!(!super::valid_arrangement_request(&request));
     }
 
     #[test]

@@ -342,3 +342,277 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
     await browser.close();
   }
 });
+
+test('V6 pane controls preserve document IDs and publish bounded Feature geometry', async () => {
+  const { mkdir } = await import('node:fs/promises');
+  const { nativeChrome } = await import('../apps/dashboard/src/studio-native.js');
+  const terminalIds = [t1, t2, t3, '00000000-0000-4000-8000-000000000014'];
+  const input = snapshot();
+  const selected = input.features[0]!;
+  selected.terminalIds = terminalIds;
+  input.slots.push({ slot: 3, provider: 'codex', terminalId: terminalIds[3]! });
+  const data = studioTerminals(input, [], undefined, 1000).map((terminal, index) => ({
+    ...terminal,
+    alias: `test-${index + 1}`,
+    name: `Fixture ${index + 1}`,
+    model: terminal.model ?? null,
+    active: index === 0,
+  }));
+  const result = await build({
+    stdin: {
+      contents: `
+        import React, { useRef, useState } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { createInstance } from 'i18next';
+        import { I18nextProvider } from 'react-i18next';
+        import { TerminalStudio } from './src/TerminalStudio.tsx';
+        import { arrangeRequest, nativeChrome } from './src/studio-native.ts';
+        import en from './src/locales/en-US.json';
+        import pt from './src/locales/pt-BR.json';
+        import './src/feature-shell.css';
+        import './src/new-terminal-dialog.css';
+        window.framesSeen = [];
+        window.mountStudio = async (snapshot, terminals) => {
+          const i18n = createInstance();
+          await i18n.init({ lng: 'pt-BR', resources: {
+            'en-US': {translation: en}, 'pt-BR': {translation: pt},
+          } });
+          function Fixture() {
+            const controls = useRef(null);
+            const [orchestrator, setOrchestrator] = useState(null);
+            return <div style={{display:'grid',gridTemplateColumns:'155px minmax(0,1fr)',height:'100%'}}>
+              <aside style={{background:'#0b0c12',borderRight:'1px solid #262334',padding:'14px'}}>
+                <strong>ORQST</strong>
+                <p>{snapshot.workspace.name}</p>
+                <p>{snapshot.features[0].name}</p>
+              </aside>
+              <TerminalStudio
+                v6={{
+                  featureName:snapshot.features[0].name,
+                  layoutControlsRef:controls,
+                  onDuplicateConfig:(draft) => {window.duplicateDraft = draft;},
+                }}
+                storageKey="synthetic-lane3"
+                terminals={terminals}
+                messages={[]}
+                toolbarStart={<strong>{snapshot.workspace.name} / {snapshot.features[0].name}</strong>}
+                toolbarEnd={<div style={{marginInlineStart:'auto',display:'flex',gap:'6px'}}>
+                  <button className="ts-ghost" type="button" onClick={() => controls.current?.toggleGrid()}>Grade</button>
+                  <button className="ts-ghost" type="button" onClick={() => controls.current?.restore()}>Restaurar</button>
+                </div>}
+                renderBody={() => null}
+                native={{onLayout:(holes,mode) => {
+                  const chrome = nativeChrome(false, innerWidth, 'v6');
+                  const frame = {...arrangeRequest(snapshot, terminals.map(({id}) => id), holes, mode, {
+                    width:innerWidth-chrome.sidebar, height:innerHeight-chrome.top-chrome.bottom,
+                  }, chrome), contractVersion:1,generation:snapshot.generation};
+                  window.framesSeen.push(frame);
+                }}}
+                orchestratorLabel={orchestrator}
+                onOrchestratorChange={setOrchestrator}
+                onCloseTerminal={(id) => {window.reviewedCloseTarget = id;}}
+              />
+            </div>;
+          }
+          createRoot(document.getElementById('root')).render(
+            <I18nextProvider i18n={i18n}><Fixture /></I18nextProvider>,
+          );
+        };
+      `,
+      resolveDir: resolve('apps/dashboard'),
+      loader: 'tsx',
+    },
+    bundle: true,
+    platform: 'browser',
+    format: 'iife',
+    target: 'safari17',
+    write: false,
+    outdir: 'unused-studio-v6-fixture',
+    logLevel: 'silent',
+  });
+  const script = result.outputFiles.find(({ path }) => path.endsWith('.js'))!;
+  const css = result.outputFiles.find(({ path }) => path.endsWith('.css'))!;
+  const browser = await chromium.launch({ headless: true });
+  try {
+    for (const [width, height] of [
+      [1440, 900],
+      [1280, 800],
+    ] as const) {
+      const page = await browser.newPage({ viewport: { width, height }, reducedMotion: 'reduce' });
+      const output = process.env.ORQST_LANE3_CAPTURE;
+      const folder = output ? resolve(output, `${width}x${height}`) : undefined;
+      if (folder) await mkdir(folder, { recursive: true });
+      const capture = async (name: string) => {
+        if (folder)
+          await page.screenshot({ path: resolve(folder, `${name}.png`), animations: 'disabled' });
+      };
+      const currentFrame = async () =>
+        featureNativeRequestSchema.parse(
+          await page.evaluate(() => (Reflect.get(window, 'framesSeen') as unknown[]).at(-1)),
+        );
+      const first = () => page.locator(`[data-pane-id="${t1}"]`);
+      const menu = () => page.getByRole('menu');
+      const openMenu = async () => {
+        await first().locator('.ts-more').click();
+        await menu().waitFor();
+      };
+      await page.route('http://synthetic-v6.invalid/', (route) =>
+        route.fulfill({ contentType: 'text/html', body: '<!doctype html><div id="root"></div>' }),
+      );
+      await page.goto('http://synthetic-v6.invalid/');
+      await page.addStyleTag({ content: css.text });
+      await page.addScriptTag({ content: script.text });
+      await page.evaluate(({ input, data }) => Reflect.get(window, 'mountStudio')(input, data), {
+        input,
+        data,
+      });
+      await page.waitForFunction(() => {
+        const frames = Reflect.get(window, 'framesSeen') as { panes: { visible: boolean }[] }[];
+        return frames.at(-1)?.panes.filter(({ visible }) => visible).length === 4;
+      });
+      assert.deepEqual(nativeChrome(false, width, 'v6'), { sidebar: 155, top: 45, bottom: 33 });
+      assert.equal((await page.locator('.ts-toolbar').boundingBox())?.height, 45);
+      assert.equal((await page.locator('.ts-dock').boundingBox())?.height, 33);
+      assert.equal((await first().locator('.ts-head').boundingBox())?.height, 31);
+      assert.equal(await first().locator('.ts-head .ts-meta').count(), 0);
+      const summary = (await page.locator('.ts-dock .ts-summary').boundingBox())!;
+      assert.equal(Math.round(width - summary.x - summary.width), 9);
+      assert.equal(
+        await first().evaluate((element) => getComputedStyle(element).borderRadius),
+        '0px',
+      );
+      assert.equal(await page.locator('.ts-modes').count(), 0);
+      const firstBox = (await first().boundingBox())!;
+      assert.deepEqual([firstBox.x, firstBox.y], [159, 49]);
+      const secondBox = (await page.locator(`[data-pane-id="${t2}"]`).boundingBox())!;
+      assert.equal(secondBox.x - firstBox.x - firstBox.width, 5);
+      const frame = await currentFrame();
+      assert.equal(frame.action, 'arrange');
+      if (frame.action !== 'arrange') throw new Error('Missing arrangement');
+      assert.deepEqual(
+        frame.panes.map(({ terminalId }) => terminalId),
+        terminalIds,
+      );
+      assert.ok(frame.panes.every(({ rect }) => rect && rect.x >= 4 && rect.y >= 35));
+      await capture('01-grid');
+
+      await page.getByRole('button', { name: 'Grade', exact: true }).click();
+      await page.waitForFunction(
+        () => (Reflect.get(window, 'framesSeen') as { mode: string }[]).at(-1)?.mode === 'columns',
+      );
+      await capture('02-columns');
+      await page.getByRole('button', { name: 'Restaurar', exact: true }).click();
+      await page.waitForFunction(
+        () => (Reflect.get(window, 'framesSeen') as { mode: string }[]).at(-1)?.mode === 'mosaic',
+      );
+      await capture('03-grid-restored');
+      const divider = page.locator('.ts-track.ts-split-columns').first();
+      const dividerBox = (await divider.boundingBox())!;
+      assert.equal(dividerBox.width, 5);
+      assert.equal(dividerBox.height, height - 86);
+      await page.mouse.move(dividerBox.x + 2, dividerBox.y + 50);
+      await page.mouse.down();
+      await page.mouse.move(dividerBox.x + 50, dividerBox.y + 50, { steps: 4 });
+      await page.mouse.up();
+      const draggedWidth = (await first().boundingBox())!.width;
+      assert.ok(draggedWidth > firstBox.width);
+      await divider.press('ArrowRight');
+      assert.ok((await first().boundingBox())!.width > draggedWidth);
+      await capture('04-divider-resized');
+
+      const header = (await first().locator('.ts-head').boundingBox())!;
+      const target = (await page.locator(`[data-pane-id="${t2}"]`).boundingBox())!;
+      await page.mouse.move(header.x + 50, header.y + 14);
+      await page.mouse.down();
+      await page.mouse.move(target.x + 80, target.y + 22, { steps: 5 });
+      await page.mouse.up();
+      assert.ok((await first().boundingBox())!.x > firstBox.x);
+      await capture('05-dock-swap');
+
+      await openMenu();
+      assert.equal((await menu().boundingBox())?.width, 215);
+      await page.waitForFunction(() =>
+        (
+          Reflect.get(window, 'framesSeen') as {
+            panes: { visible: boolean }[];
+          }[]
+        )
+          .at(-1)!
+          .panes.some(({ visible }) => !visible),
+      );
+      await capture('06-pane-menu');
+      await menu().getByRole('menuitem', { name: 'Configurações / renomear' }).click();
+      await page.getByRole('dialog').waitFor();
+      assert.ok((await page.getByRole('dialog').textContent())?.includes('test-1'));
+      await capture('07-pane-details');
+      await page.keyboard.press('Escape');
+
+      await openMenu();
+      await menu().getByRole('menuitem', { name: 'Tornar flutuante' }).click();
+      const floating = page.locator('.ts-floating');
+      await floating.waitFor();
+      assert.equal(await floating.count(), 1);
+      assert.equal(await page.locator('.ts-dock-slot').count(), 1);
+      const floatingFrame = await currentFrame();
+      assert.equal(floatingFrame.action === 'arrange' && floatingFrame.mode, 'free');
+      await capture('08-floating');
+
+      const floatBox = (await floating.boundingBox())!;
+      const floatHeader = (await floating.locator('.ts-head').boundingBox())!;
+      await page.mouse.move(floatHeader.x + 55, floatHeader.y + 10);
+      await page.mouse.down();
+      await page.mouse.move(floatHeader.x + 140, floatHeader.y + 90, { steps: 6 });
+      await page.mouse.up();
+      assert.ok((await floating.boundingBox())!.x > floatBox.x);
+      const handle = (await floating.locator('.ts-edge-se').boundingBox())!;
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + 40, handle.y + 50, { steps: 4 });
+      await page.mouse.up();
+      assert.ok((await floating.boundingBox())!.width > floatBox.width);
+      await capture('09-floating-resized');
+      await openMenu();
+      await capture('10-floating-menu');
+      await menu().getByRole('menuitem', { name: 'Encaixar na grade' }).click();
+      assert.equal(await floating.count(), 0);
+
+      await first().getByRole('button', { name: 'Maximizar', exact: true }).click();
+      assert.deepEqual(await first().boundingBox(), {
+        x: 159,
+        y: 49,
+        width: width - 163,
+        height: height - 86,
+      });
+      await capture('11-maximized');
+      await first().getByRole('button', { name: 'Restaurar', exact: true }).click();
+      await first().getByRole('button', { name: 'Minimizar', exact: true }).click();
+      assert.equal(await first().count(), 0);
+      await page.getByTitle('Restaurar Fixture 1').waitFor();
+      assert.ok((await page.locator('.ts-dock').textContent())?.includes('4 terminais'));
+      await capture('12-minimized');
+      await page.getByTitle('Restaurar Fixture 1').click();
+      await first().waitFor();
+      await capture('13-restored');
+
+      await openMenu();
+      await capture('14-duplicate-config');
+      await menu().getByRole('menuitem', { name: 'Duplicar configuração' }).click();
+      assert.deepEqual(await page.evaluate(() => Reflect.get(window, 'duplicateDraft')), {
+        sourceTerminalId: t1,
+        name: 'Fixture 1',
+        provider: 'codex',
+        model: 'gpt-synthetic',
+      });
+      await openMenu();
+      await menu().getByRole('menuitem', { name: 'Marcar como Orquestrador' }).click();
+      await first().locator('.ts-role').waitFor();
+      await capture('15-role');
+      await first().locator('.ts-close').click();
+      assert.equal(await page.evaluate(() => Reflect.get(window, 'reviewedCloseTarget')), t1);
+      assert.equal(await first().count(), 1, 'the host still owns native close and confirmation');
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+  }
+});

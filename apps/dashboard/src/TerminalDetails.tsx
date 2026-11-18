@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Copy, X } from 'lucide-react';
 import { Modal } from './Modal';
+import { useStudioPaneText } from './PaneMenu';
 import type { StudioTerminal } from './TerminalStudio';
 
 /** Read-only facts about one terminal; unknown values stay `—`. */
@@ -13,11 +14,13 @@ export function TerminalDetails({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const paneText = useStudioPaneText();
   const [copied, setCopied] = useState(false);
   const dash = '—';
   const rows: [string, string][] = [
     [t('terminalStudio.details.label'), terminal.label],
     [t('terminalStudio.details.name'), terminal.name],
+    [paneText('studio.pane.alias'), terminal.alias ?? dash],
     [t('terminalStudio.details.cli'), t(`terminalStudio.providers.${terminal.provider}`)],
     [
       t('terminalStudio.details.model'),
