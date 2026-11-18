@@ -1,5 +1,13 @@
 # Changelog
 
+## V6 Studio scope tree — 2026-11-18
+
+The managed Studio opens with a persistent Workspace and Feature tree and one
+breadcrumb/action row. Feature selection uses the Core view revision and restores
+the scoped arrangement. Managed Workspace creation and out-of-scope observer
+Workspaces show their availability. See the
+[Chromium evidence and integration notes](docs/development/v6-parity/lane2/README.md).
+
 ## Studio terminal opening — 2026-11-18
 
 Studio binds each catalog to its native generation and reviews the destination

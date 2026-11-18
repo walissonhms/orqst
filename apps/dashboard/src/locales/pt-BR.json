@@ -1199,6 +1199,25 @@
     "lifetime": "Sair encerra o Core próprio; hosts gerenciados exigem consentimento separado",
     "quit": "Sair do ORQST e encerrar seu Core"
   },
+  "feature": {
+    "addTerminal": "＋ Terminal",
+    "archived": "Esta Feature está arquivada.",
+    "archivedName": "{{name}} (arquivada)",
+    "coreRequired": "Alterar Features requer o Core gerenciado.",
+    "noLayout": "Esta Feature não tem terminais disponíveis para organizar.",
+    "noRestore": "Não há terminais minimizados para restaurar.",
+    "options": "Opções da Feature",
+    "core": {
+      "connecting": "CONECTANDO AO CORE",
+      "online": "CORE ONLINE",
+      "unavailable": "CORE INDISPONÍVEL"
+    },
+    "workspace": {
+      "create": "＋ Novo Workspace",
+      "creationUnavailable": "A criação de Workspaces gerenciados está indisponível nesta sessão do Desktop. Os Workspaces do observador são gerenciados separadamente.",
+      "unmanaged": "{{name}} está disponível no observador. Este Core gerenciado atende um Workspace."
+    }
+  },
   "features": {
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",

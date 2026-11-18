@@ -1199,6 +1199,25 @@
     "lifetime": "Quit stops the owned Core; managed hosts require separate consent",
     "quit": "Quit ORQST and its owned Core"
   },
+  "feature": {
+    "addTerminal": "＋ Terminal",
+    "archived": "This Feature is archived.",
+    "archivedName": "{{name}} (archived)",
+    "coreRequired": "Feature changes require the managed Core.",
+    "noLayout": "This Feature has no available terminals to arrange.",
+    "noRestore": "There are no minimized terminals to restore.",
+    "options": "Feature options",
+    "core": {
+      "connecting": "CORE CONNECTING",
+      "online": "CORE ONLINE",
+      "unavailable": "CORE UNAVAILABLE"
+    },
+    "workspace": {
+      "create": "＋ New Workspace",
+      "creationUnavailable": "Managed Workspace creation is unavailable in this Desktop session. Observer Workspaces are managed separately.",
+      "unmanaged": "{{name}} is available in the observer. This managed Core serves one Workspace."
+    }
+  },
   "features": {
     "workspace": "Workspace",
     "workspaces": "WORKSPACES",
