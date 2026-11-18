@@ -413,6 +413,9 @@
 .ts-provider-opencode {
   background: var(--orqst-success);
 }
+.ts-provider-antigravity {
+  background: var(--orqst-neon);
+}
 .ts-provider-shell {
   background: var(--orqst-muted);
 }

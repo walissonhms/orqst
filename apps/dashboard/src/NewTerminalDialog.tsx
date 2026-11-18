@@ -66,7 +66,7 @@ interface Choice {
   name: string;
 }
 
-const providerOrder: TerminalProvider[] = ['codex', 'claude', 'opencode', 'shell'];
+const providerOrder: TerminalProvider[] = ['codex', 'claude', 'opencode', 'antigravity', 'shell'];
 
 function firstAvailable(catalog: ProviderCatalog[]): ProviderCatalog | undefined {
   return (
@@ -158,6 +158,7 @@ export function NewTerminalDialog({
     ['claude', 'claude'],
     ['codex', 'claude'],
     ['codex', 'claude', 'opencode'],
+    ['codex', 'claude', 'opencode', 'antigravity'],
   ];
   const presets = presetLists
     .filter((list) => list.length <= limit)

@@ -818,7 +818,7 @@ test('pending warning descriptors round-trip through the public catalog without 
     featureId: null,
     catalogId: 'b'.repeat(64),
     pendingOwnedExits,
-    providers: ['codex', 'claude', 'opencode'].map((provider) => ({
+    providers: ['codex', 'claude', 'opencode', 'antigravity'].map((provider) => ({
       provider,
       status: 'unavailable',
       reason: 'executable_not_found',

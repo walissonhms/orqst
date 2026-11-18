@@ -35,7 +35,13 @@ export const terminalRPCSchema = z.discriminatedUnion('operation', [
     'prepare',
     z.tuple([
       client,
-      z.enum(['codex-login-v1', 'codex-terminal-v1', 'claude-terminal-v1', 'opencode-terminal-v1']),
+      z.enum([
+        'codex-login-v1',
+        'codex-terminal-v1',
+        'claude-terminal-v1',
+        'opencode-terminal-v1',
+        'antigravity-terminal-v1',
+      ]),
     ]),
   ),
   action('launch', z.tuple([id, proof])),
@@ -208,7 +214,7 @@ export const terminalPairReadySchema = z.strictObject({
           .max(TERMINAL_SLOT_CEILING - 1),
         terminalId: id,
         alias: z.string().min(1).max(128).optional(),
-        provider: z.enum(['codex', 'claude', 'opencode']),
+        provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
       }),
     )
     .min(1)

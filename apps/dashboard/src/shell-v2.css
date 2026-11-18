@@ -332,6 +332,9 @@ main .panel-heading {
 .agent-opencode {
   --agent: var(--orqst-success);
 }
+.agent-antigravity {
+  --agent: var(--orqst-neon);
+}
 .agent-card header {
   display: flex;
   align-items: center;

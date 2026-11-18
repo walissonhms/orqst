@@ -18,6 +18,7 @@ const pairModelKey = {
   opencode: 'openCodeModelId',
   claude: 'claudeModelId',
 } as const;
+type McpPairProvider = keyof typeof pairModelKey;
 
 export function TauriStudioPreparation({
   native,
@@ -42,12 +43,12 @@ export function TauriStudioPreparation({
   const inFlight = useRef(false);
   const chosen = catalog?.providers.find((entry) => entry.provider === provider);
   const model = chosen?.models.find((entry) => entry.id === modelId);
-  // The pair worker is any other reviewed CLI; Codex/OpenCode keep their original pairing.
-  const [workerChoice, setWorkerChoice] = useState<Provider | ''>('');
+  // The pair worker is any other reviewed MCP-capable CLI; Codex/OpenCode keep their original pairing.
+  const [workerChoice, setWorkerChoice] = useState<McpPairProvider | ''>('');
   const workerOptions = (['codex', 'opencode', 'claude'] as const).filter(
     (entry) => entry !== provider,
   );
-  const companionProvider: Provider =
+  const companionProvider: McpPairProvider =
     workerChoice && workerChoice !== provider
       ? workerChoice
       : provider === 'codex'
@@ -174,7 +175,7 @@ export function TauriStudioPreparation({
               setCompanionModelId('');
             }}
           >
-            {(['codex', 'claude', 'opencode'] as const).map((value) => (
+            {(['codex', 'claude', 'opencode', 'antigravity'] as const).map((value) => (
               <option key={value} value={value}>
                 {t(`shell.adapters.${value}`)}
               </option>
@@ -214,7 +215,12 @@ export function TauriStudioPreparation({
             <input
               type="checkbox"
               checked={mcpPair}
-              disabled={disabled || !snapshot?.canCreate || snapshot.liveEnrollment}
+              disabled={
+                disabled ||
+                !snapshot?.canCreate ||
+                snapshot.liveEnrollment ||
+                provider === 'antigravity'
+              }
               onChange={(event) => {
                 setMcpPair(event.target.checked);
                 setCompanionModelId('');
@@ -222,7 +228,12 @@ export function TauriStudioPreparation({
             />
             {t('studio.tauri.mcpPairOptIn')}
           </label>
-          {mcpPair && (
+          {provider === 'antigravity' && (
+            <p className="studio-next" role="status">
+              {t('studio.tauri.mcpUnavailableAntigravity')}
+            </p>
+          )}
+          {mcpPair && provider !== 'antigravity' && (
             <>
               <p className="studio-next">
                 {t('studio.tauri.mcpPairHelp', {
@@ -237,7 +248,7 @@ export function TauriStudioPreparation({
                   disabled={disabled || !snapshot?.canCreate}
                   value={companionProvider}
                   onChange={(event) => {
-                    setWorkerChoice(event.target.value as Provider);
+                    setWorkerChoice(event.target.value as McpPairProvider);
                     setCompanionModelId('');
                   }}
                 >
@@ -301,7 +312,7 @@ export function TauriStudioPreparation({
             catalog &&
             model &&
             void request(
-              mcpPair && companionModel
+              mcpPair && provider !== 'antigravity' && companionModel
                 ? {
                     action: 'create-mcp-pair',
                     generation: snapshot.generation,
@@ -365,11 +376,15 @@ export function TauriStudioPreparation({
           <button
             className="button"
             disabled={
-              disabled || !snapshot?.canCreate || snapshot.liveEnrollment || provider === 'opencode'
+              disabled ||
+              !snapshot?.canCreate ||
+              snapshot.liveEnrollment ||
+              provider === 'opencode' ||
+              provider === 'antigravity'
             }
             onClick={() =>
               snapshot &&
-              provider !== 'opencode' &&
+              (provider === 'codex' || provider === 'claude') &&
               void request({ action: 'create', generation: snapshot.generation, provider, count })
             }
           >

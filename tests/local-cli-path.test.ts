@@ -95,6 +95,7 @@ test('GUI minimal PATH discovers synthetic native installer locations without a 
       ['codex', f.local],
       ['claude', f.claude],
       ['opencode', f.opencode],
+      ['agy', f.local],
     ])
       symlinkSync(process.execPath, join(directory!, name!));
     const discovery = discoverLocalClis('/usr/bin:/bin:/usr/sbin:/sbin', f.home);

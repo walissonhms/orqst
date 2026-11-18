@@ -730,7 +730,7 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
             || !slot_ids.insert(s["terminalId"].to_string())
             || !matches!(
                 s["provider"].as_str(),
-                Some("codex" | "claude" | "opencode")
+                Some("codex" | "claude" | "opencode" | "antigravity")
             )
         {
             return false;
@@ -909,7 +909,7 @@ fn valid_account_limits(value: &Value) -> bool {
             || !ids.insert(account["id"].to_string())
             || !matches!(
                 account["provider"].as_str(),
-                Some("codex" | "claude" | "opencode")
+                Some("codex" | "claude" | "opencode" | "antigravity")
             )
             || !account["index"]
                 .as_u64()

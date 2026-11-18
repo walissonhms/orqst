@@ -520,7 +520,8 @@
     "adapters": {
       "codex": "Codex CLI",
       "claude": "Claude Code",
-      "opencode": "OpenCode"
+      "opencode": "OpenCode",
+      "antigravity": "Antigravity"
     },
     "capabilities": {
       "sessionDiscovery": "External session discovery",
@@ -730,6 +731,7 @@
     "createProvider_codex": "Codex 0.162.1",
     "createProvider_claude": "Claude Code 2.1.178",
     "createProvider_opencode": "OpenCode 2.2.5 (blocked review)",
+    "createProvider_antigravity": "Antigravity 1.5.10",
     "createExecutable": "Select that CLI’s native executable (canonical file; no shim)",
     "createNode": "Select the installed Node 24 executable used by both terminals",
     "createProject": "Select an empty disposable project folder shared by A and B",
@@ -805,6 +807,7 @@
     "terminalIdentity": "Core Terminal UUID",
     "claudeScope": "Experimental Claude Code native login reuse. HOME/config/Keychain selection, hooks, plugins, policies and native session writes stay shared; the CLI may refresh credentials. No sandbox. New UUID, one dispatch per manifest; no automatic task, login or resume. With MCP opt-in, strict selection excludes other MCP definitions and native approval can block startup. Native focus, login, MCP and provider acceptance remain pending. OpenCode has a separate explicit startup opt-in.",
     "opencodeScope": "Experimental OpenCode 2.2.5 standalone with existing login identity. HOME/XDG/config/database stay native and shared. Startup opens writable SQLite, may change permissions/WAL and apply pending migrations or refresh credentials. Database and migration ledger were not inspected; pending migrations are unknown and rollback is not guaranteed. Native plugins, hooks and MCPs may execute code or provider requests at startup. No ORQST task, automatic login or resume. Not a sandbox. TUI exit does not prove descendant exit; login, session routing, MCP and provider acceptance remain unvalidated. Inline MCP merges with native definitions.",
+    "antigravityScope": "Experimental Antigravity 1.5.10 interactive CLI with existing login identity. HOME and ~/.gemini (settings, extensions, hooks, plugins, MCPs and conversation transcripts) stay native and shared; the CLI may refresh credentials and write native state. Minimal environment allowlist; not a sandbox. One dispatch per manifest; no automatic task, login or resume. ORQST per-session MCP is unavailable because agy 1.5.10 has no session-scoped MCP client flag without modifying global ~/.gemini/config or workspace .agents files.",
     "opencode_startup_required": "OpenCode startup is blocked. Provision a new manifest only after explicitly authorizing shared native database writes/possible migrations and native startup activity. No database was inspected or opened.",
     "openCodeStartupReview": "Review OpenCode native startup effects for these exact identity selectors and binaries. Startup uses the existing writable credential/session SQLite database: it may change permissions/WAL, apply pending migrations and refresh credentials. Native plugins, hooks and MCPs may execute code, network or provider requests automatically. Pending migrations and startup activity are UNKNOWN; no rollback or descendant-exit guarantee is established. Capacity stays reserved even after TUI exit. This step starts nothing. Keep the manifests blocked unless you explicitly authorize these effects; terminal start and task grants remain separate.",
     "openCodeStartupAcknowledgment": "I explicitly authorize shared native SQLite writes, possible migrations, credential refresh and native startup activity for these new processes.",
@@ -1117,6 +1120,7 @@
       "mcpWorkerProvider": "Worker CLI",
       "mcpWorkerModel": "{{provider}} worker model",
       "mcpInitialOnly": "Communication pairs require a fresh initial selection. Adding MCP to an existing Core is unavailable.",
+      "mcpUnavailableAntigravity": "ORQST MCP communication is unavailable for Antigravity: agy 1.5.10 has no per-session MCP client config flag without modifying global ~/.gemini/config or workspace .agents files.",
       "openMcpPair": "Review and open communication pair"
     },
     "layoutPreview": "Open the terminal layout preview (development).",
@@ -1436,6 +1440,7 @@
       "codex": "Codex",
       "claude": "Claude Code",
       "opencode": "OpenCode",
+      "antigravity": "Antigravity",
       "shell": "Shell"
     },
     "create": {
@@ -1454,6 +1459,12 @@
       "modelCount_one": "{{count}} model",
       "modelCount_other": "{{count}} models",
       "unavailable": "Not available",
+      "reason_ready": "Ready",
+      "reason_executable_not_found": "CLI not found",
+      "reason_executable_unreviewed": "Unreviewed CLI version or checksum",
+      "reason_executable_inspection_failed": "CLI verification failed",
+      "reason_ambiguous_executable": "Multiple CLI installations found",
+      "reason_catalog_limited": "CLI or model catalog could not be validated",
       "defaultHint": "uses the CLI setting",
       "namePlaceholder": "Terminal {{n}}",
       "name": "Name for terminal {{n}}",

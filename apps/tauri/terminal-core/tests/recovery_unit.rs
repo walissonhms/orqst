@@ -100,3 +100,64 @@ fn review_detail_escapes_format_controls_visibly() {
     );
     assert_eq!(escape_format("plain é"), "plain é");
 }
+
+#[test]
+fn antigravity_version_4_manifest_and_enrollment_schema_preserve_order_and_refuse_mcp() {
+    use orqst_terminal_core::pair::member_schema_order;
+    use orqst_terminal_core::profiles::mcp::REVIEWED_ANTIGRAVITY;
+    use orqst_terminal_core::recovery::schema::{interactive_config, member};
+    use serde_json::json;
+
+    let manifest = json!({
+        "interactive": {"sharedNativeSessions": true},
+        "authentication": {
+            "sharedNativeConfiguration": true,
+            "home": "/synthetic/home",
+            "mode": "reuse-existing"
+        },
+        "state": "/synthetic/state",
+        "project": "/synthetic/project",
+        "node": {"sha256": "a".repeat(64), "path": "/synthetic/node"},
+        "executableVersion": REVIEWED_ANTIGRAVITY.version,
+        "executable": {"sha256": REVIEWED_ANTIGRAVITY.sha256, "path": "/synthetic/agy"},
+        "trust": "native-same-user",
+        "provider": "antigravity",
+        "version": 4
+    });
+    let ordered = interactive_config(&manifest).unwrap();
+    let keys: Vec<_> = ordered.as_object().unwrap().keys().cloned().collect();
+    assert_eq!(
+        keys,
+        vec![
+            "version",
+            "provider",
+            "trust",
+            "executable",
+            "executableVersion",
+            "node",
+            "project",
+            "state",
+            "authentication",
+            "interactive",
+        ]
+    );
+
+    let mut with_mcp = manifest.clone();
+    with_mcp["interactive"]["mcp"] = json!(true);
+    assert!(interactive_config(&with_mcp).is_err());
+
+    let candidate = json!({
+        "slot": 0,
+        "terminalId": "00000000-0000-4000-8000-000000000001",
+        "alias": "P-00000000-0000-4000-8000-000000000001",
+        "provider": "antigravity",
+        "requestedModel": "gemini-2.5-pro",
+        "workspaceId": "b".repeat(64),
+        "featureId": null,
+        "admissionRevision": 1,
+        "bindingDigest": "c".repeat(64),
+        "status": "ready"
+    });
+    assert!(member(&candidate).is_ok());
+    assert!(member_schema_order(candidate.as_object().unwrap()).is_ok());
+}

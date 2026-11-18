@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 pub mod adapters;
+pub mod antigravity;
 pub mod backend;
 pub mod claude;
 pub mod codex;

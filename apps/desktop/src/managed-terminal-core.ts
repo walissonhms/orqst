@@ -135,7 +135,7 @@ export async function connectManagedTerminalCore(
     slot: number;
     terminalId: string;
     alias?: string;
-    provider: 'codex' | 'claude' | 'opencode';
+    provider: 'codex' | 'claude' | 'opencode' | 'antigravity';
   }> = [];
   let ready: () => void;
   let failed: (error: Error) => void;

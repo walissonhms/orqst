@@ -11,6 +11,8 @@ import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import {
+  interactiveHub,
+  interactiveMcp,
   readInteractiveTerminalConfig,
   interactiveProvider,
 } from '../../../packages/core/src/terminal/interactive-profile.js';
@@ -89,8 +91,7 @@ async function start() {
   };
   // The pair's native task authorization; hub terminals message freely within a Feature.
   const mcpEnabled =
-    !!selection[0]!.config.interactive?.mcp &&
-    !selection.some(({ config }) => !!config.interactive?.hub);
+    interactiveMcp(selection[0]!.config) && !selection.some(({ config }) => interactiveHub(config));
   const service = new TauriTerminalService(
     core.supervisors,
     keys,

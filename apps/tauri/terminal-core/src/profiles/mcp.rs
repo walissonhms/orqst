@@ -21,6 +21,11 @@ pub const REVIEWED_OPENCODE: ReviewedBinary = ReviewedBinary {
     version: "2.2.5",
     sha256: "abe4d88594bffb12b364375b8a6732d2d1f7a977195ed1a35c5c76f8e89c9e0e",
 };
+/// `reviewedAntigravityBinary` (`antigravity-launch-plan.ts`).
+pub const REVIEWED_ANTIGRAVITY: ReviewedBinary = ReviewedBinary {
+    version: "1.5.10",
+    sha256: "780ee763a9938a37b45c7f9d6ae31747d7c574358fd10c64d3a1cdc36faf2798",
+};
 /// `reviewedClaudeTuiBinary` (`interactive-profile.ts`).
 pub const REVIEWED_CLAUDE_TUI: ReviewedBinary = ReviewedBinary {
     version: "2.1.318",

@@ -1,5 +1,18 @@
 # Changelog
 
+## Antigravity managed terminal provider — 2026-11-18 (source)
+
+Added Google Antigravity (`agy` 1.5.10, SHA-256 `780ee763…faf2798`) as an owned
+managed PTY terminal provider (`antigravity`, manifest `version: 4`, profile
+`antigravity-terminal-v1`) across protocol schemas, Desktop preparation, Studio
+dialogs (`en-US` and `pt-BR`), Node 24 Core and the `ORQST_RUST_TERMINALS=1`
+Rust Core. Unreviewed or missing `agy` binaries are refused with localized
+reasons, `--model` is populated passively from
+`~/.gemini/antigravity-cli/settings.json`, and per-session ORQST MCP is marked
+unavailable because `agy` 1.5.10 exposes no session-scoped MCP client flag
+without mutating global `~/.gemini/config` or workspace `.agents` files. See
+[contract and native acceptance steps](docs/design/antigravity-managed-terminal.md).
+
 ## Always inside a Feature — 2026-11-18 (source)
 
 New managed PTY and structured terminals always open inside the active Studio

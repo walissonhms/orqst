@@ -5,6 +5,7 @@ import { app, WebContentsView, dialog, ipcMain, session, type BrowserWindow } fr
 import { TerminalAuthority } from '../../../packages/core/src/terminal/authority.js';
 import { TerminalNativeBroker } from '../../../packages/core/src/terminal/native-broker.js';
 import {
+  interactiveMcp,
   readInteractiveTerminalConfig,
   interactiveProvider,
 } from '../../../packages/core/src/terminal/interactive-profile.js';
@@ -132,7 +133,7 @@ export async function createManagedTerminals(
   return {
     openers,
     showDashboard: () => panels.showDashboard(),
-    mcpEnabled: !!selection[0]!.config.interactive?.mcp && !blocker,
+    mcpEnabled: interactiveMcp(selection[0]!.config) && !blocker,
     async authorizeMcp() {
       if (!core || retiring || retired) return;
       retiring = true;
@@ -344,9 +345,11 @@ export async function createManagedTerminals(
               ? 'opencodeScope'
               : provider === 'claude'
                 ? 'claudeScope'
-                : config.authentication
-                  ? 'reuseScope'
-                  : 'scope',
+                : provider === 'antigravity'
+                  ? 'antigravityScope'
+                  : config.authentication
+                    ? 'reuseScope'
+                    : 'scope',
           blocker,
           terminalId: core?.identities[slot]?.terminalId,
           aliases: selection.map(({ config }) =>

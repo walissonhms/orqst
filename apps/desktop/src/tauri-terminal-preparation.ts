@@ -183,7 +183,7 @@ export async function prepareTauriTerminals(
       };
       const source = select(
         sourceProvider,
-        pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,
+        pair ? terminalMcpPairModelId(request, request.sourceProvider) : request.modelId,
       );
       const companion =
         pair && members
@@ -207,6 +207,7 @@ export async function prepareTauriTerminals(
         featureId: request.featureId,
         fence: discovered.workspace.fence,
       });
+      const supportsHub = !pair && sourceProvider !== 'antigravity';
       const plan = prepareTerminalCreation({
         ...context,
         ...source,
@@ -215,9 +216,9 @@ export async function prepareTauriTerminals(
         limit: 8,
         project: discovered.workspace.project,
         preparation,
-        // Every terminal talks through the Feature-scoped hub; the pair keeps its own MCP.
-        mcp: true,
-        ...(pair ? {} : { hub: true }),
+        // MCP-capable terminals talk through the Feature-scoped hub; the pair keeps its own MCP.
+        mcp: pair || supportsHub,
+        ...(supportsHub ? { hub: true } : {}),
         ...(providers.includes('opencode') ? { openCodeStartupAuthorized: true } : {}),
       });
       // Studio's focused, generation-bound Open gesture authorizes the exact selection.
@@ -242,7 +243,7 @@ export async function prepareTauriTerminals(
           rechecked.catalogId !== request.catalogId ||
           !still(
             sourceProvider,
-            pair ? terminalMcpPairModelId(request, sourceProvider) : request.modelId,
+            pair ? terminalMcpPairModelId(request, request.sourceProvider) : request.modelId,
           ) ||
           (pair && (!members || !still(members[1], terminalMcpPairModelId(request, members[1]))))
         )

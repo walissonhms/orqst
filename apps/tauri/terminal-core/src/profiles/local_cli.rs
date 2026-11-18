@@ -9,8 +9,16 @@ use std::collections::HashSet;
 use std::ffi::CString;
 use std::os::unix::fs::MetadataExt;
 
-pub const LOCAL_CLI_PROVIDERS: [&str; 3] = ["codex", "claude", "opencode"];
+pub const LOCAL_CLI_PROVIDERS: [&str; 4] = ["codex", "claude", "opencode", "antigravity"];
 pub const MAXIMUM_CANDIDATES: usize = 16;
+
+pub fn local_cli_executable_name(provider: &str) -> &str {
+    if provider == "antigravity" {
+        "agy"
+    } else {
+        provider
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Candidate {
@@ -88,7 +96,7 @@ pub fn discover_local_clis(
                     incomplete = true;
                     break;
                 }
-                let launcher = join2(&directory.path, provider);
+                let launcher = join2(&directory.path, local_cli_executable_name(provider));
                 let outcome = (|| -> Result<Option<String>> {
                     let entry = lstat(&launcher)?;
                     if !is_file_or_symlink(&entry) {
@@ -144,6 +152,11 @@ fn reuse_blockers(provider: &str) -> &'static [&'static str] {
         ],
         "claude" => &[
             "claude_native_shared_state_acknowledgment_required",
+            "native_provider_acceptance_pending",
+        ],
+        "antigravity" => &[
+            "antigravity_native_gemini_state_shared",
+            "per_session_mcp_configuration_unavailable",
             "native_provider_acceptance_pending",
         ],
         _ => &[

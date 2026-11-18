@@ -41,6 +41,14 @@ import {
   openCodeTerminalEnvironment,
   type ManagedOpenCodeConfig,
 } from './opencode-profile.js';
+import {
+  managedAntigravityConfigSchema,
+  validateManagedAntigravityConfig,
+  antigravityTerminalProfiles,
+  antigravityTerminalEnvironment,
+  type ManagedAntigravityConfig,
+} from './antigravity-profile.js';
+export { reviewedAntigravityBinary } from './antigravity-launch-plan.js';
 
 const path = z
   .string()
@@ -91,12 +99,20 @@ export const managedClaudeConfigSchema = z.strictObject({
 });
 export type ManagedClaudeConfig = z.infer<typeof managedClaudeConfigSchema>;
 export type InteractiveTerminalConfig =
-  ManagedCodexConfig | ManagedClaudeConfig | ManagedOpenCodeConfig;
+  ManagedCodexConfig | ManagedClaudeConfig | ManagedOpenCodeConfig | ManagedAntigravityConfig;
 
 export function interactiveProvider(
   config: InteractiveTerminalConfig,
-): 'codex' | 'claude' | 'opencode' {
+): 'codex' | 'claude' | 'opencode' | 'antigravity' {
   return config.version !== 1 ? config.provider : 'codex';
+}
+
+export function interactiveMcp(config: InteractiveTerminalConfig): boolean {
+  return config.version !== 4 && !!config.interactive?.mcp;
+}
+
+export function interactiveHub(config: InteractiveTerminalConfig): boolean {
+  return config.version !== 4 && !!config.interactive?.hub;
 }
 
 function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
@@ -155,6 +171,11 @@ export function readInteractiveTerminalConfig(
   verifyExecutable = cachedTerminalExecutableSha256,
 ): InteractiveTerminalConfig {
   const raw: unknown = JSON.parse(terminalFile(file, true).toString('utf8'));
+  if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 4) {
+    const config = managedAntigravityConfigSchema.parse(raw);
+    validateManagedAntigravityConfig(config, verifyExecutable);
+    return config;
+  }
   if (typeof raw === 'object' && raw !== null && 'version' in raw && raw.version === 3) {
     const config = managedOpenCodeConfigSchema.parse(raw);
     validateManagedOpenCodeConfig(config, verifyExecutable);
@@ -178,6 +199,7 @@ export function interactiveTerminalProfiles(
   validateTerminalPreparationBinding(config.preparation, config.project);
   if (config.version === 1) return managedCodexProfiles(config, mcp);
   if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
+  if (config.version === 4) return antigravityTerminalProfiles(config, mcp);
   validateClaudeLaunchContract(config);
   validateClaudeOwnedHooks(config);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
@@ -234,6 +256,7 @@ export function interactiveTerminalEnvironment(
 ): Record<string, string> {
   if (config.version === 1) return managedCodexEnvironment(config);
   if (config.version === 3) return openCodeTerminalEnvironment(config, mcp);
+  if (config.version === 4) return antigravityTerminalEnvironment(config, mcp);
   return {
     HOME: config.authentication.home,
     ...(config.authentication.claudeConfigDirectory

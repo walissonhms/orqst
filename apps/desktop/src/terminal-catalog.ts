@@ -59,14 +59,16 @@ export function inspectTerminalPreparationCatalog(
         ? [context.environment.CODEX_HOME ?? null]
         : provider === 'claude'
           ? [context.environment.CLAUDE_CONFIG_DIR ?? null]
-          : [
-              'XDG_CONFIG_HOME',
-              'XDG_DATA_HOME',
-              'XDG_STATE_HOME',
-              'XDG_CACHE_HOME',
-              'OPENCODE_CONFIG_DIR',
-              'OPENCODE_DB',
-            ].map((key) => context.environment[key] ?? null)),
+          : provider === 'antigravity'
+            ? []
+            : [
+                'XDG_CONFIG_HOME',
+                'XDG_DATA_HOME',
+                'XDG_STATE_HOME',
+                'XDG_CACHE_HOME',
+                'OPENCODE_CONFIG_DIR',
+                'OPENCODE_DB',
+              ].map((key) => context.environment[key] ?? null)),
     ]);
     models = {
       ...models,

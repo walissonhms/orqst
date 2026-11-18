@@ -1,5 +1,16 @@
 # ORQST
 
+## Antigravity managed terminal provider — 2026-11-18 (source)
+
+ORQST now supports Google Antigravity (`agy` 1.5.10) as an owned managed PTY
+terminal provider alongside Codex, Claude Code and OpenCode across the Studio
+picker, Node 24 Core and `ORQST_RUST_TERMINALS=1` Rust Core. Selection enforces
+the reviewed binary SHA-256, a minimal environment allowlist, passive `--model`
+discovery from `~/.gemini/antigravity-cli/settings.json`, and an honest
+per-session MCP unavailable state without touching global `~/.gemini/config` or
+project `.agents` files. Native UI and live provider acceptance remain separate
+human checks; see [design, limits and native acceptance](docs/design/antigravity-managed-terminal.md).
+
 ## Diag21 Codex and structured peers — 2026-11-17
 
 The Studio terminal picker now accepts the exact reviewed Codex 0.169.0 binary.

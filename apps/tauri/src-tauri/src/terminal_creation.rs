@@ -241,7 +241,7 @@ fn valid_request(value: &Value) -> bool {
                 && digest(&value["modelId"])
                 && matches!(
                     value["provider"].as_str(),
-                    Some("codex" | "claude" | "opencode")
+                    Some("codex" | "claude" | "opencode" | "antigravity")
                 )
                 && value["count"]
                     .as_u64()
@@ -281,7 +281,7 @@ fn valid_request(value: &Value) -> bool {
                                 && crate::features::workspace_id(&item["workspaceId"])
                                 && matches!(
                                     item["provider"].as_str(),
-                                    Some("codex" | "claude" | "opencode")
+                                    Some("codex" | "claude" | "opencode" | "antigravity")
                                 )
                                 && (item["modelId"].is_null() || digest(&item["modelId"]))
                                 && crate::features::name(&item["name"])
@@ -364,8 +364,8 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
         && value["featureId"] == request["featureId"]
         && digest(&value["catalogId"])
         && value["providers"].as_array().is_some_and(|providers| {
-            providers.len() == 3
-                && ["codex", "claude", "opencode"]
+            providers.len() == 4
+                && ["codex", "claude", "opencode", "antigravity"]
                     .iter()
                     .all(|id| providers.iter().filter(|p| p["provider"] == *id).count() == 1)
                 && providers.iter().all(|p| {
@@ -1986,7 +1986,7 @@ mod catalog_tests {
     fn pending_exits_are_bounded_ordered_and_strict() {
         let request =
             json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
-        let providers: Vec<_> = ["codex", "claude", "opencode"].iter().map(|provider| json!({"provider":provider,"status":"unavailable","reason":"executable_not_found","models":[]})).collect();
+        let providers: Vec<_> = ["codex", "claude", "opencode", "antigravity"].iter().map(|provider| json!({"provider":provider,"status":"unavailable","reason":"executable_not_found","models":[]})).collect();
         let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
         assert!(valid_catalog(&catalog, &request));
         let mut legacy = catalog.clone();
@@ -2024,7 +2024,7 @@ mod catalog_tests {
     fn catalogs_accept_all_reviewed_sources_but_never_entitlement_or_cross_scope() {
         let request =
             json!({"action":"catalog","workspaceId":"synthetic-workspace","featureId":null});
-        let providers: Vec<_>=["codex","claude","opencode"].iter().map(|provider|json!({"provider":provider,"status":"available","reason":"ready","models":[{"id":"b".repeat(64),"label":"SYNTHETIC model","source":"official-alias","isDefault":false,"availability":"unverified"}]})).collect();
+        let providers: Vec<_>=["codex","claude","opencode","antigravity"].iter().map(|provider|json!({"provider":provider,"status":"available","reason":"ready","models":[{"id":"b".repeat(64),"label":"SYNTHETIC model","source":"official-alias","isDefault":false,"availability":"unverified"}]})).collect();
         let mut catalog = json!({"contractVersion":1,"workspaceId":"synthetic-workspace","featureId":null,"catalogId":"a".repeat(64),"providers":providers,"pendingOwnedExits":[]});
         assert!(valid_catalog(&catalog, &request));
         for source in [

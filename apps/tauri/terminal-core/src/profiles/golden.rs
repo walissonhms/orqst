@@ -180,6 +180,38 @@ fn run(fn_name: &str, input: &Js, root: &str) -> Result<Js> {
                 })?;
             Ok(plan.0)
         }
+        "antigravityLaunchPlan" => {
+            let raw = input.get("raw").unwrap();
+            validate::strict(
+                raw,
+                "antigravityLaunchPlan",
+                &[
+                    "executable",
+                    "executableVersion",
+                    "executableSha256",
+                    "project",
+                    "home",
+                    "model",
+                ],
+            )?;
+            let model = match raw.get("model") {
+                None => None,
+                Some(Js::Null) => Some(None),
+                Some(Js::Str(text)) => Some(Some(text.as_str())),
+                Some(_) => return Err(ProfileError::schema("model")),
+            };
+            let plan = antigravity::antigravity_interactive_launch_plan(
+                &antigravity::AntigravityLaunchInput {
+                    executable: s(raw, "executable"),
+                    executable_version: s(raw, "executableVersion"),
+                    executable_sha256: s(raw, "executableSha256"),
+                    project: s(raw, "project"),
+                    home: s(raw, "home"),
+                    model,
+                },
+            )?;
+            Ok(plan.0)
+        }
         "pathDirectories" => Ok(local_cli_path::local_cli_path_directories(
             s(input, "searchPath"),
             input.get("home").and_then(Js::as_str),

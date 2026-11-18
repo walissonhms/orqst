@@ -520,7 +520,8 @@
     "adapters": {
       "codex": "Codex CLI",
       "claude": "Claude Code",
-      "opencode": "OpenCode"
+      "opencode": "OpenCode",
+      "antigravity": "Antigravity"
     },
     "capabilities": {
       "sessionDiscovery": "Descoberta de sessões externas",
@@ -730,6 +731,7 @@
     "createProvider_codex": "Codex 0.162.1",
     "createProvider_claude": "Claude Code 2.1.178",
     "createProvider_opencode": "OpenCode 2.2.5 (revisão bloqueada)",
+    "createProvider_antigravity": "Antigravity 1.5.10",
     "createExecutable": "Selecione o executável nativo desse CLI (arquivo canônico; sem shim)",
     "createNode": "Selecione o executável do Node 24 instalado para os dois terminais",
     "createProject": "Selecione uma pasta de projeto descartável vazia para A e B",
@@ -805,6 +807,7 @@
     "terminalIdentity": "UUID do Terminal no Core",
     "claudeScope": "Reuso experimental do login nativo Claude Code. HOME/config/Keychain, hooks, plugins, políticas e gravações de sessões nativas ficam compartilhados; o CLI pode renovar credenciais. Sem sandbox. Novo UUID, um disparo por manifesto; sem tarefa, login ou retomada automática. No opt-in MCP, a seleção estrita exclui outros MCPs e a aprovação nativa pode bloquear a inicialização. Aceite de foco, login, MCP e provider pendente. OpenCode possui opt-in de startup separado.",
     "opencodeScope": "OpenCode 2.2.5 standalone experimental com identidade do login existente. HOME/XDG/config/banco permanecem nativos e compartilhados. O startup abre SQLite gravável, pode alterar permissões/WAL, aplicar migrações pendentes ou renovar credenciais. Banco e ledger não foram inspecionados; migrações pendentes são desconhecidas e não há garantia de reversão. Plugins, hooks e MCPs nativos podem executar código ou chamadas ao provider no startup. Sem tarefa ORQST, login automático ou retomada. Sem sandbox. Saída do TUI não comprova saída dos descendentes; login, roteamento de sessão, MCP e aceite do provider não validados. MCP inline mescla com definições nativas.",
+    "antigravityScope": "CLI interativa Antigravity 1.5.10 experimental com identidade do login existente. HOME e ~/.gemini (configurações, extensões, hooks, plugins, MCPs e transcrições de conversa) permanecem nativos e compartilhados; a CLI pode renovar credenciais e gravar estado nativo. Lista mínima de variáveis de ambiente; sem sandbox. Um disparo por manifesto; sem tarefa, login ou retomada automática. O MCP por sessão do ORQST está indisponível porque o agy 1.5.10 não possui flag de configuração MCP isolada por sessão sem modificar ~/.gemini/config global ou arquivos .agents do workspace.",
     "opencode_startup_required": "Startup OpenCode bloqueado. Provisione um novo manifesto apenas após autorizar explicitamente gravações no banco nativo/possíveis migrações e atividade nativa no startup. Nenhum banco foi inspecionado ou aberto.",
     "openCodeStartupReview": "Revise os efeitos do startup nativo OpenCode para estes seletores de identidade e binários exatos. O startup usa o SQLite existente e gravável de credenciais/sessões: pode mudar permissões/WAL, aplicar migrações pendentes e atualizar credenciais. Plugins, hooks e MCPs nativos podem executar código, rede ou requisições ao provider automaticamente. Migrações pendentes e atividade de startup são DESCONHECIDAS; não há garantia de rollback nem de saída de descendentes. A capacidade permanece reservada mesmo após a saída da TUI. Esta etapa não inicia nada. Mantenha os manifests bloqueados sem autorizar explicitamente esses efeitos; startup do terminal e tarefas têm grants separados.",
     "openCodeStartupAcknowledgment": "Autorizo explicitamente gravações no SQLite nativo compartilhado, possíveis migrações, atualização de credenciais e atividade nativa de startup destes novos processos.",
@@ -1117,6 +1120,7 @@
       "mcpWorkerProvider": "CLI de destino",
       "mcpWorkerModel": "Modelo do executor {{provider}}",
       "mcpInitialOnly": "Pares com comunicação exigem uma seleção inicial nova. Adicionar MCP a um Core existente está indisponível.",
+      "mcpUnavailableAntigravity": "Comunicação MCP do ORQST indisponível para o Antigravity: o agy 1.5.10 não possui flag de configuração MCP por sessão sem alterar ~/.gemini/config global ou arquivos .agents do workspace.",
       "openMcpPair": "Revisar e abrir par com comunicação"
     },
     "layoutPreview": "Abrir a prévia do layout de terminais (desenvolvimento).",
@@ -1436,6 +1440,7 @@
       "codex": "Codex",
       "claude": "Claude Code",
       "opencode": "OpenCode",
+      "antigravity": "Antigravity",
       "shell": "Shell"
     },
     "create": {
@@ -1454,6 +1459,12 @@
       "modelCount_one": "{{count}} modelo",
       "modelCount_other": "{{count}} modelos",
       "unavailable": "Indisponível",
+      "reason_ready": "Pronto",
+      "reason_executable_not_found": "CLI não encontrada",
+      "reason_executable_unreviewed": "Versão ou checksum da CLI não revisado",
+      "reason_executable_inspection_failed": "Falha ao verificar a CLI",
+      "reason_ambiguous_executable": "Várias instalações da CLI encontradas",
+      "reason_catalog_limited": "Catálogo da CLI ou modelos não pôde ser validado",
       "defaultHint": "usa a configuração da CLI",
       "namePlaceholder": "Terminal {{n}}",
       "name": "Nome do terminal {{n}}",

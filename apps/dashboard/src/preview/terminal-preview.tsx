@@ -103,6 +103,7 @@ const syntheticCatalog: ProviderCatalog[] = [
     accounts: accountsFor('claude'),
   },
   { provider: 'opencode', available: true, models: [{ id: 'opencode/default' }] },
+  { provider: 'antigravity', available: true, models: [{ id: 'gemini-2.5-pro' }] },
   { provider: 'shell', available: true, models: [] },
 ];
 

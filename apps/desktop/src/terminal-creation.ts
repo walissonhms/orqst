@@ -23,6 +23,7 @@ import {
 } from '../../../packages/core/src/terminal/codex-profile.js';
 import {
   managedClaudeConfigSchema,
+  reviewedAntigravityBinary,
   reviewedClaudeTuiBinary,
   readInteractiveTerminalConfig,
   validateManagedClaudeConfig,
@@ -33,6 +34,11 @@ import {
   validateOpenCodeSelection,
   validateManagedOpenCodeConfig,
 } from '../../../packages/core/src/terminal/opencode-profile.js';
+import {
+  managedAntigravityConfigSchema,
+  validateAntigravitySelection,
+  validateManagedAntigravityConfig,
+} from '../../../packages/core/src/terminal/antigravity-profile.js';
 import {
   reviewedClaudeMcpBinaries,
   reviewedProviderMcpBinaries,
@@ -116,6 +122,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     throw new Error('Only an explicit MCP pair of two distinct CLIs can mix providers');
   if (input.openCodeStartupAuthorized && !members.some(({ provider }) => provider === 'opencode'))
     throw new Error('OpenCode startup consent is provider-specific');
+  if (input.mcp && members.some(({ provider }) => provider === 'antigravity'))
+    throw new Error('Antigravity has no per-session MCP launch contract');
   terminalDirectory(input.project);
   if (!input.preparation && readdirSync(input.project).length)
     throw new Error('Select an empty disposable project');
@@ -220,6 +228,27 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
           ...(input.hub ? { hub: true } : {}),
         },
       });
+    }
+    if (provider === 'antigravity') {
+      if (executable.sha256 !== reviewedAntigravityBinary.sha256)
+        throw new Error('No reviewed Antigravity binary version/hash');
+      nativeRoots.push(join(input.home, '.gemini'));
+      const config = managedAntigravityConfigSchema.parse({
+        ...common,
+        version: 4,
+        provider: 'antigravity',
+        executableVersion: reviewedAntigravityBinary.version,
+        authentication: {
+          mode: 'reuse-existing',
+          home: input.home,
+          sharedNativeConfiguration: true,
+        },
+        interactive: {
+          sharedNativeSessions: true,
+        },
+      });
+      validateAntigravitySelection(config, cachedTerminalExecutableSha256);
+      return config;
     }
     for (const name of ['OPENCODE_TEST_HOME', 'OPENCODE_CONFIG', 'OPENCODE_CONFIG_CONTENT'])
       if (input.environment[name] !== undefined) throw new Error('Unsupported OpenCode selector');
@@ -370,6 +399,8 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
           validateManagedCodexConfig(stagedConfig, cachedTerminalExecutableSha256);
         else if (stagedConfig.version === 2)
           validateManagedClaudeConfig(stagedConfig, cachedTerminalExecutableSha256);
+        else if (stagedConfig.version === 4)
+          validateManagedAntigravityConfig(stagedConfig, cachedTerminalExecutableSha256);
         else validateManagedOpenCodeConfig(stagedConfig, cachedTerminalExecutableSha256);
         writeFileSync(join(state, 'terminal.json'), JSON.stringify(boundConfig, null, 2) + '\n', {
           flag: 'wx',

@@ -29,7 +29,7 @@ export const accountLimitsSchema = z
       .array(
         z.strictObject({
           id: accountLimitId,
-          provider: z.enum(['codex', 'claude', 'opencode']),
+          provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
           index: z.number().int().min(1).max(99),
           plan: z
             .string()
@@ -225,7 +225,7 @@ export const featureNativeSnapshotSchema = z
         z.strictObject({
           slot: z.number().int().min(0).max(7),
           terminalId: z.uuid(),
-          provider: z.enum(['codex', 'claude', 'opencode']),
+          provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
           closed: z.literal(true).optional(),
           workspace: z
             .strictObject({

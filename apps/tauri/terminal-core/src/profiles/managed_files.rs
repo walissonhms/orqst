@@ -111,7 +111,10 @@ pub fn inspect_managed_terminal_files(
         ));
     }
     if hub {
-        if selection.iter().any(|s| !s.config.hub()) {
+        if selection
+            .iter()
+            .any(|s| s.config.version() != 4 && !s.config.hub())
+        {
             return Err(ProfileError::refused(
                 "Hub terminals cannot share a Core with non-hub terminals",
             ));

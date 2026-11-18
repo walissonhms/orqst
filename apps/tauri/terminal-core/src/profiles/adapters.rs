@@ -15,8 +15,22 @@ pub fn interactive_cli_status(provider: &str) -> Js {
             }),
         ),
         ("existingLoginPty", Js::str("explicit_opt_in_unvalidated")),
-        ("perInstanceMcp", Js::str("synthetic_transport_only")),
-        ("mcpConfiguration", Js::str("desktop_opt_in_synthetic_only")),
+        (
+            "perInstanceMcp",
+            Js::str(if provider == "antigravity" {
+                "unavailable"
+            } else {
+                "synthetic_transport_only"
+            }),
+        ),
+        (
+            "mcpConfiguration",
+            Js::str(if provider == "antigravity" {
+                "unavailable_global_or_workspace_only"
+            } else {
+                "desktop_opt_in_synthetic_only"
+            }),
+        ),
         ("installedVersionCompatibility", Js::str("unvalidated")),
         ("automaticTaskDelivery", Js::str("unvalidated")),
         ("providerAcceptance", Js::str("not_run")),
@@ -33,6 +47,7 @@ pub fn interactive_cli_adapter(
 ) -> Result<()> {
     if (provider == "opencode" && authentication != "reuse-existing")
         || (provider == "claude" && authentication != "reuse-existing")
+        || (provider == "antigravity" && authentication != "reuse-existing")
         || (authentication == "reuse-existing" && !native_session_writes_acknowledged)
     {
         return Err(ProfileError::refused(

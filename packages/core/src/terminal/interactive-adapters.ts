@@ -15,8 +15,12 @@ export function interactiveCliStatus(provider: LocalCliProvider) {
         ? ('legacy_separate_login_fixture_validated' as const)
         : ('explicit_opt_in_synthetic_only' as const),
     existingLoginPty: 'explicit_opt_in_unvalidated' as const,
-    perInstanceMcp: 'synthetic_transport_only' as const,
-    mcpConfiguration: 'desktop_opt_in_synthetic_only' as const,
+    perInstanceMcp:
+      provider === 'antigravity' ? ('unavailable' as const) : ('synthetic_transport_only' as const),
+    mcpConfiguration:
+      provider === 'antigravity'
+        ? ('unavailable_global_or_workspace_only' as const)
+        : ('desktop_opt_in_synthetic_only' as const),
     installedVersionCompatibility: 'unvalidated' as const,
     automaticTaskDelivery: 'unvalidated' as const,
     providerAcceptance: 'not_run' as const,
@@ -32,6 +36,7 @@ export function interactiveCliAdapter(
   if (
     (provider === 'opencode' && authentication !== 'reuse-existing') ||
     (provider === 'claude' && authentication !== 'reuse-existing') ||
+    (provider === 'antigravity' && authentication !== 'reuse-existing') ||
     (authentication === 'reuse-existing' && !nativeSessionWritesAcknowledged)
   )
     throw new Error('Interactive CLI adapter has no reviewed launch contract for this mode');

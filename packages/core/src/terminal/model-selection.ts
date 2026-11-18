@@ -239,12 +239,14 @@ export function discoverTerminalModels(
             join(project, '.claude/settings.json'),
             join(project, '.claude/settings.local.json'),
           ]
-        : [
-            join(opencodeHome, 'opencode.json'),
-            join(opencodeHome, 'opencode.jsonc'),
-            join(project, 'opencode.json'),
-            join(project, 'opencode.jsonc'),
-          ];
+        : provider === 'antigravity'
+          ? [join(home, '.gemini/antigravity-cli/settings.json')]
+          : [
+              join(opencodeHome, 'opencode.json'),
+              join(opencodeHome, 'opencode.jsonc'),
+              join(project, 'opencode.json'),
+              join(project, 'opencode.jsonc'),
+            ];
   // The native preference document is separate state, never merged into configuration evidence.
   const openCodeStatePath =
     provider === 'opencode'
