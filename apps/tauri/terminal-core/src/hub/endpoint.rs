@@ -257,7 +257,8 @@ fn serve(
     };
     let deadline = Instant::now() + Duration::from_secs(2);
     let busy = Arc::new(AtomicBool::new(false));
-    let mut authenticated = None::<String>;
+    let mut authenticated = false;
+    let mut authenticated_terminal = None;
     let mut reader = LineReader::default();
     let mut stream = stream;
     let mut buffer = vec![0u8; 65_536];
@@ -265,7 +266,7 @@ fn serve(
         if destroyed.load(Ordering::SeqCst) || shared.closed.load(Ordering::SeqCst) {
             break;
         }
-        if authenticated.is_none() {
+        if !authenticated {
             let left = deadline.saturating_duration_since(Instant::now());
             if left.is_zero() || stream.set_read_timeout(Some(left)).is_err() {
                 break;
@@ -281,16 +282,14 @@ fn serve(
             Err(_) => break,
         };
         let fed = reader.feed(&buffer[..count], |raw| {
-            if authenticated.is_none() {
+            if !authenticated {
                 let secret = raw
                     .as_object()
                     .filter(|m| m.len() == 1)
                     .and_then(|m| m.get("secret"))
                     .and_then(Value::as_str)
                     .filter(|s| is_secret(s));
-                let (Some(secret), Some(terminal_id)) = (secret, terminal.current()) else {
-                    return false;
-                };
+                let Some(secret) = secret else { return false };
                 if !timing_safe_equal(&expected, &sha(secret.as_bytes()))
                     || shared
                         .claimed
@@ -299,8 +298,13 @@ fn serve(
                 {
                     return false;
                 }
-                hub.relay_connected(&terminal_id, true);
-                authenticated = Some(terminal_id);
+                authenticated = true;
+                // A valid capability authenticates the socket. Routing still requires
+                // the terminal identity bound at authentication.
+                authenticated_terminal = terminal.current();
+                if let Some(id) = &authenticated_terminal {
+                    hub.relay_connected(id, true);
+                }
                 if stream.set_read_timeout(None).is_err() {
                     return false;
                 }
@@ -328,7 +332,9 @@ fn serve(
                 id.to_owned(),
                 request.get("call").cloned().unwrap_or(Value::Null),
             );
-            let bound_id = authenticated.clone().filter(|id| terminal.current().as_ref() == Some(id));
+            let bound_id = authenticated_terminal
+                .clone()
+                .filter(|id| terminal.current().as_ref() == Some(id));
             let (hub, writer, destroyed, busy) = (
                 hub.clone(),
                 writer.clone(),
@@ -375,7 +381,7 @@ fn serve(
             break;
         }
     }
-    if let Some(id) = authenticated {
+    if let Some(id) = authenticated_terminal {
         hub.relay_connected(&id, false);
     }
     destroy();
