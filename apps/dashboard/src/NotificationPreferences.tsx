@@ -8,6 +8,7 @@ export function NotificationPreferences({
   value,
   disabled,
   nativeDesktop,
+  settings = false,
   onChange,
   onTestSound,
   onPermission,
@@ -15,6 +16,7 @@ export function NotificationPreferences({
   value: Preferences;
   disabled: boolean;
   nativeDesktop: boolean;
+  settings?: boolean;
   onChange: (value: Preferences) => void;
   onTestSound: () => void;
   onPermission: () => void;
@@ -28,7 +30,7 @@ export function NotificationPreferences({
   } as const;
   return (
     <div className="preferences lane-notification-preferences">
-      <h3>{t('preferences')}</h3>
+      {!settings && <h3>{t('preferences')}</h3>}
       {(['completed', 'failed', 'intervention', 'sound'] as const).map((key) => (
         <label className="preference" key={key}>
           <span>{t(labels[key])}</span>
@@ -53,9 +55,16 @@ export function NotificationPreferences({
           {t('desktop')}
         </button>
       )}
-      <p className="fine-print">
-        {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
-      </p>
+      {settings ? (
+        <details className="fine-print">
+          <summary>{t('screens.details')}</summary>
+          {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
+        </details>
+      ) : (
+        <p className="fine-print">
+          {t(nativeDesktop ? 'desktopShell.dashboardNotice' : 'notificationsPermission')}
+        </p>
+      )}
     </div>
   );
 }

@@ -15,7 +15,7 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
     return option ? [option] : [];
   });
   const number = (value: number | null | undefined) =>
-    value == null ? t('unknown') : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
+    value == null ? '—' : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
   const metrics = [
     ['analytics.reportedTokens', (row) => row.usage?.total],
     ['input', (row) => row.usage?.input],
@@ -26,8 +26,14 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
   return (
     <section className="panel analytics-comparison" aria-labelledby="model-comparison-title">
       <h2 id="model-comparison-title">{t('analytics.comparison.title')}</h2>
-      <p className="notice">{t('analytics.comparison.limits')}</p>
-      <p className="fine-print">{t('analytics.comparison.scope')}</p>
+      <details className="fine-print">
+        <summary>{t('screens.details')}</summary>
+        <p>{t('analytics.comparison.limits')}</p>
+        <p>{t('analytics.comparison.scope')}</p>
+        <p>{t('analytics.nonAdditive')}</p>
+        <p>{t('analytics.cache')}</p>
+        <p>{t('analytics.comparison.unavailable')}</p>
+      </details>
       <div className="analytics-filters">
         {selection.map((id, index) => (
           <label key={index}>
@@ -47,7 +53,8 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
                   value={option.id}
                   disabled={option.id !== id && selection.includes(option.id)}
                 >
-                  {option.row.adapter}: {option.row.model ?? t('analytics.unidentified')}
+                  {t(`screens.cli.${option.row.adapter}`, { defaultValue: option.row.adapter })} ·{' '}
+                  {option.row.model ?? t('analytics.unidentified')}
                 </option>
               ))}
             </select>
@@ -73,9 +80,8 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
                     <span className="analytics-model">
                       {row.model ?? t('analytics.unidentified')}
                     </span>
-                    <small className="analytics-provider">{row.adapter}</small>
                     <small className="analytics-provider">
-                      {t('analytics.providerUnavailable')}
+                      {t(`screens.cli.${row.adapter}`, { defaultValue: row.adapter })}
                     </small>
                   </th>
                 ))}
@@ -96,9 +102,6 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
           </table>
         </div>
       )}
-      <p className="fine-print">{t('analytics.nonAdditive')}</p>
-      <p className="fine-print">{t('analytics.cache')}</p>
-      <p className="fine-print">{t('analytics.comparison.unavailable')}</p>
     </section>
   );
 }

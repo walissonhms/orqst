@@ -63,6 +63,7 @@ export function ModelHistory({
     <details
       className="model-history"
       onToggle={(event) => {
+        if (event.target !== event.currentTarget) return;
         setResult(undefined);
         setFailed(false);
         setOpen(event.currentTarget.open);
@@ -71,9 +72,12 @@ export function ModelHistory({
       <summary>{t('modelHistory.title')}</summary>
       {open && (
         <>
-          <p className="fine-print">{t('modelHistory.limits')}</p>
-          <p className="fine-print">{t('modelHistory.timeNote')}</p>
-          <p className="fine-print">{t('modelHistory.privacy')}</p>
+          <details className="fine-print">
+            <summary>{t('screens.details')}</summary>
+            <p>{t('modelHistory.limits')}</p>
+            <p>{t('modelHistory.timeNote')}</p>
+            <p>{t('modelHistory.privacy')}</p>
+          </details>
           {!online ? (
             <p>{t('modelHistory.offline')}</p>
           ) : failed ? (

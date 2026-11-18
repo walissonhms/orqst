@@ -2,11 +2,8 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObjec
 import { useTranslation } from 'react-i18next';
 import {
   Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
   Bell,
   Check,
-  CheckCircle2,
   ChevronRight,
   Circle,
   Command,
@@ -22,7 +19,6 @@ import {
   BarChart3,
   Plus,
   Pin,
-  Radio,
   Search,
   Settings2,
   ShieldCheck,
@@ -37,9 +33,9 @@ import type {
   SessionView,
   Snapshot,
   StoredEvent,
-  Usage,
 } from '@orqst/protocol';
 import {
+  defaultFeatureId,
   featureDisplayName,
   featurePreparationRequestSchema,
   type FeaturePreparationRequest,
@@ -64,20 +60,18 @@ import {
   type StudioTreeProps,
 } from './navigation';
 import { findNotificationSource, NativeSessionNavigation } from './native-session-navigation';
-import { Agents } from './Agents';
 import { Studio } from './Studio';
 import { StudioWorkspace } from './StudioWorkspace';
 import { Workspaces } from './Workspaces';
 import { pinnedFirst, useWorkspacePins } from './workspace-pins';
-import { OverviewLayoutEditor, OverviewPanels } from './OverviewLayout';
-import { useOverviewPreferences } from './overview-preferences';
+import { OverviewLayout, type StudioCardTarget } from './OverviewLayout';
 import { CommandPalette } from './CommandPalette';
 import { useFeatureShell } from './use-feature-shell.js';
 import { unassignedTerminalCount } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import { Modal } from './Modal';
-import { Settings } from './Settings';
-import { ObservationGuide } from './ObservationGuide';
+import { Settings, readStartup } from './Settings';
+import { needsOnboarding, ObservationGuide } from './ObservationGuide';
 import { NotificationPreferences } from './NotificationPreferences';
 import { useAppearancePreferences } from './appearance-preferences';
 import { isTemporaryWorkspace, shellSections, shortAge, STALE_MS } from './shell-sections';
@@ -189,37 +183,6 @@ function Status({ status, lastActivity }: { status: AgentStatus; lastActivity?: 
       <span className="status-dot" />
       {stale ? t('statusLabels.stale') : t(`statusLabels.${status}`)}
     </span>
-  );
-}
-function TokenSummary({ usage }: { usage: Usage | undefined }) {
-  const { t } = useTranslation();
-  const f = useFormatting();
-  if (!usage) return <p className="empty-copy">{t('tokensUnavailable')}</p>;
-  return (
-    <>
-      <div className="token-total">
-        {f.number(usage.total)}
-        <span>{t('tokens')}</span>
-      </div>
-      <div className="token-metrics">
-        <div>
-          <ArrowDownLeft size={15} />
-          <span>{t('input')}</span>
-          <strong>{f.number(usage.input)}</strong>
-        </div>
-        <div>
-          <ArrowUpRight size={15} />
-          <span>{t('output')}</span>
-          <strong>{f.number(usage.output)}</strong>
-        </div>
-        <div>
-          <Layers3 size={15} />
-          <span>{t('cached')}</span>
-          <strong>{f.number(usage.cached)}</strong>
-        </div>
-      </div>
-      <p className="fine-print">{t('cachedNote')}</p>
-    </>
   );
 }
 function Timeline({
@@ -579,21 +542,7 @@ export function App() {
   const { t, i18n } = useTranslation();
   const f = useFormatting();
   const appearance = useAppearancePreferences();
-  const overview = useOverviewPreferences();
   const workspacePins = useWorkspacePins();
-  const [overviewLayoutOpen, setOverviewLayoutOpen] = useState(false);
-  const overviewLayoutTrigger = useRef<HTMLButtonElement>(null);
-  const overviewLayoutOpener = useRef<Element | null>(null);
-  function openOverviewLayout() {
-    overviewLayoutOpener.current = document.activeElement;
-    setOverviewLayoutOpen(true);
-  }
-  function closeOverviewLayout() {
-    setOverviewLayoutOpen(false);
-    requestAnimationFrame(() => {
-      if (!overviewLayoutOpener.current?.isConnected) overviewLayoutTrigger.current?.focus();
-    });
-  }
   const [shell, setShell] = useState(readShellPreferences);
   const [showAllWorkspaces, setShowAllWorkspaces] = useState(false);
   const [now, setNow] = useState(Date.now);
@@ -602,9 +551,13 @@ export function App() {
     return () => window.clearInterval(timer);
   }, []);
   const [workspaceId, setWorkspaceId] = useState(shell.workspaceId);
-  const [view, setView] = useState<AppView>(
-    viewFromLocation(location) ?? (location.hash ? 'overview' : shell.view),
-  );
+  const [view, setView] = useState<AppView>(() => {
+    const explicit = viewFromLocation(location);
+    if (explicit) return explicit;
+    if (location.hash) return 'overview';
+    const startup = readStartup();
+    return startup === 'last' ? shell.view : startup;
+  });
   const [studioReturn, setStudioReturn] = useState(false);
   const [preparationRequest, setPreparationRequest] = useState<FeaturePreparationRequest>();
   const showPreparation = useRef<(detail: unknown) => void>(() => {});
@@ -613,10 +566,13 @@ export function App() {
     window.addEventListener('orqst-show-preparation', show);
     return () => window.removeEventListener('orqst-show-preparation', show);
   }, []);
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState(shell.status);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(
+    () => location.pathname === '/' && !location.hash && needsOnboarding(),
+  );
+  function openGuide() {
+    if (needsOnboarding()) setGuideOpen(true);
+  }
   function closeGuide() {
     setGuideOpen(false);
     requestAnimationFrame(() => {
@@ -664,14 +620,11 @@ export function App() {
   });
   useEffect(() => {
     try {
-      localStorage.setItem(
-        shellStorageKey,
-        JSON.stringify({ ...shell, view, workspaceId, status }),
-      );
+      localStorage.setItem(shellStorageKey, JSON.stringify({ ...shell, view, workspaceId }));
     } catch {
       // Disabled or full browser storage must not prevent observation.
     }
-  }, [shell, view, workspaceId, status]);
+  }, [shell, view, workspaceId]);
   const [selected, setSelected] = useState<string>();
   const [headerMetrics, setHeaderMetrics] = useState<{
     sessionId: string;
@@ -814,8 +767,6 @@ export function App() {
     if (id) {
       applySession(id);
       setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
-      setQuery('');
-      setStatus('');
     } else if (page === 'overview') applySession(undefined);
     if (page !== 'overview') setArtifactRequest(undefined);
     if (page === 'studio' || view === 'studio') setStudioReturn(page !== 'studio');
@@ -934,8 +885,6 @@ export function App() {
     requestNavigation(() => {
       setWorkspaceId(id);
       applySession(undefined);
-      setQuery('');
-      setStatus('');
       applyView(page, '');
     });
   }
@@ -949,8 +898,6 @@ export function App() {
     const transition = () => {
       if (native && !native.current()) return;
       setWorkspaceId(session.workspaceId);
-      setQuery('');
-      setStatus('');
       applySession(id);
       applyView('overview', id);
       if (artifact) setArtifactRequest(artifact);
@@ -958,37 +905,8 @@ export function App() {
     if (id === selected && view === 'overview') transition();
     else requestNavigation(transition);
   }
-  const sessions =
-    snapshot?.sessions.filter((session) => !workspaceId || session.workspaceId === workspaceId) ??
-    [];
-  const filtered = sessions.filter(
-    (session) =>
-      (!status || session.status === status) &&
-      `${session.agentName} ${session.task ?? ''} ${session.id}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
-  const attention = sessions.filter(
-    (session) => session.status === 'waiting_for_user' || session.status === 'failed',
-  );
   const selectedSession = snapshot?.sessions.find((session) => session.id === selected);
-  // Older bridges cannot distinguish a recorded zero from missing telemetry.
-  const measuredSessions = sessions.filter(
-    (session) => session.usageRecorded ?? session.usage.total > 0,
-  );
-  const usage = measuredSessions.reduce(
-    (sum, session) => ({
-      input: sum.input + session.usage.input,
-      output: sum.output + session.usage.output,
-      cached: sum.cached + session.usage.cached,
-      total: sum.total + session.usage.total,
-    }),
-    { input: 0, output: 0, cached: 0, total: 0 },
-  );
   const currentWorkspace = snapshot?.workspaces.find((workspace) => workspace.id === workspaceId);
-  const recent = (snapshot?.events ?? []).filter(
-    (event) => !workspaceId || sessions.some((session) => session.id === event.sessionId),
-  );
   const initialScan = snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan === null;
   const historyReady = !!snapshot && !initialScan;
   const offline = connection === 'offline' || error;
@@ -998,6 +916,95 @@ export function App() {
       notificationFilter === 'all' ||
       (notificationFilter === 'unread' ? !item.read : item.type === notificationFilter),
   );
+  async function openStudioCard(target: StudioCardTarget): Promise<boolean> {
+    const native = featureShell.native;
+    let current = featureShell.snapshot;
+    if (!native || !current) return false;
+    if (current.activeFeatureId !== target.featureId) {
+      const selection = await native.request({
+        action: 'select',
+        contractVersion: 1,
+        generation: current.generation,
+        featureId: target.featureId,
+        expectedRevision: current.view.revision,
+      });
+      if (selection.status !== 'ok' || !selection.snapshot) return false;
+      current = selection.snapshot;
+    }
+    const member = current.features.some(
+      (feature) =>
+        feature.featureId === target.featureId && feature.terminalIds.includes(target.terminalId),
+    );
+    const slot = current.slots.find(
+      (entry) => entry.terminalId === target.terminalId && !entry.closed,
+    );
+    if (!member || !slot || current.activeFeatureId !== target.featureId) return false;
+    navigate('studio', true);
+    // Resolve the slot again after Studio mounts so a concurrent layout update cannot retarget focus.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const reading = await native.request({
+      action: 'snapshot',
+      contractVersion: 1,
+      generation: current.generation,
+    });
+    const next = reading.snapshot;
+    const currentSlot = next?.slots.find(
+      (entry) => entry.terminalId === target.terminalId && !entry.closed,
+    );
+    if (
+      reading.status !== 'ok' ||
+      !next ||
+      !currentSlot ||
+      next.activeFeatureId !== target.featureId ||
+      !next.features.some(
+        (feature) =>
+          feature.featureId === target.featureId && feature.terminalIds.includes(target.terminalId),
+      )
+    )
+      return false;
+    const focus = await native.request({
+      action: 'pane',
+      contractVersion: 1,
+      generation: next.generation,
+      slot: currentSlot.slot,
+      terminalId: target.terminalId,
+      command: 'focus',
+    });
+    return focus.status === 'ok';
+  }
+
+  async function startOnboarding(path: string | undefined, skip: boolean) {
+    if (path) {
+      const name = path.split(/[\\/]/).filter(Boolean).at(-1)?.slice(0, 100) ?? path.slice(0, 100);
+      const workspace = await api<{ id: string }>('/api/workspaces', {
+        method: 'POST',
+        body: JSON.stringify({ name, path }),
+      });
+      await refresh();
+      setWorkspaceId(workspace.id);
+    } else if (!skip && featureSnapshot && featureShell.native) {
+      const general = defaultFeatureId(featureSnapshot.workspace.id);
+      if (
+        featureSnapshot.activeFeatureId !== general &&
+        featureSnapshot.features.some(
+          (feature) => feature.featureId === general && feature.status !== 'archived',
+        )
+      ) {
+        const selection = await featureShell.native.request({
+          action: 'select',
+          contractVersion: 1,
+          generation: featureSnapshot.generation,
+          featureId: general,
+          expectedRevision: featureSnapshot.view.revision,
+        });
+        if (selection.status !== 'ok' || selection.snapshot?.activeFeatureId !== general)
+          throw new Error('Workspace Feature unavailable');
+      }
+    }
+    navigate('studio', true);
+  }
   async function markNotificationsRead() {
     setMarkingRead(true);
     setMarkReadError(false);
@@ -1048,7 +1055,7 @@ export function App() {
       setNotice('desktopBlocked');
     }
   }
-  const notificationPreferences = (
+  const notificationPreferences = (settings = false) => (
     <>
       {(!snapshot || error || connection !== 'connected') && (
         <p className="notice" role="status">
@@ -1059,6 +1066,7 @@ export function App() {
         value={localPrefs}
         disabled={prefsSaving || !snapshot || error || connection !== 'connected'}
         nativeDesktop={nativeDesktop}
+        settings={settings}
         onChange={(next) => {
           void preferences(next);
         }}
@@ -1109,7 +1117,6 @@ export function App() {
     onObservedWorkspaceChange: (id) => openWorkspace(id),
   };
   const sideSections = shellSections(snapshot?.sessions ?? [], now);
-  const overviewRunning = shellSections(sessions, now, Number.MAX_SAFE_INTEGER);
   const hiddenWorkspaces = snapshot
     ? snapshot.workspaces.filter(
         (workspace) =>
@@ -1507,14 +1514,23 @@ export function App() {
             ) : (
               <Studio />
             )
-          ) : view === 'settings' ? (
+          ) : view === 'settings' || view === 'agents' ? (
             <Settings
               appearance={appearance.appearance}
               onAppearance={appearance.setAppearance}
               storageUnavailable={appearance.storageUnavailable}
               systemReducedMotion={appearance.systemReducedMotion}
-              notifications={notificationPreferences}
-              onGuide={() => setGuideOpen(true)}
+              key={view}
+              initialTab={view === 'agents' ? 'agents' : undefined}
+              notifications={notificationPreferences(true)}
+              catalogScope={
+                featureSnapshot && {
+                  workspaceId: featureSnapshot.workspace.id,
+                  featureId: featureSnapshot.activeFeatureId,
+                }
+              }
+              defaultFolder={currentWorkspace?.path}
+              snapshot={snapshot}
               returnAction={
                 studioReturn
                   ? { label: t('shell.views.studio'), onReturn: () => navigate('studio', true) }
@@ -1523,21 +1539,24 @@ export function App() {
             />
           ) : view === 'models' ? (
             <ModelAnalytics
+              scope={featureSnapshot}
               workspaceId={workspaceId}
               snapshot={snapshot}
               connection={connection}
               snapshotError={error}
             />
           ) : view === 'artifacts' ? (
-            snapshot && (
-              <ArtifactLibrary
-                key={workspaceId}
-                snapshot={snapshot}
-                workspaceId={workspaceId}
-                online={connection === 'connected' && !error}
-                onOpen={(request) => openSession(request.sessionId, request)}
-              />
-            )
+            <ArtifactLibrary
+              key={workspaceId}
+              snapshot={snapshot}
+              scope={featureSnapshot}
+              workspaceId={workspaceId}
+              online={connection === 'connected' && !error}
+              selection={artifactRequest}
+              closeGuard={artifactCloseGuard}
+              onOpen={(request) => requestNavigation(() => setArtifactRequest(request), false)}
+              onClose={() => setArtifactRequest(undefined)}
+            />
           ) : view === 'workspaces' ? (
             snapshot && (
               <Workspaces
@@ -1555,341 +1574,30 @@ export function App() {
                 onCreate={() => setWorkspaceOpen(true)}
               />
             )
-          ) : view === 'agents' ? (
-            snapshot && <Agents snapshot={snapshot} />
+          ) : selectedSession && snapshot ? (
+            <SessionDetail
+              key={selectedSession.id}
+              session={selectedSession}
+              snapshot={snapshot}
+              connection={connection}
+              snapshotError={error}
+              onMetrics={updateHeaderMetrics}
+              artifactCloseGuard={artifactCloseGuard}
+              artifactRequest={artifactRequest}
+              onArtifact={setArtifactRequest}
+              onClose={() => selectSession(undefined)}
+              onSave={() => {
+                void refresh();
+              }}
+            />
           ) : (
-            <>
-              <div className="page-heading overview-heading">
-                <div>
-                  <span className="eyebrow">
-                    <Radio size={12} />
-                    {t('readOnly')}
-                  </span>
-                  <h1>{t('overviewPage.title')}</h1>
-                  <p>{t('overviewPage.subtitle')}</p>
-                </div>
-                <button ref={overviewLayoutTrigger} className="button" onClick={openOverviewLayout}>
-                  <Settings2 size={16} />
-                  {t('overviewLayout.title')}
-                </button>
-              </div>
-              {(error || saveError) && (
-                <p className="notice" role="alert">
-                  {t(saveError ? 'savedError' : 'error')}
-                </p>
-              )}
-              <section className="stats" aria-label={t('overview')}>
-                <div className="stat">
-                  <span>
-                    {t('sessions')}
-                    <Terminal size={15} />
-                  </span>
-                  <strong>
-                    {historyReady
-                      ? f.number(sessions.length)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  <small>{currentWorkspace?.name ?? t('allWorkspaces')}</small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('running')}
-                    <Activity size={15} />
-                  </span>
-                  <strong>
-                    {historyReady
-                      ? f.number(overviewRunning.running.length)
-                      : t('overviewPage.measurementUnavailable')}
-                    {historyReady && overviewRunning.running.length > 0 && (
-                      <i className="stat-live" aria-hidden="true" />
-                    )}
-                  </strong>
-                  <small>
-                    {overviewRunning.stale > 0
-                      ? t('shell.side.staleOnly', { count: overviewRunning.stale })
-                      : t('overviewPage.recentActivity')}
-                  </small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('attention')}
-                    <Bell size={15} />
-                  </span>
-                  <strong className={attention.length ? 'amber-text' : ''}>
-                    {historyReady
-                      ? f.number(attention.length)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  <small>{t('overviewPage.lastObservedState')}</small>
-                </div>
-                <div className="stat">
-                  <span>
-                    {t('tokens')}
-                    <Zap size={15} />
-                  </span>
-                  <strong>
-                    {historyReady && measuredSessions.length
-                      ? f.compact(usage.total)
-                      : t('overviewPage.measurementUnavailable')}
-                  </strong>
-                  {historyReady && (
-                    <small>
-                      {t('tokenScope', {
-                        measured: measuredSessions.length,
-                        total: sessions.length,
-                      })}
-                    </small>
-                  )}
-                </div>
-              </section>
-              <section className="panel agents-panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Terminal size={17} />
-                    {t('agents')}
-                    {historyReady && <span className="count-badge">{sessions.length}</span>}
-                  </h2>
-                  <span className="subtle-label">{t('latest')}</span>
-                </div>
-                <div className="filters">
-                  <label className="search-box">
-                    <Search size={15} />
-                    <input
-                      aria-label={t('search')}
-                      placeholder={t('search')}
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                    />
-                  </label>
-                  <label className="status-filter">
-                    <Settings2 size={14} />
-                    <select
-                      aria-label={t('status')}
-                      value={status}
-                      onChange={(event) => setStatus(event.target.value)}
-                    >
-                      <option value="">{t('allStatuses')}</option>
-                      {(
-                        [
-                          'running',
-                          'waiting_for_user',
-                          'completed',
-                          'failed',
-                          'interrupted',
-                          'unknown',
-                        ] as const
-                      ).map((value) => (
-                        <option value={value} key={value}>
-                          {t(`statusLabels.${value}`)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                {!historyReady ? null : !sessions.length ? (
-                  <div className="empty-state">
-                    <img
-                      className="empty-mascot"
-                      src="/brand/orqst-mascot.svg"
-                      width={690}
-                      height={590}
-                      alt=""
-                      aria-hidden="true"
-                    />
-                    <h3>{t('emptyTitle')}</h3>
-                    <p>{t('emptyBody')}</p>
-                    <button className="button" onClick={() => setGuideOpen(true)}>
-                      {t('observationGuide.title')}
-                    </button>
-                    {snapshot?.diagnostics.scanning && snapshot.diagnostics.lastScan !== null && (
-                      <span className="connection">{t('syncing')}</span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="table-scroll" tabIndex={0} role="group" aria-label={t('agents')}>
-                    <table className="session-table" role="table">
-                      <thead>
-                        <tr>
-                          <th>{t('agent')}</th>
-                          <th>{t('status')}</th>
-                          <th>{t('duration')}</th>
-                          <th>{t('lastActivity')}</th>
-                          <th>{t('tokens')}</th>
-                          <th>
-                            <span className="sr-only">{t('viewSession')}</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filtered.map((session) => (
-                          <tr
-                            key={session.id}
-                            className={selected === session.id ? 'selected-row' : ''}
-                          >
-                            <td>
-                              <button
-                                className="agent-cell"
-                                onClick={() => selectSession(session.id)}
-                              >
-                                <span
-                                  className={`agent-avatar ${session.parentSessionId ? 'child-agent' : ''}`}
-                                >
-                                  {session.parentSessionId ? (
-                                    <GitBranch size={17} />
-                                  ) : (
-                                    <Terminal size={17} />
-                                  )}
-                                </span>
-                                <span>
-                                  <strong>{session.agentName}</strong>
-                                  <small title={session.task ?? ''}>
-                                    {session.task ?? t('noTask')}
-                                  </small>
-                                </span>
-                              </button>
-                            </td>
-                            <td data-label={t('status')}>
-                              <Status status={session.status} lastActivity={session.lastActivity} />
-                            </td>
-                            <td className="mono muted" data-label={t('duration')}>
-                              {f.duration(session)}
-                            </td>
-                            <td className="mono muted" data-label={t('lastActivity')}>
-                              {f.date(session.lastActivity)}
-                            </td>
-                            <td className="mono token-cell" data-label={t('tokens')}>
-                              {(session.usageRecorded ?? session.usage.total > 0)
-                                ? f.compact(session.usage.total)
-                                : '—'}
-                            </td>
-                            <td>
-                              <button
-                                className="icon-button"
-                                aria-label={`${t('viewSession')} ${session.agentName}`}
-                                onClick={() => selectSession(session.id)}
-                              >
-                                <ChevronRight size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {!filtered.length && <p className="empty-copy">{t('filteredEmpty')}</p>}
-                  </div>
-                )}
-                <div className="panel-footer">
-                  <span className="tiny-dot" />
-                  {t('observedNote')}
-                </div>
-              </section>
-              {selectedSession && snapshot ? (
-                <SessionDetail
-                  key={selectedSession.id}
-                  session={selectedSession}
-                  snapshot={snapshot}
-                  connection={connection}
-                  snapshotError={error}
-                  onMetrics={updateHeaderMetrics}
-                  artifactCloseGuard={artifactCloseGuard}
-                  artifactRequest={artifactRequest}
-                  onArtifact={setArtifactRequest}
-                  onClose={() => selectSession(undefined)}
-                  onSave={() => {
-                    void refresh();
-                  }}
-                />
-              ) : historyReady ? (
-                <OverviewPanels
-                  preferences={overview.preferences}
-                  onCustomize={openOverviewLayout}
-                  panels={{
-                    activity: (
-                      <section className="panel activity-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Activity size={17} />
-                            {t('activity')}
-                          </h2>
-                          <span className="subtle-label">{f.number(recent.length)}</span>
-                        </div>
-                        <Timeline events={recent.slice(-45)} />
-                        <div className="panel-footer">
-                          {t('limitNotice', { count: Math.min(recent.length, 45) })}
-                        </div>
-                      </section>
-                    ),
-                    attention: (
-                      <section className="panel attention-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Bell size={16} />
-                            {t('attention')}
-                          </h2>
-                          <span className="count-badge">{attention.length}</span>
-                        </div>
-                        {attention.length ? (
-                          <div className="attention-list">
-                            {attention.slice(0, 10).map((session) => (
-                              <button onClick={() => selectSession(session.id)} key={session.id}>
-                                <span>
-                                  <strong>{session.agentName}</strong>
-                                  <Status status={session.status} />
-                                </span>
-                                <ChevronRight size={16} />
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="quiet-state">
-                            <CheckCircle2 size={26} />
-                            <strong>{t('attentionEmpty')}</strong>
-                            <p>{t('attentionBody')}</p>
-                          </div>
-                        )}
-                      </section>
-                    ),
-                    usage: (
-                      <section className="panel usage-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <Zap size={16} />
-                            {t('usage')}
-                          </h2>
-                        </div>
-                        <div className="usage-body">
-                          <TokenSummary usage={measuredSessions.length ? usage : undefined} />
-                        </div>
-                      </section>
-                    ),
-                    diagnostics: (
-                      <section className="panel diagnostics-panel">
-                        <div className="panel-heading">
-                          <h2>
-                            <ShieldCheck size={16} />
-                            {t('diagnostics')}
-                          </h2>
-                        </div>
-                        <dl>
-                          {[
-                            ['sourceFiles', snapshot?.diagnostics.files ?? 0],
-                            ['malformed', snapshot?.diagnostics.malformed ?? 0],
-                            ['oversized', snapshot?.diagnostics.oversized ?? 0],
-                            ['scanErrors', snapshot?.diagnostics.errors ?? 0],
-                          ].map(([key, value]) => (
-                            <div key={key}>
-                              <dt>{t(String(key))}</dt>
-                              <dd>{f.number(Number(value))}</dd>
-                            </div>
-                          ))}
-                        </dl>
-                        <p className="fine-print">{t('retentionNote')}</p>
-                      </section>
-                    ),
-                  }}
-                />
-              ) : null}
-            </>
+            <OverviewLayout
+              scope={featureSnapshot}
+              snapshot={snapshot}
+              online={connection === 'connected' && !error}
+              onRefresh={refresh}
+              onOpen={openStudioCard}
+            />
           )}
         </main>
         <footer className="status-bar" aria-label={t('shell.side.status')}>
@@ -1921,14 +1629,6 @@ export function App() {
           </span>
         </footer>
       </div>
-      {overviewLayoutOpen && (
-        <OverviewLayoutEditor
-          preferences={overview.preferences}
-          onChange={overview.setPreferences}
-          storageUnavailable={overview.storageUnavailable}
-          onClose={closeOverviewLayout}
-        />
-      )}
       {paletteOpen && (
         <CommandPalette
           snapshot={snapshot}
@@ -1938,16 +1638,21 @@ export function App() {
           onSession={openSession}
           onNotifications={() => setNotificationOpen(true)}
           onCreate={() => setWorkspaceOpen(true)}
-          onGuide={() => setGuideOpen(true)}
+          onGuide={openGuide}
           onClose={() => setPaletteOpen(false)}
         />
       )}
       {guideOpen && (
         <ObservationGuide
-          snapshot={snapshot}
-          connection={connection}
-          snapshotError={error}
-          onNavigate={(page) => navigate(page, true)}
+          scope={
+            featureSnapshot && {
+              workspaceId: featureSnapshot.workspace.id,
+              featureId: featureSnapshot.activeFeatureId,
+            }
+          }
+          workspaceName={featureSnapshot?.workspace.name}
+          canCreateWorkspace={!managedShell && !!snapshot && connection === 'connected' && !error}
+          onStart={startOnboarding}
           onClose={closeGuide}
         />
       )}
@@ -2066,7 +1771,7 @@ export function App() {
                 </p>
               )
             )}
-            {notificationPreferences}
+            {notificationPreferences()}
           </div>
         </Modal>
       )}

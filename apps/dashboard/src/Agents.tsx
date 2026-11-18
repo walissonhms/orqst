@@ -1,158 +1,156 @@
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, ShieldCheck, Terminal } from 'lucide-react';
-import type { AdapterCapabilities, Snapshot } from '@orqst/protocol';
+import { ExternalLink, RefreshCw } from 'lucide-react';
+import { terminalPreparationCatalogSchema, type TerminalPreparationCatalog } from '@orqst/protocol';
 
-/** CLIs with an owned terminal integration in ORQST Desktop (CLI → model → Open). */
-const managed = new Set(['codex', 'claude', 'opencode', 'antigravity']);
-const capabilities: (keyof AdapterCapabilities)[] = [
-  'sessionDiscovery',
-  'realtimeEvents',
-  'messages',
-  'toolCalls',
-  'subagents',
-  'tokenUsage',
-  'taskResults',
-  'userIntervention',
-  'remoteControl',
-];
-export function Agents({ snapshot }: { snapshot: Snapshot }) {
-  const { t, i18n } = useTranslation();
-  const number = new Intl.NumberFormat(i18n.resolvedLanguage ?? 'en-US');
+const installDocs = {
+  codex: 'https://learn.chatgpt.com/docs/codex/cli',
+  opencode: 'https://opencode.ai/docs/',
+  claude: 'https://code.claude.com/docs/en/setup#install-claude-code',
+  antigravity: 'https://antigravity.google/docs/getting-started?tab=cli',
+};
+const providers = ['codex', 'opencode', 'claude', 'antigravity'] as const;
+export interface CatalogScope {
+  workspaceId: string;
+  featureId: string | null;
+}
+const catalogCache = new Map<string, TerminalPreparationCatalog>();
+
+function useCatalog(scope?: CatalogScope) {
+  const native =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const workspaceId = scope?.workspaceId;
+  const featureId = scope?.featureId;
+  const key = JSON.stringify([workspaceId, featureId]);
+  const [revision, setRevision] = useState(0);
+  const [status, setStatus] = useState<{ key: string; revision: number; failed: boolean }>();
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  const available = !!native && !!workspaceId && featureId !== undefined;
+  useEffect(() => {
+    if (!native || !workspaceId || featureId === undefined) return;
+    let active = true;
+    void native
+      .request({ action: 'catalog', workspaceId, featureId })
+      .then((reply) => {
+        if (!active) return;
+        if (reply.status !== 'catalog') throw new Error('Catalog unavailable');
+        const catalog = terminalPreparationCatalogSchema.parse(reply.catalog);
+        if (catalog.workspaceId !== workspaceId || catalog.featureId !== featureId)
+          throw new Error('Catalog scope mismatch');
+        catalogCache.set(key, catalog);
+        setStatus({ key, revision, failed: false });
+      })
+      .catch(() => {
+        if (active) setStatus({ key, revision, failed: true });
+      });
+    return () => {
+      active = false;
+    };
+  }, [native, workspaceId, featureId, key, revision]);
+  const current = status?.key === key && status.revision === revision ? status : undefined;
+  return {
+    catalog: available && !current?.failed ? catalogCache.get(key) : undefined,
+    pending: available && !current,
+    failed: current?.failed,
+    available,
+    refresh,
+  };
+}
+
+export function Agents({ scope, compact = false }: { scope?: CatalogScope; compact?: boolean }) {
+  const { t } = useTranslation();
+  const { catalog, pending, failed, available, refresh } = useCatalog(scope);
+  const rows = providers.map((provider) => ({
+    provider,
+    entry: catalog?.providers.find((candidate) => candidate.provider === provider),
+  }));
+  function status(entry?: TerminalPreparationCatalog['providers'][number]) {
+    if (!entry) return '—';
+    if (entry.status === 'available') return t('screens.agents.installed');
+    if (entry.reason === 'executable_not_found') return t('screens.agents.missing');
+    return t('screens.agents.checkNeeded');
+  }
   return (
-    <>
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">{t('readOnly')}</span>
-          <h1>{t('shell.views.agents')}</h1>
-          <p>{t('shell.agents.description')}</p>
+    <div className="spec-cli">
+      {!compact && (
+        <div className="spec-actions">
+          <button
+            className="button"
+            type="button"
+            onClick={refresh}
+            disabled={!available || pending}
+          >
+            <RefreshCw size={13} />
+            {t('analytics.refresh')}
+          </button>
+          {failed && <span role="alert">{t('screens.agents.failed')}</span>}
         </div>
-        <ShieldCheck size={30} />
-      </div>
-      <section className="agent-cards" aria-label={t('shell.agents.cards')}>
-        {snapshot.adapters.map((adapter) => {
-          const count = snapshot.sessions.filter(
-            (session) => session.adapter === adapter.id,
-          ).length;
-          return (
-            <article key={adapter.id} className={`agent-card agent-${adapter.id}`}>
-              <header>
-                <span className="agent-mark" aria-hidden="true" />
-                <h2>{t(`shell.adapters.${adapter.id}`, { defaultValue: adapter.id })}</h2>
-              </header>
-              <dl>
-                <div>
-                  <dt>
-                    <Eye size={14} aria-hidden="true" />
-                    {t('shell.agents.observe')}
-                  </dt>
-                  <dd className={adapter.implemented ? 'capability-available' : 'muted'}>
-                    {adapter.implemented
-                      ? t('shell.agents.observeOn', { count: number.format(count) })
-                      : t('shell.agents.observeOff')}
-                  </dd>
+      )}
+      {pending && <p role="status">{t('screens.agents.checking')}</p>}
+      {compact ? (
+        <ul className="spec-rows">
+          {rows.map(({ provider, entry }) => (
+            <li key={provider}>
+              <strong>{t(`screens.cli.${provider}`)}</strong>
+              <span>{status(entry)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        rows.map(({ provider, entry }) => (
+          <section className="spec-cli-row" key={provider}>
+            <div className="spec-row-heading">
+              <h3>{t(`screens.cli.${provider}`)}</h3>
+              <span title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}>
+                {status(entry)}
+              </span>
+              <a className="button" href={installDocs[provider]} target="_blank" rel="noreferrer">
+                {t('screens.agents.install')}
+                <ExternalLink size={12} />
+              </a>
+            </div>
+            <dl className="spec-facts">
+              {[
+                ['path', '—'],
+                ['version', '—'],
+                ['login', '—'],
+                ['terminal', t('screens.agents.pty')],
+                [
+                  'messages',
+                  t(
+                    `screens.agents.${provider === 'antigravity' ? 'noRelay' : provider === 'claude' ? 'mcpRelay' : 'autoRelay'}`,
+                  ),
+                ],
+                ['tokens', provider === 'antigravity' ? '—' : t('screens.agents.whenReported')],
+              ].map(([key, value]) => (
+                <div key={key}>
+                  <dt>{t(`screens.agents.${key}`)}</dt>
+                  <dd>{value}</dd>
                 </div>
-                <div>
-                  <dt>
-                    <Terminal size={14} aria-hidden="true" />
-                    {t('shell.agents.managed')}
-                  </dt>
-                  <dd className={managed.has(adapter.id) ? 'capability-available' : 'muted'}>
-                    {managed.has(adapter.id)
-                      ? t('shell.agents.managedOn')
-                      : t('shell.agents.unavailable')}
-                  </dd>
-                </div>
-              </dl>
-            </article>
-          );
-        })}
-      </section>
-      <section className="panel adapter-panel" aria-label={t('shell.agents.matrix')}>
-        <div className="panel-heading">
-          <h2>{t('shell.agents.matrix')}</h2>
-        </div>
-        <details className="fine-print adapter-intro">
-          <summary>{t('shell.agents.aboutMatrix')}</summary>
-          {t('shell.agents.discoveryNote')}
-        </details>
-        <div
-          className="table-scroll"
-          tabIndex={0}
-          role="group"
-          aria-label={t('shell.agents.matrix')}
-        >
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">{t('shell.agents.capability')}</th>
-                {snapshot.adapters.map((adapter) => (
-                  <th scope="col" key={adapter.id}>
-                    {t(`shell.adapters.${adapter.id}`, { defaultValue: adapter.id })}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">{t('shell.agents.mode')}</th>
-                {snapshot.adapters.map((adapter) => (
-                  <td key={adapter.id}>
-                    {t(adapter.implemented ? 'readOnly' : 'shell.agents.observeOff')}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th scope="row">{t('sessions')}</th>
-                {snapshot.adapters.map((adapter) => (
-                  <td className="mono" key={adapter.id}>
-                    {adapter.implemented
-                      ? number.format(
-                          snapshot.sessions.filter((session) => session.adapter === adapter.id)
-                            .length,
-                        )
-                      : '—'}
-                  </td>
-                ))}
-              </tr>
-              {capabilities.map((capability) => (
-                <tr key={capability}>
-                  <th scope="row">{t(`shell.capabilities.${capability}`)}</th>
-                  {snapshot.adapters.map((adapter) => (
-                    <td key={adapter.id}>
-                      <span
-                        className={
-                          adapter.implemented && adapter.capabilities[capability]
-                            ? 'capability-available'
-                            : 'muted'
-                        }
-                      >
-                        {t(
-                          adapter.implemented && adapter.capabilities[capability]
-                            ? 'shell.agents.supported'
-                            : 'shell.agents.unavailable',
-                        )}
-                      </span>
-                    </td>
-                  ))}
-                </tr>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="panel-footer">{t('shell.agents.limits')}</p>
-      </section>
-      <section className="panel adapter-evidence" aria-label={t('shell.agents.evidence')}>
-        <div className="panel-heading">
-          <h2>{t('shell.agents.evidence')}</h2>
-        </div>
-        {snapshot.adapters.map((adapter) => (
-          <details key={adapter.id}>
-            <summary>{t(`shell.adapters.${adapter.id}`, { defaultValue: adapter.id })}</summary>
-            <p>{adapter.evidence}</p>
-          </details>
-        ))}
-        <p className="fine-print">{t('shell.agents.evidenceNote')}</p>
-      </section>
-    </>
+              <div>
+                <dt>{t('screens.agents.models')}</dt>
+                <dd>
+                  {entry?.models.length ? (
+                    <details>
+                      <summary>
+                        {t('screens.agents.modelCount', { count: entry.models.length })}
+                      </summary>
+                      <ul>
+                        {entry.models.map((model) => (
+                          <li key={model.id}>{model.label}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : (
+                    '—'
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ))
+      )}
+    </div>
   );
 }

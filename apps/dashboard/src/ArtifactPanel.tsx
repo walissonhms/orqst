@@ -20,9 +20,11 @@ export function ArtifactPanel({
   tokenThreshold,
   onClose,
   closeGuard,
+  library = false,
 }: {
   request: ArtifactExtractionRequest;
-  metrics: LiveMetricsState;
+  metrics?: LiveMetricsState;
+  library?: boolean;
   tokenThreshold?: number;
   onClose: () => void;
   closeGuard: RefObject<ArtifactCloseGuard | null>;
@@ -46,7 +48,7 @@ export function ArtifactPanel({
   const [result, setResult] = useState<ArtifactExtractionResult>();
   const [failed, setFailed] = useState(false);
   const [draft, setDraft] = useState('');
-  const [mode, setMode] = useState<'source' | 'preview' | 'edit'>('source');
+  const [mode, setMode] = useState<'source' | 'preview' | 'edit'>(library ? 'preview' : 'source');
   const [copyState, setCopyState] = useState<'copied' | 'copyFailed'>();
   const copyGeneration = useRef(0);
   const [limitError, setLimitError] = useState(false);
@@ -115,7 +117,7 @@ export function ArtifactPanel({
     setSaveState(undefined);
     try {
       const response = await desktop.saveMarkdown(
-        mode === 'source'
+        library || mode === 'source'
           ? { contractVersion: 1, selection: request, representation: 'original', openAfterSave }
           : {
               contractVersion: 1,
@@ -131,6 +133,14 @@ export function ArtifactPanel({
     } finally {
       if (mounted.current) setSaving(false);
     }
+  }
+  function download(text: string) {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'artifact.md';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   const artifact = result?.availability === 'available' ? result.value : undefined;
   const reference = artifact?.reference;
@@ -236,8 +246,8 @@ export function ArtifactPanel({
           </div>
         </dialog>
       )}
-      <LiveMetrics state={metrics} threshold={tokenThreshold} />
-      <p className="fine-print">{t('artifacts.manualNote')}</p>
+      {!library && metrics && <LiveMetrics state={metrics} threshold={tokenThreshold} />}
+      {!library && <p className="fine-print">{t('artifacts.manualNote')}</p>}
       {failed && <p role="alert">{t('artifacts.loadFailed')}</p>}
       {!failed && !result && <p role="status">{t('artifacts.loading')}</p>}
       {result?.availability === 'unavailable' && (
@@ -245,61 +255,61 @@ export function ArtifactPanel({
       )}
       {artifact && reference && (
         <>
-          <dl className="artifact-provenance">
-            <dt>{t('artifacts.project')}</dt>
-            <dd>{reference.identity.workspaceId}</dd>
-            <dt>{t('artifacts.session')}</dt>
-            <dd>{reference.identity.sessionRef.nativeSessionId}</dd>
-            <dt>{t('artifacts.agent')}</dt>
-            <dd>{reference.identity.observedAgent.id}</dd>
-            <dt>{t('artifacts.machine')}</dt>
-            <dd>{reference.identity.sessionRef.machineId}</dd>
-            <dt>{t('artifacts.provider')}</dt>
-            <dd>
-              {reference.identity.sessionRef.adapterId} / {reference.role}
-            </dd>
-            <dt>{t('artifacts.date')}</dt>
-            <dd>
-              <time>{reference.evidence.occurredAt}</time>
-            </dd>
-            <dt>{t('artifacts.event')}</dt>
-            <dd>
-              {reference.evidence.eventId} / {reference.evidence.sequence}
-            </dd>
-            <dt>{t('artifacts.version')}</dt>
-            <dd>
-              {artifact.contractVersion} / {artifact.eventSchemaVersion}
-            </dd>
-            <dt>{t('source')}</dt>
-            <dd>
-              {reference.evidence.source.file}:{reference.evidence.source.line} /{' '}
-              {reference.evidence.source.offset} / {reference.evidence.source.recordType}
-              <br />
-              {reference.evidence.source.hash}
-            </dd>
-          </dl>
-          <p className="fine-print">{t('artifacts.provenanceNote')}</p>
-          <p className="notice">{t('artifacts.retainedNote')}</p>
-          <p className="fine-print">
-            {t(draftChanged ? 'artifacts.draftChanged' : 'artifacts.draftUnchanged')}
-          </p>
+          <details className="spec-artifact-source">
+            <summary>{t('source')}</summary>
+            <dl className="artifact-provenance">
+              <dt>{t('artifacts.project')}</dt>
+              <dd>{reference.identity.workspaceId}</dd>
+              <dt>{t('artifacts.session')}</dt>
+              <dd>{reference.identity.sessionRef.nativeSessionId}</dd>
+              <dt>{t('artifacts.agent')}</dt>
+              <dd>{reference.identity.observedAgent.id}</dd>
+              <dt>{t('artifacts.machine')}</dt>
+              <dd>{reference.identity.sessionRef.machineId}</dd>
+              <dt>{t('artifacts.provider')}</dt>
+              <dd>
+                {reference.identity.sessionRef.adapterId} / {reference.role}
+              </dd>
+              <dt>{t('artifacts.date')}</dt>
+              <dd>
+                <time>{reference.evidence.occurredAt}</time>
+              </dd>
+              <dt>{t('artifacts.event')}</dt>
+              <dd>
+                {reference.evidence.eventId} / {reference.evidence.sequence}
+              </dd>
+              <dt>{t('artifacts.version')}</dt>
+              <dd>
+                {artifact.contractVersion} / {artifact.eventSchemaVersion}
+              </dd>
+              <dt>{t('source')}</dt>
+              <dd>
+                {reference.evidence.source.file}:{reference.evidence.source.line} /{' '}
+                {reference.evidence.source.offset} / {reference.evidence.source.recordType}
+                <br />
+                {reference.evidence.source.hash}
+              </dd>
+            </dl>
+          </details>
           <div className="artifact-modes" role="group" aria-label={t('artifacts.views')}>
-            {(['source', 'preview', 'edit'] as const).map((value) => (
-              <button
-                className="button"
-                ref={value === 'edit' ? editButton : undefined}
-                disabled={saving || restoring}
-                key={value}
-                aria-pressed={mode === value}
-                onClick={() => {
-                  setMode(value);
-                  copyGeneration.current++;
-                  setCopyState(undefined);
-                }}
-              >
-                {t(`artifacts.${value}`)}
-              </button>
-            ))}
+            {(['preview', 'source', 'edit'] as const)
+              .filter((value) => !library || value !== 'edit')
+              .map((value) => (
+                <button
+                  className="button"
+                  ref={value === 'edit' ? editButton : undefined}
+                  disabled={saving || restoring}
+                  key={value}
+                  aria-pressed={mode === value}
+                  onClick={() => {
+                    setMode(value);
+                    copyGeneration.current++;
+                    setCopyState(undefined);
+                  }}
+                >
+                  {t(library ? `screens.artifacts.${value}` : `artifacts.${value}`)}
+                </button>
+              ))}
           </div>
           {mode === 'source' && (
             <pre className="artifact-content reading-content">{artifact.original.text}</pre>
@@ -348,72 +358,98 @@ export function ArtifactPanel({
             </div>
           )}
           {limitError && <p role="alert">{t('artifacts.limit')}</p>}
-          <p className="fine-print">{t('artifacts.draftNote')}</p>
-          <div className="artifact-actions">
-            <button
-              className="button"
-              ref={restoreButton}
-              disabled={!draftChanged || saving || restoring}
-              onClick={() => setRestoring(true)}
-            >
-              {t('artifacts.restoreDraft')}
-            </button>
-          </div>
-          {restoring && (
-            <div
-              role="group"
-              aria-labelledby={restoreId}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  cancelRestore();
-                }
-              }}
-            >
-              <p className="notice" id={restoreId}>
-                {t('artifacts.restoreWarning')}
-              </p>
-              <div className="artifact-actions">
-                <button className="button" ref={cancelRestoreButton} onClick={cancelRestore}>
-                  {t('cancel')}
-                </button>
-                <button
-                  className="button"
-                  onClick={() => {
-                    setDraft(artifact.original.text);
-                    setLimitError(false);
-                    copyGeneration.current++;
-                    setCopyState(undefined);
-                    setSaveState(undefined);
-                    setRestoring(false);
-                    requestAnimationFrame(() => editButton.current?.focus());
-                  }}
-                >
-                  {t('artifacts.confirmRestore')}
-                </button>
-              </div>
-            </div>
-          )}
-          {desktop ? (
+          {library ? (
             <div className="artifact-actions">
-              <button
-                className="button"
-                disabled={saving || restoring}
-                onClick={() => void save(false)}
-              >
-                {t(mode === 'source' ? 'artifacts.saveOriginal' : 'artifacts.saveDraft')}
+              <button className="button" onClick={() => void copy(artifact.original.text)}>
+                {t('artifacts.copyMarkdown')}
               </button>
               <button
                 className="button"
-                disabled={saving || restoring}
+                disabled={saving}
+                onClick={() => (desktop ? void save(false) : download(artifact.original.text))}
+              >
+                {t('screens.artifacts.save')}
+              </button>
+              <button
+                className="button"
+                disabled={!desktop || saving}
+                title={desktop ? undefined : t('screens.artifacts.nativeOnly')}
                 onClick={() => void save(true)}
               >
-                {t(mode === 'source' ? 'artifacts.saveOpenOriginal' : 'artifacts.saveOpenDraft')}
+                {t('screens.artifacts.editor')}
               </button>
             </div>
           ) : (
-            <p className="fine-print">{t('artifacts.desktopOnly')}</p>
+            <>
+              <div className="artifact-actions">
+                <button
+                  className="button"
+                  ref={restoreButton}
+                  disabled={!draftChanged || saving || restoring}
+                  onClick={() => setRestoring(true)}
+                >
+                  {t('artifacts.restoreDraft')}
+                </button>
+              </div>
+              {restoring && (
+                <div
+                  role="group"
+                  aria-labelledby={restoreId}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      cancelRestore();
+                    }
+                  }}
+                >
+                  <p className="notice" id={restoreId}>
+                    {t('artifacts.restoreWarning')}
+                  </p>
+                  <div className="artifact-actions">
+                    <button className="button" ref={cancelRestoreButton} onClick={cancelRestore}>
+                      {t('cancel')}
+                    </button>
+                    <button
+                      className="button"
+                      onClick={() => {
+                        setDraft(artifact.original.text);
+                        setLimitError(false);
+                        copyGeneration.current++;
+                        setCopyState(undefined);
+                        setSaveState(undefined);
+                        setRestoring(false);
+                        requestAnimationFrame(() => editButton.current?.focus());
+                      }}
+                    >
+                      {t('artifacts.confirmRestore')}
+                    </button>
+                  </div>
+                </div>
+              )}
+              {desktop ? (
+                <div className="artifact-actions">
+                  <button
+                    className="button"
+                    disabled={saving || restoring}
+                    onClick={() => void save(false)}
+                  >
+                    {t(mode === 'source' ? 'artifacts.saveOriginal' : 'artifacts.saveDraft')}
+                  </button>
+                  <button
+                    className="button"
+                    disabled={saving || restoring}
+                    onClick={() => void save(true)}
+                  >
+                    {t(
+                      mode === 'source' ? 'artifacts.saveOpenOriginal' : 'artifacts.saveOpenDraft',
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <p className="fine-print">{t('artifacts.desktopOnly')}</p>
+              )}
+            </>
           )}
           {saving && (
             <p role="status">
@@ -431,32 +467,34 @@ export function ArtifactPanel({
               {t(`artifacts.saveResult.${saveState}`)}
             </p>
           )}
-          <div className="artifact-actions">
-            <button
-              className="button"
-              onClick={() => {
-                void copy(artifact.original.text);
-              }}
-            >
-              {t('artifacts.copyOriginal')}
-            </button>
-            <button
-              className="button"
-              onClick={() => {
-                void copy(draft);
-              }}
-            >
-              {t('artifacts.copyMarkdown')}
-            </button>
-            <button
-              className="button"
-              onClick={() => {
-                void copy(readableArtifact(draft));
-              }}
-            >
-              {t('artifacts.copyReadable')}
-            </button>
-          </div>
+          {!library && (
+            <div className="artifact-actions">
+              <button
+                className="button"
+                onClick={() => {
+                  void copy(artifact.original.text);
+                }}
+              >
+                {t('artifacts.copyOriginal')}
+              </button>
+              <button
+                className="button"
+                onClick={() => {
+                  void copy(draft);
+                }}
+              >
+                {t('artifacts.copyMarkdown')}
+              </button>
+              <button
+                className="button"
+                onClick={() => {
+                  void copy(readableArtifact(draft));
+                }}
+              >
+                {t('artifacts.copyReadable')}
+              </button>
+            </div>
+          )}
           {copyState && (
             <p role={copyState === 'copyFailed' ? 'alert' : 'status'}>
               {t(`artifacts.${copyState}`)}
@@ -464,7 +502,12 @@ export function ArtifactPanel({
           )}
         </>
       )}
-      <p className="fine-print">{t('artifacts.fileNote')}</p>
+      {!library && (
+        <details className="fine-print">
+          <summary>{t('screens.details')}</summary>
+          {t('artifacts.fileNote')}
+        </details>
+      )}
     </section>
   );
 }

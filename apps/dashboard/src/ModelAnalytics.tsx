@@ -1,14 +1,25 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BarChart3, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import { AccountLimits } from './AccountLimits';
+import { expiredWindow, parseAccountLimits } from './account-limits-model';
+import { useOverviewReading } from './OverviewLayout';
+import { readLimitCaps } from './Settings';
+import { LiveMetrics } from './LiveMetrics';
+import { ModelHistory } from './ModelHistory';
+import { useSessionMetrics } from './use-session-metrics';
+import './spec-screens.css';
 import { ModelComparison } from './ModelComparison';
 import { ModelEvolution } from './ModelEvolution';
 import {
+  featureDisplayName,
   modelAnalyticsExportSourceSchema,
   analyticsReadingSchema,
   type AnalyticsReading,
   type AnalyticsNativeResult,
   type ModelAnalyticsSummary,
+  type FeatureNativeSnapshot,
+  type SessionView,
   type Snapshot,
 } from '@orqst/protocol';
 import {
@@ -40,19 +51,60 @@ function calendarBounds(period: Period, start: string, end: string): Record<stri
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
-export function ModelAnalytics({
-  workspaceId,
-  snapshot,
-  connection,
-  snapshotError,
-}: {
+type MetricsTab = 'usage' | 'models' | 'limits';
+type MetricsProps = {
   workspaceId: string;
   snapshot?: Snapshot;
+  scope?: FeatureNativeSnapshot;
   connection: 'connecting' | 'connected' | 'offline';
   snapshotError: boolean;
-}) {
+};
+
+export function ModelAnalytics(props: MetricsProps) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<MetricsTab>('usage');
+  return (
+    <section className="spec-screen" aria-labelledby="analytics-title">
+      <div className="spec-head">
+        <h1 id="analytics-title">{t('screens.metrics.title')}</h1>
+      </div>
+      <nav className="spec-tabs" aria-label={t('screens.metrics.title')}>
+        {(['usage', 'models', 'limits'] as const).map((value) => (
+          <button
+            type="button"
+            key={value}
+            className="button"
+            aria-current={value === tab ? 'page' : undefined}
+            onClick={() => setTab(value)}
+          >
+            {t(`screens.metrics.${value}`)}
+          </button>
+        ))}
+      </nav>
+      {tab === 'limits' ? (
+        <LimitsView scope={props.scope} />
+      ) : (
+        <AnalyticsReadingView {...props} tab={tab} />
+      )}
+    </section>
+  );
+}
+
+function AnalyticsReadingView({
+  workspaceId,
+  snapshot,
+  scope,
+  connection,
+  snapshotError,
+  tab,
+}: MetricsProps & { tab: Exclude<MetricsTab, 'limits'> }) {
   const { t, i18n } = useTranslation();
   const [period, setPeriod] = useState<Period>('week');
+  const [featureId, setFeatureId] = useState('');
+  const features = scope?.features.filter((feature) => feature.status !== 'archived') ?? [];
+  const feature =
+    tab === 'usage' ? features.find((feature) => feature.featureId === featureId) : undefined;
+  const [sessionId, setSessionId] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [agent, setAgent] = useState('');
@@ -95,7 +147,7 @@ export function ModelAnalytics({
   const cursor = snapshot?.cursor;
   const request = useMemo(() => {
     const bounds = calendarBounds(period, start, end);
-    if (!bounds) return null;
+    if (!bounds || feature) return null;
     const params = new URLSearchParams(bounds);
     if (workspaceId) params.set('workspaceId', workspaceId);
     if (agent.trim()) params.set('agentId', agent.trim());
@@ -104,7 +156,19 @@ export function ModelAnalytics({
     else if (model.trim()) params.set('model', model.trim());
     return `/api/analytics/models?${params}`;
     // Re-evaluate calendar bounds only on a query change, refresh or observed event.
-  }, [period, start, end, workspaceId, agent, adapter, model, unidentified, revision, cursor]);
+  }, [
+    period,
+    start,
+    end,
+    workspaceId,
+    agent,
+    adapter,
+    model,
+    unidentified,
+    revision,
+    cursor,
+    feature,
+  ]);
   const key = `${request}:${revision}:${cursor}:${transport.generation}`;
   useEffect(() => {
     setExportFailure(false);
@@ -238,13 +302,13 @@ export function ModelAnalytics({
       });
   };
   const number = (value: number | undefined | null) =>
-    value == null ? t('unknown') : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
+    value == null ? '—' : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
   const rows = useMemo(() => (data ? rankModelAnalytics(data, ranking) : []), [data, ranking]);
   const lead = rows[0];
   const leader =
     lead && (ranking === 'sessions' || lead.usage !== null)
       ? (lead.model ?? t('analytics.unidentified'))
-      : t('unknown');
+      : '—';
   const adapters = snapshot?.adapters.filter((item) => item.implemented) ?? [];
   const exportReport = (format: AnalyticsExportFormat) => {
     if (desktop || !data || !exportable || !result || !request || !available || loading) return;
@@ -263,307 +327,604 @@ export function ModelAnalytics({
     }
   };
   return (
-    <section className="analytics" aria-labelledby="analytics-title">
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">
-            <BarChart3 size={12} />
-            {t('readOnly')}
-          </span>
-          <h1 id="analytics-title">{t('analytics.title')}</h1>
-          <p>{t('analytics.description')}</p>
-        </div>
-        <button className="button" onClick={() => setRevision((value) => value + 1)}>
-          <RefreshCw size={14} />
+    <div className="analytics spec-metrics">
+      <div className="spec-actions spec-metrics-controls">
+        {tab === 'usage' && (
+          <label>
+            {t('screens.feature')}{' '}
+            <select
+              value={feature?.featureId ?? ''}
+              onChange={(event) => setFeatureId(event.target.value)}
+            >
+              <option value="">{t('screens.metrics.observedHistory')}</option>
+              {features.map((entry) => (
+                <option key={entry.featureId} value={entry.featureId}>
+                  {featureDisplayName(entry, t('features.defaultName'))}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!feature && (
+          <>
+            <label>
+              {t('analytics.period')}
+              <select
+                aria-label={t('analytics.period')}
+                value={period}
+                onChange={(event) => setPeriod(event.target.value as Period)}
+              >
+                {(['today', 'week', 'month', 'custom', 'all'] as const).map((value) => (
+                  <option value={value} key={value}>
+                    {t(`analytics.periods.${value}`)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {period === 'custom' && (
+              <>
+                <label>
+                  {t('analytics.start')}
+                  <input
+                    type="date"
+                    value={start}
+                    onChange={(event) => setStart(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {t('analytics.end')}
+                  <input type="date" value={end} onChange={(event) => setEnd(event.target.value)} />
+                </label>
+              </>
+            )}
+            <label>
+              {t('analytics.agent')}
+              <input
+                value={agent}
+                placeholder={t('analytics.allAgents')}
+                onChange={(event) => setAgent(event.target.value)}
+              />
+            </label>
+            <label>
+              {t('analytics.adapter')}
+              <select
+                aria-label={t('analytics.adapter')}
+                value={adapter}
+                onChange={(event) => setAdapter(event.target.value)}
+              >
+                <option value="">{t('analytics.allAdapters')}</option>
+                {adapters.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {t(`screens.cli.${item.id}`, { defaultValue: item.id })}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {t('analytics.model')}
+              <input
+                value={model}
+                disabled={unidentified}
+                placeholder={t('analytics.allModels')}
+                onChange={(event) => setModel(event.target.value)}
+              />
+            </label>
+            <label className="analytics-checkbox">
+              <input
+                type="checkbox"
+                checked={unidentified}
+                onChange={(event) => setUnidentified(event.target.checked)}
+              />
+              {t('analytics.unidentifiedOnly')}
+            </label>
+            <button className="button" onClick={() => setRevision((value) => value + 1)}>
+              <RefreshCw size={13} />
+              {t('analytics.refresh')}
+            </button>
+          </>
+        )}
+      </div>
+      {feature ? (
+        <FeatureUsage scope={scope} featureId={feature.featureId} />
+      ) : (
+        <>
+          {!request && <p role="alert">{t('screens.metrics.invalidPeriod')}</p>}
+          <details className="notice analytics-coverage disclosure">
+            <summary>{t('analytics.incompleteShort')}</summary>
+            {t('analytics.incomplete')}
+          </details>
+          {tab === 'models' && (
+            <details
+              className="panel analytics-export disclosure"
+              aria-label={t('analytics.export.title')}
+            >
+              <summary>
+                <h2>{t('analytics.export.title')}</h2>
+              </summary>
+              <p className="fine-print">{t('analytics.export.privacy')}</p>
+              {desktop && !native ? (
+                <p className="notice">{t('analytics.export.desktop')}</p>
+              ) : (
+                <>
+                  <button
+                    className="button"
+                    disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
+                    onClick={() => (native ? saveNative('csv') : exportReport('csv'))}
+                  >
+                    {t('analytics.export.csv')}
+                  </button>{' '}
+                  <button
+                    className="button"
+                    disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
+                    onClick={() => (native ? saveNative('markdown') : exportReport('markdown'))}
+                  >
+                    {t('analytics.export.markdown')}
+                  </button>
+                  <p className="fine-print">
+                    {t(native ? 'analytics.export.nativeHelp' : 'analytics.export.download')}
+                  </p>
+                  {nativeBusy && <p role="status">{t('analytics.export.nativePending')}</p>}
+                  {native && !nativeBusy && !nativeContext && (
+                    <p className="notice">{t('analytics.export.nativeRefresh')}</p>
+                  )}
+                  {nativeStatus?.key === nativeKey && (
+                    <p
+                      role={
+                        ['saved', 'cancelled'].includes(nativeStatus.status) ? 'status' : 'alert'
+                      }
+                    >
+                      {t(`analytics.export.nativeResults.${nativeStatus.status}`)}
+                    </p>
+                  )}
+                  {!data && <p className="notice">{t('analytics.export.blocked')}</p>}
+                  {data && !exportable && <p className="notice">{t('analytics.export.limits')}</p>}
+                </>
+              )}
+              {exportFailure && <p role="alert">{t('analytics.export.failed')}</p>}
+            </details>
+          )}
+          {failure?.key === key && (
+            <div className="notice" role="alert">
+              {t(`analytics.${failure.reason}`)}
+            </div>
+          )}
+          {request && available && loading && (
+            <p role="status" className="empty-copy">
+              {t('analytics.loading')}
+            </p>
+          )}
+          {tab === 'usage' && (
+            <dl className="spec-counters spec-usage-counters">
+              {(['total', 'input', 'output', 'cached'] as const).map((field) => (
+                <div key={field} title={field === 'cached' ? t('analytics.cache') : undefined}>
+                  <dt>{t(field === 'total' ? 'analytics.reportedTokens' : field)}</dt>
+                  <dd>{number(data?.usage?.[field])}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+          {data && (
+            <>
+              {tab === 'usage' ? (
+                <>
+                  <ModelEvolution key={result?.readingId} request={request!} summary={data} auto />
+                  <UsageBreakdown data={data} />
+                  {snapshot && (
+                    <section className="spec-panel">
+                      <h2>{t('liveMetrics.title')}</h2>
+                      <label className="spec-field">
+                        {t('screens.overview.session')}
+                        <select
+                          value={sessionId}
+                          onChange={(event) => setSessionId(event.target.value)}
+                        >
+                          <option value="">—</option>
+                          {snapshot.sessions
+                            .filter(
+                              (item) =>
+                                (!workspaceId || item.workspaceId === workspaceId) &&
+                                (!adapter || item.adapter === adapter),
+                            )
+                            .map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.agentName} · {item.model ?? '—'}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      {snapshot.sessions.some(
+                        (item) =>
+                          item.id === sessionId &&
+                          (!workspaceId || item.workspaceId === workspaceId) &&
+                          (!adapter || item.adapter === adapter),
+                      ) && (
+                        <UsageSession
+                          key={sessionId}
+                          session={snapshot.sessions.find((item) => item.id === sessionId)!}
+                          snapshot={snapshot}
+                          connection={connection}
+                          snapshotError={snapshotError}
+                        />
+                      )}
+                    </section>
+                  )}
+                </>
+              ) : (
+                <>
+                  <section className="stats analytics-stats" aria-label={t('analytics.summary')}>
+                    <div className="stat">
+                      <span>{t('analytics.leader')}</span>
+                      <strong className="analytics-leader">{leader}</strong>
+                      <small>
+                        {t(ranking === 'tokens' ? 'analytics.byTokens' : 'analytics.bySessions')}
+                      </small>
+                    </div>
+                    <div className="stat">
+                      <span>{t('analytics.reportedTokens')}</span>
+                      <strong>{number(data.usage?.total)}</strong>
+                      <small>{t('analytics.coveredOnly')}</small>
+                    </div>
+                    <div className="stat">
+                      <span>{t('sessions')}</span>
+                      <strong>{number(data.sessions)}</strong>
+                      <small>{t('analytics.nonAdditive')}</small>
+                    </div>
+                  </section>
+                  <section className="panel" aria-label={t('analytics.ranking')}>
+                    <div className="panel-heading">
+                      <h2>{t('analytics.ranking')}</h2>
+                      <label>
+                        {t('analytics.order')}{' '}
+                        <select
+                          aria-label={t('analytics.order')}
+                          value={ranking}
+                          onChange={(event) =>
+                            setRanking(event.target.value as 'tokens' | 'sessions')
+                          }
+                        >
+                          <option value="tokens">{t('analytics.byTokens')}</option>
+                          <option value="sessions">{t('analytics.bySessions')}</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    {!rows.length ? (
+                      <p className="empty-copy">{t('analytics.empty')}</p>
+                    ) : (
+                      <div
+                        className="table-scroll"
+                        tabIndex={0}
+                        role="region"
+                        aria-label={t('analytics.ranking')}
+                      >
+                        <table className="analytics-table">
+                          <caption className="sr-only">{t('analytics.ranking')}</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col">{t('model')}</th>
+                              <th scope="col">{t('analytics.adapter')}</th>
+                              <th scope="col">{t('analytics.reportedTokens')}</th>
+                              <th scope="col">{t('analytics.share')}</th>
+                              <th scope="col">{t('sessions')}</th>
+                              <th scope="col">{t('input')}</th>
+                              <th scope="col">{t('output')}</th>
+                              <th scope="col">{t('cached')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((row) => {
+                              const share =
+                                row.usage && data.usage && data.usage.total > 0
+                                  ? row.usage.total / data.usage.total
+                                  : null;
+                              return (
+                                <tr key={JSON.stringify([row.adapter, row.model])}>
+                                  <th scope="row">
+                                    <span className="analytics-model">
+                                      {row.model ?? t('analytics.unidentified')}
+                                    </span>
+                                  </th>
+                                  <td>
+                                    {t(`screens.cli.${row.adapter}`, { defaultValue: row.adapter })}
+                                  </td>
+                                  <td className="mono">{number(row.usage?.total)}</td>
+                                  <td>
+                                    <span>
+                                      {share === null
+                                        ? '—'
+                                        : new Intl.NumberFormat(i18n.resolvedLanguage, {
+                                            style: 'percent',
+                                            maximumFractionDigits: 1,
+                                          }).format(share)}
+                                    </span>
+                                    {share !== null && (
+                                      <span className="analytics-bar" aria-hidden="true">
+                                        <i
+                                          style={{
+                                            width: `${Math.min(100, Math.max(0, share * 100))}%`,
+                                          }}
+                                        />
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td>{number(row.sessions)}</td>
+                                  <td>{number(row.usage?.input)}</td>
+                                  <td>{number(row.usage?.output)}</td>
+                                  <td>{number(row.usage?.cached)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                  <ModelComparison key={result?.readingId} data={data} />
+                </>
+              )}
+              <details className="panel analytics-evidence" aria-label={t('analytics.coverage')}>
+                <summary>{t('analytics.coverage')}</summary>
+                <p>
+                  {t('analytics.coverageCounts', {
+                    sessions: number(data.coverage.sessions),
+                    measured: number(data.coverage.sessionsWithCanonicalUsage),
+                    unidentified: number(data.coverage.unidentifiedContributions),
+                  })}
+                </p>
+                <p className="fine-print">{t('analytics.coverageScope')}</p>
+                {data.coverage.gaps.length > 0 && (
+                  <ul>
+                    {data.coverage.gaps.map((gap) => (
+                      <li key={gap.reason}>
+                        {t(`analytics.gaps.${gap.reason}`)}: {number(gap.count)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="fine-print">{t('analytics.basis')}</p>
+                <p className="fine-print">
+                  {t('analytics.updated', {
+                    time: result?.at.toLocaleTimeString(i18n.resolvedLanguage),
+                  })}
+                </p>
+              </details>
+            </>
+          )}
+          {!available && <p>{t('screens.offline')} · —</p>}
+        </>
+      )}
+    </div>
+  );
+}
+
+function UsageSession({
+  session,
+  snapshot,
+  connection,
+  snapshotError,
+}: {
+  session: SessionView;
+  snapshot: Snapshot;
+  connection: MetricsProps['connection'];
+  snapshotError: boolean;
+}) {
+  const state = useSessionMetrics(session, snapshot, connection, snapshotError);
+  return (
+    <>
+      <LiveMetrics state={state} />
+      <ModelHistory
+        session={session}
+        cursor={snapshot.cursor}
+        online={connection === 'connected' && !snapshotError}
+      />
+    </>
+  );
+}
+
+function UsageBreakdown({ data }: { data: ModelAnalyticsSummary }) {
+  const { t, i18n } = useTranslation();
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage);
+  return (
+    <section className="spec-panel">
+      <h2>{t('screens.metrics.byModel')}</h2>
+      <div className="table-scroll">
+        <table className="spec-table">
+          <thead>
+            <tr>
+              {[
+                'screens.cliLabel',
+                'model',
+                'input',
+                'output',
+                'cached',
+                'analytics.reportedTokens',
+              ].map((key) => (
+                <th key={key} scope="col">
+                  {t(key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.models.map((row) => (
+              <tr key={JSON.stringify([row.adapter, row.model])}>
+                <td>{t(`screens.cli.${row.adapter}`, { defaultValue: row.adapter })}</td>
+                <td>{row.model ?? '—'}</td>
+                {(['input', 'output', 'cached', 'total'] as const).map((field) => (
+                  <td key={field}>{row.usage ? number.format(row.usage[field]) : '—'}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!data.models.length && <p>—</p>}
+    </section>
+  );
+}
+
+function FeatureUsage({ scope, featureId }: { scope?: FeatureNativeSnapshot; featureId: string }) {
+  const { t, i18n } = useTranslation();
+  const { reply, refresh } = useOverviewReading(scope);
+  const feature = scope?.features.find((entry) => entry.featureId === featureId);
+  const slots =
+    scope?.slots.filter((slot) => !slot.closed && feature?.terminalIds.includes(slot.terminalId)) ??
+    [];
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage);
+  return (
+    <section className="spec-panel">
+      <div className="spec-row-heading">
+        <h2>{t('screens.metrics.liveFeature')}</h2>
+        <button className="button" onClick={refresh}>
+          <RefreshCw size={13} />
           {t('analytics.refresh')}
         </button>
       </div>
-      <div className="panel analytics-filter-panel">
-        <div className="analytics-filters">
-          <label>
-            {t('analytics.period')}
-            <select
-              aria-label={t('analytics.period')}
-              value={period}
-              onChange={(event) => setPeriod(event.target.value as Period)}
-            >
-              {(['today', 'week', 'month', 'custom', 'all'] as const).map((value) => (
-                <option value={value} key={value}>
-                  {t(`analytics.periods.${value}`)}
-                </option>
+      <div className="table-scroll">
+        <table className="spec-table">
+          <thead>
+            <tr>
+              {[
+                'screens.cliLabel',
+                'model',
+                'input',
+                'output',
+                'cached',
+                'analytics.reportedTokens',
+              ].map((key) => (
+                <th key={key} scope="col">
+                  {t(key)}
+                </th>
               ))}
-            </select>
-          </label>
-          {period === 'custom' && (
-            <>
-              <label>
-                {t('analytics.start')}
-                <input
-                  type="date"
-                  value={start}
-                  onChange={(event) => setStart(event.target.value)}
-                />
-              </label>
-              <label>
-                {t('analytics.end')}
-                <input type="date" value={end} onChange={(event) => setEnd(event.target.value)} />
-              </label>
-            </>
-          )}
-          <label>
-            {t('analytics.agent')}
-            <input
-              value={agent}
-              placeholder={t('analytics.allAgents')}
-              onChange={(event) => setAgent(event.target.value)}
-            />
-          </label>
-          <label>
-            {t('analytics.adapter')}
-            <select
-              aria-label={t('analytics.adapter')}
-              value={adapter}
-              onChange={(event) => setAdapter(event.target.value)}
-            >
-              <option value="">{t('analytics.allAdapters')}</option>
-              {adapters.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {t('analytics.model')}
-            <input
-              value={model}
-              disabled={unidentified}
-              placeholder={t('analytics.allModels')}
-              onChange={(event) => setModel(event.target.value)}
-            />
-          </label>
-          <label className="analytics-checkbox">
-            <input
-              type="checkbox"
-              checked={unidentified}
-              onChange={(event) => setUnidentified(event.target.checked)}
-            />
-            {t('analytics.unidentifiedOnly')}
-          </label>
-        </div>
-        <details className="fine-print disclosure">
-          <summary>{t('analytics.filtersHelp')}</summary>
-          <p>
-            {t('analytics.calendar', { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
-          </p>
-          <p>{t('analytics.identifiers')}</p>
-        </details>
-        {!request && (
-          <p className="notice" role="alert">
-            {t('analytics.invalidCustom')}
-          </p>
-        )}
+            </tr>
+          </thead>
+          <tbody>
+            {slots.map((slot) => {
+              const usage = reply?.canvas?.entries.find(
+                (entry) => entry.terminalId === slot.terminalId,
+              )?.usage;
+              return (
+                <tr key={slot.terminalId}>
+                  <td>{t(`screens.cli.${slot.provider}`)}</td>
+                  <td>{slot.selectedModel ?? '—'}</td>
+                  {(['input', 'output', 'cached', 'total'] as const).map((field) => (
+                    <td key={field}>{usage ? number.format(usage[field]) : '—'}</td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-      <details className="notice analytics-coverage disclosure">
-        <summary>{t('analytics.incompleteShort')}</summary>
-        {t('analytics.incomplete')}
-      </details>
-      <details
-        className="panel analytics-export disclosure"
-        aria-label={t('analytics.export.title')}
-      >
-        <summary>
-          <h2>{t('analytics.export.title')}</h2>
-        </summary>
-        <p className="fine-print">{t('analytics.export.privacy')}</p>
-        {desktop && !native ? (
-          <p className="notice">{t('analytics.export.desktop')}</p>
-        ) : (
-          <>
-            <button
-              className="button"
-              disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
-              onClick={() => (native ? saveNative('csv') : exportReport('csv'))}
-            >
-              {t('analytics.export.csv')}
-            </button>{' '}
-            <button
-              className="button"
-              disabled={!exportable || (!!native && (!nativeContext || nativeBusy))}
-              onClick={() => (native ? saveNative('markdown') : exportReport('markdown'))}
-            >
-              {t('analytics.export.markdown')}
-            </button>
-            <p className="fine-print">
-              {t(native ? 'analytics.export.nativeHelp' : 'analytics.export.download')}
-            </p>
-            {nativeBusy && <p role="status">{t('analytics.export.nativePending')}</p>}
-            {native && !nativeBusy && !nativeContext && (
-              <p className="notice">{t('analytics.export.nativeRefresh')}</p>
-            )}
-            {nativeStatus?.key === nativeKey && (
-              <p role={['saved', 'cancelled'].includes(nativeStatus.status) ? 'status' : 'alert'}>
-                {t(`analytics.export.nativeResults.${nativeStatus.status}`)}
-              </p>
-            )}
-            {!data && <p className="notice">{t('analytics.export.blocked')}</p>}
-            {data && !exportable && <p className="notice">{t('analytics.export.limits')}</p>}
-          </>
-        )}
-        {exportFailure && <p role="alert">{t('analytics.export.failed')}</p>}
-      </details>
-      {failure?.key === key && (
-        <div className="notice" role="alert">
-          {t(`analytics.${failure.reason}`)}
+      {!slots.length && <p>—</p>}
+    </section>
+  );
+}
+
+function LimitsView({ scope }: { scope?: FeatureNativeSnapshot }) {
+  const { t, i18n } = useTranslation();
+  const { reply, refresh } = useOverviewReading(scope);
+  const [shown, setShown] = useState<string[]>();
+  const [caps, setCaps] = useState(readLimitCaps);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(timer);
+  }, []);
+  const accounts = parseAccountLimits(reply?.accountLimits?.accounts);
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage, {
+    style: 'percent',
+    maximumFractionDigits: 2,
+  });
+  const date = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  return (
+    <section className="spec-panel">
+      <div className="spec-row-heading">
+        <h2>{t('accountLimits.title')}</h2>
+        <div className="spec-actions">
+          {accounts.length > 0 && (
+            <AccountLimits
+              accounts={accounts}
+              shown={shown ?? accounts.map((account) => account.id)}
+              caps={caps}
+              now={now}
+              source={t('accountLimits.sourceApp')}
+              onShownChange={setShown}
+              onCapsChange={setCaps}
+            />
+          )}
+          <button className="button" disabled={!scope} onClick={refresh}>
+            <RefreshCw size={13} />
+            {t('analytics.refresh')}
+          </button>
         </div>
-      )}
-      {request && loading && (
-        <p role="status" className="empty-copy">
-          {t('analytics.loading')}
-        </p>
-      )}
-      {data && (
-        <>
-          <section className="stats analytics-stats" aria-label={t('analytics.summary')}>
-            <div className="stat">
-              <span>{t('analytics.leader')}</span>
-              <strong className="analytics-leader">{leader}</strong>
-              <small>
-                {t(ranking === 'tokens' ? 'analytics.byTokens' : 'analytics.bySessions')}
-              </small>
-            </div>
-            <div className="stat">
-              <span>{t('analytics.reportedTokens')}</span>
-              <strong>{number(data.usage?.total)}</strong>
-              <small>{t('analytics.coveredOnly')}</small>
-            </div>
-            <div className="stat">
-              <span>{t('sessions')}</span>
-              <strong>{number(data.sessions)}</strong>
-              <small>{t('analytics.nonAdditive')}</small>
-            </div>
-          </section>
-          <section className="panel" aria-label={t('analytics.ranking')}>
-            <div className="panel-heading">
-              <h2>{t('analytics.ranking')}</h2>
-              <label>
-                {t('analytics.order')}{' '}
-                <select
-                  aria-label={t('analytics.order')}
-                  value={ranking}
-                  onChange={(event) => setRanking(event.target.value as 'tokens' | 'sessions')}
-                >
-                  <option value="tokens">{t('analytics.byTokens')}</option>
-                  <option value="sessions">{t('analytics.bySessions')}</option>
-                </select>
-              </label>
-            </div>
-            <p className="fine-print analytics-note">
-              {t('analytics.denominator', { tokens: number(data.usage?.total) })}
-            </p>
-            <p className="fine-print analytics-note">{t('analytics.nonAdditive')}</p>
-            {!rows.length ? (
-              <p className="empty-copy">{t('analytics.empty')}</p>
-            ) : (
-              <div
-                className="table-scroll"
-                tabIndex={0}
-                role="region"
-                aria-label={t('analytics.ranking')}
-              >
-                <table className="analytics-table">
-                  <caption className="sr-only">{t('analytics.ranking')}</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col">{t('model')}</th>
-                      <th scope="col">{t('analytics.adapter')}</th>
-                      <th scope="col">{t('analytics.reportedTokens')}</th>
-                      <th scope="col">{t('analytics.share')}</th>
-                      <th scope="col">{t('sessions')}</th>
-                      <th scope="col">{t('input')}</th>
-                      <th scope="col">{t('output')}</th>
-                      <th scope="col">{t('cached')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => {
-                      const share =
-                        row.usage && data.usage && data.usage.total > 0
-                          ? row.usage.total / data.usage.total
-                          : null;
-                      return (
-                        <tr key={JSON.stringify([row.adapter, row.model])}>
-                          <th scope="row">
-                            <span className="analytics-model">
-                              {row.model ?? t('analytics.unidentified')}
-                            </span>
-                            <small className="analytics-provider">
-                              {t('analytics.providerUnavailable')}
-                            </small>
-                          </th>
-                          <td>{row.adapter}</td>
-                          <td className="mono">{number(row.usage?.total)}</td>
+      </div>
+      <div className="table-scroll">
+        <table className="spec-table">
+          <thead>
+            <tr>
+              {[
+                'screens.cliLabel',
+                'screens.metrics.window',
+                'screens.metrics.consumed',
+                'screens.metrics.renews',
+                'source',
+              ].map((key) => (
+                <th key={key} scope="col">
+                  {t(key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(['codex', 'opencode', 'claude', 'antigravity'] as const).map((provider) => {
+              const list = accounts.filter((account) => account.provider === provider);
+              const label = t(`screens.cli.${provider}`);
+              return list.length ? (
+                list.flatMap((account) => {
+                  const heading = `${label} · ${account.index}${account.plan ? ` · ${account.plan}` : ''}`;
+                  return account.windows.length
+                    ? account.windows.map((window) => (
+                        <tr key={`${account.id}:${window.id}`}>
+                          <th scope="row">{heading}</th>
+                          <td>{window.label}</td>
                           <td>
-                            <span>
-                              {share === null
-                                ? t('unknown')
-                                : new Intl.NumberFormat(i18n.resolvedLanguage, {
-                                    style: 'percent',
-                                    maximumFractionDigits: 1,
-                                  }).format(share)}
-                            </span>
-                            {share !== null && (
-                              <span className="analytics-bar" aria-hidden="true">
-                                <i
-                                  style={{ width: `${Math.min(100, Math.max(0, share * 100))}%` }}
-                                />
-                              </span>
-                            )}
+                            {window.usedPercent === undefined || expiredWindow(window, now)
+                              ? '—'
+                              : number.format(window.usedPercent / 100)}
                           </td>
-                          <td>{number(row.sessions)}</td>
-                          <td>{number(row.usage?.input)}</td>
-                          <td>{number(row.usage?.output)}</td>
-                          <td>{number(row.usage?.cached)}</td>
+                          <td>
+                            {window.resetsAt === undefined ? '—' : date.format(window.resetsAt)}
+                          </td>
+                          <td>{t('accountLimits.sourceApp')}</td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <p className="fine-print analytics-note">{t('analytics.cache')}</p>
-          </section>
-          <ModelComparison key={result?.readingId} data={data} />
-          <ModelEvolution key={result?.readingId} request={request!} summary={data} />
-          <section className="panel analytics-evidence" aria-label={t('analytics.coverage')}>
-            <h2>{t('analytics.coverage')}</h2>
-            <p>
-              {t('analytics.coverageCounts', {
-                sessions: number(data.coverage.sessions),
-                measured: number(data.coverage.sessionsWithCanonicalUsage),
-                unidentified: number(data.coverage.unidentifiedContributions),
-              })}
-            </p>
-            <p className="fine-print">{t('analytics.coverageScope')}</p>
-            {data.coverage.gaps.length > 0 && (
-              <ul>
-                {data.coverage.gaps.map((gap) => (
-                  <li key={gap.reason}>
-                    {t(`analytics.gaps.${gap.reason}`)}: {number(gap.count)}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="fine-print">{t('analytics.basis')}</p>
-            <p className="fine-print">
-              {t('analytics.updated', {
-                time: result?.at.toLocaleTimeString(i18n.resolvedLanguage),
-              })}
-            </p>
-          </section>
-        </>
-      )}
-      <p className="fine-print analytics-note">{t('analytics.unavailable')}</p>
+                      ))
+                    : [
+                        <tr key={account.id}>
+                          <th scope="row">{heading}</th>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>—</td>
+                          <td>—</td>
+                        </tr>,
+                      ];
+                })
+              ) : (
+                <tr key={provider}>
+                  <th scope="row">{label}</th>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                  <td>—</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

@@ -1,164 +1,382 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
-import { Modal } from './Modal';
+import { RefreshCw } from 'lucide-react';
 import {
-  defaultOverviewPreferences,
-  moveOverviewPanel,
-  type OverviewPanel,
-  type OverviewPreferences,
-} from './overview-preferences';
+  featureDisplayName,
+  type FeatureNativeReply,
+  type FeatureNativeSnapshot,
+  type Snapshot,
+} from '@orqst/protocol';
+import { useOverviewPeriod } from './overview-preferences';
+import { permissionTerminals } from './feature-permissions-matrix';
+import { STALE_MS } from './shell-sections';
+import './spec-screens.css';
 
-export function OverviewPanels({
-  preferences,
-  panels,
-  onCustomize,
-}: {
-  preferences: OverviewPreferences;
-  panels: Record<OverviewPanel, ReactNode>;
-  onCustomize: () => void;
-}) {
-  const { t } = useTranslation();
-  const visible = preferences.order.filter((panel) => !preferences.hidden.includes(panel));
-  const [primary, ...secondary] = visible;
-  if (!primary)
-    return (
-      <section className="panel overview-empty" aria-label={t('overviewLayout.title')}>
-        <p>{t('overviewLayout.empty')}</p>
-        <button className="button" onClick={onCustomize}>
-          {t('overviewLayout.title')}
-        </button>
-      </section>
-    );
-  return (
-    <div className={`overview-panels ${secondary.length ? '' : 'overview-panels-single'}`}>
-      <div className="overview-primary" data-overview-panel={primary}>
-        {panels[primary]}
-      </div>
-      {secondary.length > 0 && (
-        <div className="overview-secondary">
-          {secondary.map((panel) => (
-            <div key={panel} data-overview-panel={panel}>
-              {panels[panel]}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export interface StudioCardTarget {
+  featureId: string;
+  terminalId: string;
 }
 
-export function OverviewLayoutEditor({
-  preferences,
-  onChange,
-  storageUnavailable,
-  onClose,
+export function useOverviewReading(scope?: FeatureNativeSnapshot) {
+  const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
+  const workspaceId = scope?.workspace.id;
+  const generation = scope?.generation;
+  const featureId = scope?.activeFeatureId;
+  const [revision, setRevision] = useState(0);
+  const [reading, setReading] = useState<{ key: string; reply?: FeatureNativeReply }>();
+  const key = JSON.stringify([workspaceId, generation, featureId, revision]);
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
+  useEffect(() => {
+    if (!native || generation === undefined) return;
+    let active = true;
+    void native
+      .request({ action: 'snapshot', contractVersion: 1, generation })
+      .then((reply) => {
+        if (!active) return;
+        const current = reply.snapshot;
+        setReading({
+          key,
+          reply:
+            reply.status === 'ok' &&
+            current?.workspace.id === workspaceId &&
+            current?.generation === generation &&
+            current?.activeFeatureId === featureId
+              ? reply
+              : undefined,
+        });
+      })
+      .catch(() => {
+        if (active) setReading({ key });
+      });
+    return () => {
+      active = false;
+    };
+  }, [native, generation, workspaceId, featureId, key]);
+  return { reply: reading?.key === key ? reading.reply : undefined, refresh };
+}
+
+export function OverviewLayout({
+  scope,
+  snapshot,
+  online,
+  onRefresh,
+  onOpen,
 }: {
-  preferences: OverviewPreferences;
-  onChange: (value: OverviewPreferences) => void;
-  storageUnavailable: boolean;
-  onClose: () => void;
+  scope?: FeatureNativeSnapshot;
+  snapshot?: Snapshot;
+  online: boolean;
+  onRefresh: () => Promise<unknown>;
+  onOpen: (target: StudioCardTarget) => Promise<boolean>;
 }) {
-  const { t } = useTranslation();
-  const [announcement, setAnnouncement] = useState('');
-  const list = useRef<HTMLOListElement>(null);
-  function move(panel: OverviewPanel, direction: -1 | 1) {
-    const next = moveOverviewPanel(preferences, panel, direction);
-    if (next === preferences) return;
-    onChange(next);
-    // Keep focus on the moved row even when its move button becomes disabled.
-    list.current?.querySelector<HTMLInputElement>(`#overview-visible-${panel}`)?.focus();
-    setAnnouncement(
-      t('overviewLayout.moved', {
-        panel: t(panel),
-        position: next.order.indexOf(panel) + 1,
-        count: next.order.length,
+  const { t, i18n } = useTranslation();
+  const { period, setPeriod } = useOverviewPeriod();
+  const { reply, refresh } = useOverviewReading(scope);
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<'openFailed' | 'refreshFailed'>();
+  const number = new Intl.NumberFormat(i18n.resolvedLanguage);
+  const date = new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const since = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - Number(period),
+  ).getTime();
+  const slots = new Map(scope?.slots.map((slot) => [slot.terminalId, slot]));
+  const evidence = new Map(reply?.canvas?.entries.map((entry) => [entry.terminalId, entry]));
+  const rows =
+    scope?.features.flatMap((feature) => {
+      if (feature.status === 'archived') return [];
+      return permissionTerminals(scope, feature.featureId).flatMap(({ terminalId, label }) => {
+        const slot = slots.get(terminalId);
+        if (!slot || slot.closed) return [];
+        const reading = evidence.get(terminalId);
+        const state =
+          reading?.state === 'exited'
+            ? 'ended'
+            : reading?.agentState && reading.agentState !== 'unknown'
+              ? reading.agentState
+              : reading?.state === 'running'
+                ? 'running'
+                : 'unknown';
+        return [
+          {
+            featureId: feature.featureId,
+            feature: featureDisplayName(feature, t('features.defaultName')),
+            terminalId,
+            label,
+            slot,
+            reading,
+            state,
+            lastActivity: Math.max(0, ...(reading?.activities ?? []).map((event) => event.at)),
+          },
+        ];
+      });
+    }) ?? [];
+  const attention = rows.filter(
+    (row) => row.state === 'waiting_for_user' || row.state === 'failed',
+  );
+  const messages = reply?.communication?.events ?? [];
+  const messageWindowCovered = messages.length < 50 || messages.some(({ at }) => at < today);
+  const hasTurnEvidence =
+    !!reply?.canvas &&
+    (rows.every(({ reading }) => reading?.state === 'exited') ||
+      rows.some(({ reading }) => reading?.agentState && reading.agentState !== 'unknown'));
+  const measuredToday = rows.filter(
+    ({ reading }) =>
+      reading?.usage && reading.startedAt !== undefined && reading.startedAt >= today,
+  );
+  const counters = [
+    [
+      'active',
+      reply?.canvas ? rows.filter(({ reading }) => reading?.state === 'running').length : undefined,
+    ],
+    [
+      'waiting',
+      hasTurnEvidence
+        ? attention.filter(({ state }) => state === 'waiting_for_user').length
+        : undefined,
+    ],
+    [
+      'failures',
+      hasTurnEvidence ? attention.filter(({ state }) => state === 'failed').length : undefined,
+    ],
+    [
+      'messagesToday',
+      reply?.communication && !!scope?.activeFeatureId && messageWindowCovered
+        ? messages.filter(({ at, kind }) => at >= today && kind === 'message').length
+        : undefined,
+    ],
+    [
+      'tokensToday',
+      measuredToday.length
+        ? measuredToday.reduce((sum, { reading }) => sum + (reading?.usage?.total ?? 0), 0)
+        : undefined,
+    ],
+  ] as const;
+  const activity = rows.flatMap((row) =>
+    (row.reading?.activities ?? []).map(({ at, label }) => ({
+      key: JSON.stringify([row.terminalId, at, label]),
+      featureId: row.featureId,
+      at,
+      label,
+    })),
+  );
+  for (const event of messages) {
+    const from = rows.find((row) => row.terminalId === event.from);
+    const to = rows.find((row) => row.terminalId === event.to);
+    if (!from || !to || from.featureId !== to.featureId) continue;
+    activity.push({
+      key: event.id,
+      featureId: from.featureId,
+      at: event.at,
+      label: t(`screens.overview.event.${event.kind}`, {
+        from: t(`screens.cli.${from.slot.provider}`),
+        to: t(`screens.cli.${to.slot.provider}`),
       }),
-    );
+    });
   }
-  return (
-    <Modal
-      label={t('overviewLayout.title')}
-      className="panel shell-dialog overview-layout-dialog"
-      initialFocus=".overview-layout-close"
-      onClose={onClose}
-    >
-      <div className="panel-heading">
-        <h2>{t('overviewLayout.title')}</h2>
-        <button
-          className="icon-button overview-layout-close"
-          aria-label={t('close')}
-          onClick={onClose}
+  const recent = activity
+    .filter(({ at }) => at >= since)
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 25);
+  const groups = new Map<string, typeof recent>();
+  for (const event of recent) {
+    const group = groups.get(event.featureId) ?? [];
+    group.push(event);
+    groups.set(event.featureId, group);
+  }
+  const owned = new Set(
+    reply?.canvas?.entries.flatMap(({ session }) => (session ? [session.sessionId] : [])),
+  );
+  const observed = snapshot?.sessions.filter((session) => !owned.has(session.id)) ?? [];
+  const formatDate = (at: number) => (at ? date.format(at) : '—');
+  function open(target: StudioCardTarget) {
+    setFailure(undefined);
+    setBusy(true);
+    void onOpen(target)
+      .then((opened) => {
+        if (!opened) setFailure('openFailed');
+      })
+      .catch(() => setFailure('openFailed'))
+      .finally(() => setBusy(false));
+  }
+  const tools = (
+    <>
+      <label>
+        {t('analytics.period')}{' '}
+        <select
+          value={period}
+          onChange={(event) => setPeriod(event.target.value === '0' ? '0' : '6')}
         >
-          <X size={18} />
-        </button>
+          <option value="0">{t('analytics.periods.today')}</option>
+          <option value="6">{t('analytics.periods.week')}</option>
+        </select>
+      </label>
+      <button
+        className="button"
+        disabled={busy}
+        onClick={() => {
+          setFailure(undefined);
+          refresh();
+          if (online) void onRefresh().catch(() => setFailure('refreshFailed'));
+        }}
+      >
+        <RefreshCw size={13} />
+        {t('analytics.refresh')}
+      </button>
+    </>
+  );
+  return (
+    <section className="spec-screen" aria-labelledby="overview-title">
+      <div className="spec-head">
+        <h1 id="overview-title">{t('overviewPage.title')}</h1>
+        <div className="spec-actions">{tools}</div>
       </div>
-      <div className="overview-layout-body">
-        <p id="overview-layout-help">{t('overviewLayout.help')}</p>
-        {storageUnavailable && (
-          <p className="notice" role="status">
-            {t('overviewLayout.storageUnavailable')}
-          </p>
-        )}
-        <ol ref={list} className="overview-layout-list" aria-describedby="overview-layout-help">
-          {preferences.order.map((panel, index) => (
-            <li key={panel}>
-              <label>
-                <input
-                  id={`overview-visible-${panel}`}
-                  type="checkbox"
-                  checked={!preferences.hidden.includes(panel)}
-                  onChange={(event) => {
-                    onChange({
-                      ...preferences,
-                      hidden: event.target.checked
-                        ? preferences.hidden.filter((item) => item !== panel)
-                        : [...preferences.hidden, panel],
-                    });
-                  }}
-                />
-                <span>{t(panel)}</span>
-              </label>
-              <div className="overview-move-controls">
-                <button
-                  className="icon-button"
-                  aria-label={t('overviewLayout.moveUp', { panel: t(panel) })}
-                  disabled={index === 0}
-                  onClick={() => move(panel, -1)}
-                >
-                  <ArrowUp size={17} />
-                </button>
-                <button
-                  className="icon-button"
-                  aria-label={t('overviewLayout.moveDown', { panel: t(panel) })}
-                  disabled={index === preferences.order.length - 1}
-                  onClick={() => move(panel, 1)}
-                >
-                  <ArrowDown size={17} />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ol>
-        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-          {announcement}
-        </p>
-        <p className="fine-print">{t('overviewLayout.scope')}</p>
-        <div className="overview-layout-actions">
-          <button
-            className="button"
-            onClick={() => {
-              onChange(defaultOverviewPreferences);
-              setAnnouncement(t('overviewLayout.restored'));
-            }}
+      {failure && <p role="alert">{t(`screens.overview.${failure}`)}</p>}
+      <dl className="spec-counters">
+        {counters.map(([key, value]) => (
+          <div
+            key={key}
+            title={
+              key === 'messagesToday' || key === 'tokensToday'
+                ? t(`screens.overview.${key}Help`)
+                : undefined
+            }
           >
-            {t('overviewLayout.reset')}
-          </button>
-          <button className="button primary" onClick={onClose}>
-            {t('overviewLayout.done')}
-          </button>
+            <dt>{t(`screens.overview.${key}`)}</dt>
+            <dd>{value === undefined ? '—' : number.format(value)}</dd>
+          </div>
+        ))}
+      </dl>
+      <section className="spec-panel">
+        <h2>{t('screens.overview.attention')}</h2>
+        {attention.length ? (
+          <ul className="spec-rows">
+            {attention.map((row) => (
+              <li key={row.terminalId}>
+                <span>
+                  {row.feature} · {row.label} · {t(`screens.cli.${row.slot.provider}`)} ·{' '}
+                  {t(`statusLabels.${row.state}`)}
+                </span>
+                <button className="button" disabled={busy} onClick={() => open(row)}>
+                  {t('screens.open')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>{hasTurnEvidence ? t('attentionEmpty') : '—'}</p>
+        )}
+      </section>
+      <section className="spec-panel">
+        <h2>{t('screens.overview.terminals')}</h2>
+        <div className="table-scroll">
+          <table className="spec-table">
+            <thead>
+              <tr>
+                {[
+                  'screens.feature',
+                  'screens.overview.terminal',
+                  'screens.cliLabel',
+                  'model',
+                  'status',
+                  'lastActivity',
+                ].map((label) => (
+                  <th key={label} scope="col">
+                    {t(label)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.terminalId}>
+                  <td>
+                    <button className="button spec-link" disabled={busy} onClick={() => open(row)}>
+                      {row.feature}
+                    </button>
+                  </td>
+                  <td title={row.terminalId}>{row.label}</td>
+                  <td>{t(`screens.cli.${row.slot.provider}`)}</td>
+                  <td>{row.slot.selectedModel ?? '—'}</td>
+                  <td>
+                    {row.state === 'unknown'
+                      ? '—'
+                      : t(
+                          row.state === 'ended'
+                            ? 'screens.overview.ended'
+                            : `statusLabels.${row.state}`,
+                        )}
+                  </td>
+                  <td>{formatDate(row.lastActivity)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-    </Modal>
+        {!rows.length && <p>{scope ? t('screens.overview.noTerminals') : '—'}</p>}
+      </section>
+      <section className="spec-panel">
+        <h2>{t('screens.overview.recent')}</h2>
+        {!groups.size && (
+          <p>{reply?.canvas || reply?.communication ? t('screens.overview.noEvents') : '—'}</p>
+        )}
+        {[...groups].map(([featureId, events]) => (
+          <div className="spec-event-group" key={featureId}>
+            <h3>{rows.find((row) => row.featureId === featureId)?.feature}</h3>
+            <ul className="spec-rows">
+              {events.map((event, index) => (
+                <li key={`${event.key}:${index}`}>
+                  <span>{event.label}</span>
+                  <time dateTime={new Date(event.at).toISOString()}>{formatDate(event.at)}</time>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </section>
+      <details className="spec-panel">
+        <summary>{t('screens.overview.observed')}</summary>
+        <div className="table-scroll">
+          <table className="spec-table">
+            <thead>
+              <tr>
+                {[
+                  'screens.overview.session',
+                  'screens.cliLabel',
+                  'model',
+                  'status',
+                  'lastActivity',
+                ].map((label) => (
+                  <th key={label} scope="col">
+                    {t(label)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {observed.map((session) => (
+                <tr key={session.id}>
+                  <td>{session.agentName}</td>
+                  <td>{t(`screens.cli.${session.adapter}`, { defaultValue: session.adapter })}</td>
+                  <td>{session.model ?? '—'}</td>
+                  <td>
+                    {t(
+                      `statusLabels.${session.status === 'running' && Date.now() - Date.parse(session.lastActivity) > STALE_MS ? 'stale' : session.status}`,
+                    )}
+                  </td>
+                  <td>{formatDate(Date.parse(session.lastActivity))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!observed.length && <p>{online ? t('screens.overview.noObserved') : '—'}</p>}
+      </details>
+    </section>
   );
 }
