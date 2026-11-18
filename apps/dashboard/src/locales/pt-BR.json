@@ -1768,6 +1768,9 @@
       }
     },
     "agents": {
+      "matrix": "Matriz de suporte das CLIs",
+      "installation": "Instalação",
+      "installProvider": "Como instalar {{provider}}",
       "installed": "Instalado",
       "missing": "Não instalado",
       "checkNeeded": "Verificação necessária",
@@ -1823,6 +1826,7 @@
       "failed": "Falha ao abrir Workspace"
     },
     "metrics": {
+      "lastReading": "Última leitura",
       "title": "Métricas",
       "usage": "Uso",
       "models": "Modelos",
@@ -1836,6 +1840,8 @@
       "renews": "Renovação"
     },
     "artifacts": {
+      "search": "Buscar artefatos",
+      "copy": "Copiar Markdown",
       "title": "Artefatos",
       "noAttribution": "Feature indisponível para artefatos observados",
       "choose": "Selecione um artefato",

@@ -1768,6 +1768,9 @@
       }
     },
     "agents": {
+      "matrix": "CLI support matrix",
+      "installation": "Installation",
+      "installProvider": "How to install {{provider}}",
       "installed": "Installed",
       "missing": "Not installed",
       "checkNeeded": "Check required",
@@ -1823,6 +1826,7 @@
       "failed": "Could not open Workspace"
     },
     "metrics": {
+      "lastReading": "Last reading",
       "title": "Metrics",
       "usage": "Usage",
       "models": "Models",
@@ -1836,6 +1840,8 @@
       "renews": "Renews"
     },
     "artifacts": {
+      "search": "Search artifacts",
+      "copy": "Copy Markdown",
       "title": "Artifacts",
       "noAttribution": "Feature unavailable for observed artifacts",
       "choose": "Select an artifact",

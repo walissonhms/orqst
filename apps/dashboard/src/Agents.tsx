@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { terminalPreparationCatalogSchema, type TerminalPreparationCatalog } from '@orqst/protocol';
 
 const installDocs = {
@@ -97,59 +97,97 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
           ))}
         </ul>
       ) : (
-        rows.map(({ provider, entry }) => (
-          <section className="spec-cli-row" key={provider}>
-            <div className="spec-row-heading">
-              <h3>{t(`screens.cli.${provider}`)}</h3>
-              <span title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}>
-                {status(entry)}
-              </span>
-              <a className="button" href={installDocs[provider]} target="_blank" rel="noreferrer">
-                {t('screens.agents.install')}
-                <ExternalLink size={12} />
-              </a>
-            </div>
-            <dl className="spec-facts">
-              {[
-                ['path', '—'],
-                ['version', '—'],
-                ['login', '—'],
-                ['terminal', t('screens.agents.pty')],
-                [
-                  'messages',
-                  t(
-                    `screens.agents.${provider === 'antigravity' ? 'noRelay' : provider === 'claude' ? 'mcpRelay' : 'autoRelay'}`,
-                  ),
-                ],
-                ['tokens', provider === 'antigravity' ? '—' : t('screens.agents.whenReported')],
-              ].map(([key, value]) => (
-                <div key={key}>
-                  <dt>{t(`screens.agents.${key}`)}</dt>
-                  <dd>{value}</dd>
-                </div>
-              ))}
-              <div>
-                <dt>{t('screens.agents.models')}</dt>
-                <dd>
-                  {entry?.models.length ? (
-                    <details>
-                      <summary>
-                        {t('screens.agents.modelCount', { count: entry.models.length })}
-                      </summary>
-                      <ul>
-                        {entry.models.map((model) => (
-                          <li key={model.id}>{model.label}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  ) : (
-                    '—'
-                  )}
-                </dd>
-              </div>
-            </dl>
-          </section>
-        ))
+        <div
+          className="table-scroll"
+          tabIndex={0}
+          role="region"
+          aria-label={t('screens.agents.matrix')}
+        >
+          <table className="spec-table spec-cli-matrix">
+            <thead>
+              <tr>
+                <th scope="col">{t('screens.cliLabel')}</th>
+                {rows.map(({ provider }) => (
+                  <th scope="col" key={provider}>
+                    {t(`screens.cli.${provider}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">{t('status')}</th>
+                {rows.map(({ provider, entry }) => (
+                  <td
+                    key={provider}
+                    title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}
+                  >
+                    {status(entry)}
+                  </td>
+                ))}
+              </tr>
+              {(['path', 'version', 'login', 'terminal', 'messages', 'tokens'] as const).map(
+                (key) => (
+                  <tr key={key}>
+                    <th scope="row">{t(`screens.agents.${key}`)}</th>
+                    {rows.map(({ provider }) => (
+                      <td key={provider}>
+                        {key === 'terminal'
+                          ? t('screens.agents.pty')
+                          : key === 'messages'
+                            ? t(
+                                `screens.agents.${provider === 'antigravity' ? 'noRelay' : provider === 'claude' ? 'mcpRelay' : 'autoRelay'}`,
+                              )
+                            : key === 'tokens' && provider !== 'antigravity'
+                              ? t('screens.agents.whenReported')
+                              : '—'}
+                      </td>
+                    ))}
+                  </tr>
+                ),
+              )}
+              <tr>
+                <th scope="row">{t('screens.agents.models')}</th>
+                {rows.map(({ provider, entry }) => (
+                  <td key={provider}>
+                    {entry?.models.length ? (
+                      <details>
+                        <summary>
+                          {t('screens.agents.modelCount', { count: entry.models.length })}
+                        </summary>
+                        <ul>
+                          {entry.models.map((model) => (
+                            <li key={model.id}>{model.label}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                ))}
+              </tr>
+              <tr>
+                <th scope="row">{t('screens.agents.installation')}</th>
+                {rows.map(({ provider }) => (
+                  <td key={provider}>
+                    <a
+                      className="button"
+                      href={installDocs[provider]}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={t('screens.agents.installProvider', {
+                        provider: t(`screens.cli.${provider}`),
+                      })}
+                    >
+                      {t('screens.agents.install')}
+                    </a>
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

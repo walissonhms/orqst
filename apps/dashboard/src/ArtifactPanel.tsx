@@ -206,7 +206,7 @@ export function ArtifactPanel({
           {t('artifacts.title')}
         </h3>
         <button className="button" disabled={saving} onClick={() => requestClose(onClose)}>
-          {t('artifacts.close')}
+          {t(library ? 'close' : 'artifacts.close')}
         </button>
       </div>
       {closeAction && (
@@ -361,7 +361,7 @@ export function ArtifactPanel({
           {library ? (
             <div className="artifact-actions">
               <button className="button" onClick={() => void copy(artifact.original.text)}>
-                {t('artifacts.copyMarkdown')}
+                {t('screens.artifacts.copy')}
               </button>
               <button
                 className="button"

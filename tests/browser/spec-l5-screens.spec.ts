@@ -323,7 +323,7 @@ test('Settings includes all tabs, discovers the current CLI catalog, and persist
   const screen = page.locator('.spec-screen');
   await expect(screen.locator('.spec-settings-nav button')).toHaveCount(8);
   await screen.getByRole('button', { name: 'Agents', exact: true }).click();
-  await expect(screen.getByRole('heading', { name: 'Claude', exact: true })).toBeVisible();
+  await expect(screen.getByRole('columnheader', { name: 'Claude', exact: true })).toBeVisible();
   await expect(screen.getByText('Not installed', { exact: true })).toBeVisible();
   await expect
     .poll(() => calls.filter(({ action }) => action === 'catalog').length)

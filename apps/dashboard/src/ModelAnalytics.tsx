@@ -565,9 +565,8 @@ function AnalyticsReadingView({
                       <small>{t('analytics.coveredOnly')}</small>
                     </div>
                     <div className="stat">
-                      <span>{t('sessions')}</span>
+                      <span title={t('analytics.nonAdditive')}>{t('sessions')}</span>
                       <strong>{number(data.sessions)}</strong>
-                      <small>{t('analytics.nonAdditive')}</small>
                     </div>
                   </section>
                   <section className="panel" aria-label={t('analytics.ranking')}>

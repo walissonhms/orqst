@@ -192,6 +192,12 @@ export function OverviewLayout({
   const owned = new Set(
     reply?.canvas?.entries.flatMap(({ session }) => (session ? [session.sessionId] : [])),
   );
+  function stateLabel(state: string) {
+    if (state === 'unknown') return '—';
+    if (state === 'ended' || state === 'waiting_for_user')
+      return t(state === 'ended' ? 'screens.overview.ended' : 'screens.overview.waiting');
+    return t(`statusLabels.${state}`);
+  }
   const observed = snapshot?.sessions.filter((session) => !owned.has(session.id)) ?? [];
   const formatDate = (at: number) => (at ? date.format(at) : '—');
   function open(target: StudioCardTarget) {
@@ -260,7 +266,7 @@ export function OverviewLayout({
               <li key={row.terminalId}>
                 <span>
                   {row.feature} · {row.label} · {t(`screens.cli.${row.slot.provider}`)} ·{' '}
-                  {t(`statusLabels.${row.state}`)}
+                  {stateLabel(row.state)}
                 </span>
                 <button className="button" disabled={busy} onClick={() => open(row)}>
                   {t('screens.open')}
@@ -303,15 +309,7 @@ export function OverviewLayout({
                   <td title={row.terminalId}>{row.label}</td>
                   <td>{t(`screens.cli.${row.slot.provider}`)}</td>
                   <td>{row.slot.selectedModel ?? '—'}</td>
-                  <td>
-                    {row.state === 'unknown'
-                      ? '—'
-                      : t(
-                          row.state === 'ended'
-                            ? 'screens.overview.ended'
-                            : `statusLabels.${row.state}`,
-                        )}
-                  </td>
+                  <td>{stateLabel(row.state)}</td>
                   <td>{formatDate(row.lastActivity)}</td>
                 </tr>
               ))}

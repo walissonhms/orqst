@@ -76,8 +76,8 @@ export function ArtifactLibrary({
               <Search size={13} aria-hidden="true" />
               <input
                 type="search"
-                aria-label={t('artifactLibrary.search')}
-                placeholder={t('artifactLibrary.search')}
+                aria-label={t('screens.artifacts.search')}
+                placeholder={t('screens.artifacts.search')}
                 maxLength={200}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -274,7 +274,7 @@ function ArtifactSources({
                 if (request) onOpen(request);
               }}
             >
-              <strong>{event.payload.text?.trim().split('\n')[0]?.slice(0, 100)}</strong>
+              <strong>{event.payload.text?.trim().split('\n', 1)[0]?.slice(0, 100)}</strong>
               <span>
                 {workspace?.name ?? session.agentName} ·{' '}
                 <time dateTime={event.timestamp}>

@@ -221,11 +221,33 @@
 .spec-metrics .analytics-evidence {
   padding: 8px 10px;
 }
-.spec-metrics .panel-heading {
-  padding: 8px 10px;
+.spec-screen .spec-metrics .panel-heading {
+  min-height: 36px;
+  padding: 5px 8px;
 }
 .spec-metrics .analytics-evolution {
   padding: 0 8px 8px;
+}
+.spec-screen
+  .spec-metrics
+  :is(
+    .analytics-stats,
+    .analytics-evolution,
+    .analytics-comparison,
+    .analytics-evidence,
+    .analytics-export
+  ) {
+  margin: 0;
+}
+.spec-screen .spec-metrics :is(.analytics-comparison, .analytics-export) {
+  padding: 8px 10px;
+}
+.spec-screen .spec-metrics .analytics-table :is(th, td) {
+  padding: 6px 9px;
+}
+.spec-screen .spec-metrics .analytics-evolution-totals {
+  margin: 6px 0;
+  gap: 3px 8px;
 }
 .spec-metrics .analytics-comparison > p {
   margin: 0;
@@ -299,17 +321,13 @@
   display: grid;
   gap: 8px;
 }
-.spec-cli-row {
-  display: grid;
-  gap: 6px;
-  border-top: 1px solid var(--spec-line);
-  padding-top: 7px;
+.spec-screen .spec-cli-matrix :is(th, td) {
+  min-width: 100px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
-.spec-cli-row .spec-row-heading {
-  justify-content: start;
-}
-.spec-cli-row .spec-row-heading > a {
-  margin-inline-start: auto;
+.spec-cli-matrix details ul {
+  padding-inline-start: 14px;
 }
 
 .spec-artifact-layout {
@@ -357,6 +375,7 @@
 }
 .spec-artifact-preview .artifact-content {
   min-height: 110px;
+  border-radius: 0;
 }
 .spec-artifact-preview .panel-heading {
   padding: 0;
@@ -370,6 +389,9 @@
 
 .spec-onboarding.shell-dialog {
   width: min(410px, 90vw);
+  max-height: calc(100% - 24px);
+  inset: 0;
+  margin: auto;
   padding: 12px;
   background: #1d1828;
   border: 1px solid #56466f;
@@ -377,6 +399,9 @@
 }
 :root[data-theme='light'] .spec-onboarding.shell-dialog {
   background: var(--orqst-surface);
+}
+.spec-onboarding-title:focus {
+  outline: none;
 }
 .spec-onboarding .spec-actions {
   justify-content: flex-end;
