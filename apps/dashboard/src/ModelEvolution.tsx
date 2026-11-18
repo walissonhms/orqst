@@ -12,12 +12,14 @@ import { readAnalyticsJSON } from './analytics-export';
 export function ModelEvolution({
   request,
   summary,
+  auto = false,
 }: {
   request: string;
   summary: ModelAnalyticsSummary;
+  auto?: boolean;
 }) {
   const { t, i18n } = useTranslation();
-  const [attempt, setAttempt] = useState(0);
+  const [attempt, setAttempt] = useState(auto ? 1 : 0);
   const [reading, setReading] = useState<{ data: ModelAnalyticsEvolution; at: Date }>();
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -60,7 +62,7 @@ export function ModelEvolution({
     };
   }, [attempt, request, summary]);
   const number = (value: number | undefined) =>
-    value === undefined ? t('unknown') : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
+    value === undefined ? '—' : new Intl.NumberFormat(i18n.resolvedLanguage).format(value);
   const date = (value: string) =>
     new Intl.DateTimeFormat(i18n.resolvedLanguage, {
       dateStyle: 'medium',
@@ -80,20 +82,24 @@ export function ModelEvolution({
           {t(attempt ? 'analytics.evolution.retry' : 'analytics.evolution.show')}
         </button>
       </div>
-      <p className="fine-print">{t('analytics.evolution.basis')}</p>
-      <p className="fine-print">{t('analytics.evolution.filters')}</p>
+      <details className="fine-print">
+        <summary>{t('screens.details')}</summary>
+        <p>{t('analytics.evolution.basis')}</p>
+        <p>{t('analytics.evolution.filters')}</p>
+        <p>{t('analytics.evolution.reconciliation')}</p>
+        <p>{t('analytics.evolution.missing')}</p>
+        {data && <p>{t('analytics.evolution.windows', { days: data.bucketDays })}</p>}
+      </details>
       {loading && <p role="status">{t('analytics.loading')}</p>}
       {failed && <p role="alert">{t('analytics.evolution.failed')}</p>}
       {data && (
         <>
-          <p className="notice">{t('analytics.evolution.windows', { days: data.bucketDays })}</p>
           <dl className="analytics-evolution-totals">
             <dt>{t('analytics.evolution.coveredTotal')}</dt>
             <dd>{number(data.summary.usage?.total)}</dd>
             <dt>{t('analytics.evolution.undistributed')}</dt>
             <dd>{number(data.undistributedUsage?.total)}</dd>
           </dl>
-          <p className="fine-print">{t('analytics.evolution.reconciliation')}</p>
           {!data.buckets.length ? (
             <p>{t('analytics.evolution.empty')}</p>
           ) : (
@@ -145,9 +151,16 @@ export function ModelEvolution({
               </table>
             </div>
           )}
-          <p className="fine-print">{t('analytics.evolution.missing')}</p>
-          <p className="fine-print">
-            {t('analytics.updated', { time: reading.at.toLocaleTimeString(i18n.resolvedLanguage) })}
+          <p
+            className="fine-print"
+            title={t('analytics.updated', {
+              time: reading.at.toLocaleTimeString(i18n.resolvedLanguage),
+            })}
+          >
+            {t('screens.metrics.lastReading')}{' '}
+            <time dateTime={reading.at.toISOString()}>
+              {reading.at.toLocaleTimeString(i18n.resolvedLanguage)}
+            </time>
           </p>
         </>
       )}

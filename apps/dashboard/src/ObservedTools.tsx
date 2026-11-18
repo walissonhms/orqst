@@ -44,9 +44,12 @@ export function ObservedTools({
   return (
     <section className="observed-tools" aria-label={t('observedTools.title')}>
       <h3>{t('observedTools.title')}</h3>
-      <p className="fine-print">{t('observedTools.boundary')}</p>
-      <p className="fine-print">{t('observedTools.coverage', observedToolLimits)}</p>
-      <p className="fine-print">{t('observedTools.controls')}</p>
+      <details className="fine-print">
+        <summary>{t('screens.details')}</summary>
+        <p>{t('observedTools.boundary')}</p>
+        <p>{t('observedTools.coverage', observedToolLimits)}</p>
+        <p>{t('observedTools.controls')}</p>
+      </details>
       {!online && <p role="status">{t('observedTools.offline')}</p>}
       {failed && <p role="status">{t('observedTools.failed')}</p>}
       {projection.limited && <p role="status">{t('observedTools.limited')}</p>}

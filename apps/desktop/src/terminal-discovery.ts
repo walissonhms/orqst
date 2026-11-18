@@ -56,20 +56,22 @@ export function inspectReviewedExecutables(
   return { executables, refusal };
 }
 
+export function terminalExecutablePins(provider: LocalCliProvider) {
+  return provider === 'codex'
+    ? reviewedDesktopCodexBinaries
+    : provider === 'claude'
+      ? [reviewedClaudeTuiBinary]
+      : provider === 'antigravity'
+        ? [reviewedAntigravityBinary]
+        : [reviewedProviderMcpBinaries.opencode];
+}
+
 export function inspectTerminalExecutables(
   provider: LocalCliProvider,
   searchPath: string,
   home: string,
 ) {
-  const pins =
-    provider === 'codex'
-      ? reviewedDesktopCodexBinaries
-      : provider === 'claude'
-        ? [reviewedClaudeTuiBinary]
-        : provider === 'antigravity'
-          ? [reviewedAntigravityBinary]
-          : [reviewedProviderMcpBinaries.opencode];
-  return inspectReviewedExecutables(provider, searchPath, home, pins);
+  return inspectReviewedExecutables(provider, searchPath, home, terminalExecutablePins(provider));
 }
 
 export function discoverTerminalExecutable(

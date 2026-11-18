@@ -13,7 +13,7 @@ import {
   localCliProviders,
   type LocalCliProvider,
 } from '../../../packages/core/src/terminal/local-cli.js';
-import { inspectTerminalExecutables } from './terminal-discovery.js';
+import { inspectTerminalExecutables, terminalExecutablePins } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
 
 /** Resolve the scope and re-read only providers participating in the request. */
@@ -35,6 +35,10 @@ export function inspectTerminalPreparationCatalog(
       context.environment.PATH ?? '',
       context.home,
     );
+    const path = executables.length === 1 ? executables[0] : undefined;
+    const hash = path ? cachedTerminalExecutableSha256(path) : undefined;
+    const version = terminalExecutablePins(provider).find(({ sha256 }) => sha256 === hash)?.version;
+    const installation = path && path.length <= 4096 && version ? { path, version } : {};
     let models;
     try {
       models = discoverTerminalModels(
@@ -45,13 +49,13 @@ export function inspectTerminalPreparationCatalog(
       );
     } catch {
       // Unsafe/unreadable source files cannot be treated as an empty native configuration.
-      return { provider, executables: [], models: null, refusal };
+      return { provider, executables: [], models: null, refusal, installation };
     }
     const executable = executables.length === 1 ? executables[0]! : null;
     const identity = JSON.stringify([
       provider,
       executable,
-      executable ? cachedTerminalExecutableSha256(executable) : null,
+      hash ?? null,
       context.home,
       context.environment.PATH ?? '',
       // Only native selectors consumed by this provider, never credential variables.
@@ -77,7 +81,7 @@ export function inspectTerminalPreparationCatalog(
         id: selectionId(identity, option.label, option.selection),
       })),
     };
-    return { provider, executables, models, identity, refusal };
+    return { provider, executables, models, identity, refusal, installation };
   });
   return { request, catalogId: terminalCatalogId(trusted, workspace), providers, workspace };
 }
@@ -96,7 +100,7 @@ export function terminalCatalogId(
   );
 }
 
-/** Read-only public projection with every provider, no launch paths or arguments. */
+/** Read-only catalog with verified installation metadata and opaque launch choices. */
 export function terminalPreparationCatalog(
   raw: unknown,
   trusted: TerminalPreparationContext,
@@ -113,8 +117,9 @@ export function terminalPreparationCatalog(
     workspaceId: request.workspaceId,
     featureId: request.featureId,
     catalogId,
-    providers: providers.map(({ provider, executables, models, refusal }) => ({
+    providers: providers.map(({ provider, executables, models, refusal, installation }) => ({
       provider,
+      ...installation,
       status: executables.length === 1 && models ? 'available' : 'unavailable',
       reason: !models
         ? 'catalog_limited'

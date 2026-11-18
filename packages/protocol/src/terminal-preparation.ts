@@ -174,6 +174,8 @@ export const terminalPreparationCatalogSchema = z.strictObject({
           'ambiguous_executable',
           'catalog_limited',
         ]),
+        path: z.string().min(1).max(4096).optional(),
+        version: z.string().min(1).max(160).optional(),
         models: z
           .array(
             z.strictObject({

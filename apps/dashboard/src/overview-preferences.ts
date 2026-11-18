@@ -96,3 +96,25 @@ export function useOverviewPreferences() {
   }, []);
   return { ...state, setPreferences };
 }
+
+const periodStorageKey = 'orqst.overview.period.v1';
+type Period = '0' | '6';
+
+export function useOverviewPeriod() {
+  const [period, updatePeriod] = useState<Period>(() => {
+    try {
+      return localStorage.getItem(periodStorageKey) === '6' ? '6' : '0';
+    } catch {
+      return '0';
+    }
+  });
+  function setPeriod(value: Period) {
+    updatePeriod(value);
+    try {
+      localStorage.setItem(periodStorageKey, value);
+    } catch {
+      // The period still applies to this view.
+    }
+  }
+  return { period, setPeriod };
+}

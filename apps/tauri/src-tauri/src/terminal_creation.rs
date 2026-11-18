@@ -369,7 +369,25 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
                     .iter()
                     .all(|id| providers.iter().filter(|p| p["provider"] == *id).count() == 1)
                 && providers.iter().all(|p| {
-                    exact(p, &["provider", "status", "reason", "models"])
+                    p.as_object().is_some_and(|row| {
+                        ["provider", "status", "reason", "models"]
+                            .iter()
+                            .all(|key| row.contains_key(*key))
+                            && row.keys().all(|key| {
+                                matches!(key.as_str(), "provider" | "status" | "reason" | "models" | "path" | "version")
+                            })
+                            && row.get("path").is_none_or(|value| {
+                                value.as_str().is_some_and(|path| {
+                                    std::path::Path::new(path).is_absolute()
+                                        && path.encode_utf16().count() <= 4096
+                                })
+                            })
+                            && row.get("version").is_none_or(|value| {
+                                value.as_str().is_some_and(|version| {
+                                    !version.is_empty() && version.encode_utf16().count() <= 160
+                                })
+                            })
+                    })
                         && matches!(p["status"].as_str(), Some("available" | "unavailable"))
                         && matches!(
                             p["reason"].as_str(),

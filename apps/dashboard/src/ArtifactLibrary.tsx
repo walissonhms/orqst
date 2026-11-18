@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FileText, RefreshCw, Search } from 'lucide-react';
+import { RefreshCw, Search } from 'lucide-react';
 import type {
+  FeatureNativeSnapshot,
   ArtifactExtractionRequest,
   SessionView,
   Snapshot,
   StoredEvent,
 } from '@orqst/protocol';
+import { featureDisplayName } from '@orqst/protocol';
 import { api } from './api';
+import { ArtifactPanel, type ArtifactCloseGuard } from './ArtifactPanel';
+import type { RefObject } from 'react';
+import './spec-screens.css';
 import { artifactLibraryLimits, artifactSelection, parseArtifactPage } from './artifact-library';
 
 interface Reading {
@@ -30,74 +35,104 @@ const emptyReading: Reading = {
 
 export function ArtifactLibrary({
   snapshot,
+  scope,
   workspaceId,
   online,
+  selection,
+  closeGuard,
   onOpen,
+  onClose,
 }: {
-  snapshot: Snapshot;
+  snapshot?: Snapshot;
+  scope?: FeatureNativeSnapshot;
   workspaceId: string;
   online: boolean;
+  selection?: ArtifactExtractionRequest;
+  closeGuard: RefObject<ArtifactCloseGuard | null>;
   onOpen: (selection: ArtifactExtractionRequest) => void;
+  onClose: () => void;
 }) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [sessionId, setSessionId] = useState('');
-  const sessions = snapshot.sessions.filter(
-    (session) => !workspaceId || session.workspaceId === workspaceId,
-  );
-  const selectedId = sessions.some((session) => session.id === sessionId) ? sessionId : '';
+  const [featureId, setFeatureId] = useState('');
+  const sessions =
+    snapshot?.sessions.filter((session) => !workspaceId || session.workspaceId === workspaceId) ??
+    [];
+  // Retained Codex artifacts currently carry workspace/session identity only.
+  const features = scope?.features.filter((feature) => feature.status !== 'archived') ?? [];
+  const selectedFeature = features.find((feature) => feature.featureId === featureId);
   return (
-    <section className="artifact-library" aria-labelledby="artifact-library-heading">
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">
-            <FileText size={12} />
-            {t('readOnly')}
-          </span>
-          <h1 id="artifact-library-heading">{t('artifactLibrary.title')}</h1>
-          <p>{t('artifactLibrary.description')}</p>
-        </div>
+    <section className="spec-screen" aria-labelledby="artifact-library-heading">
+      <div className="spec-head">
+        <h1 id="artifact-library-heading">{t('screens.artifacts.title')}</h1>
       </div>
-      <p className="fine-print">{t('artifactLibrary.scope')}</p>
-      <div className="artifact-library-filters">
-        <label className="search-box">
-          <Search size={16} aria-hidden="true" />
-          <input
-            type="search"
-            aria-label={t('artifactLibrary.search')}
-            placeholder={t('artifactLibrary.search')}
-            maxLength={200}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
-        <label>
-          {t('artifactLibrary.session')}
-          <select
-            aria-label={t('artifactLibrary.session')}
-            value={selectedId}
-            onChange={(event) => setSessionId(event.target.value)}
-          >
-            <option value="">{t('artifactLibrary.allSessions')}</option>
-            {sessions
-              .filter((session) => session.id.length <= 200)
-              .map((session) => (
-                <option key={session.id} value={session.id}>
-                  {session.agentName} · {session.id}
+      <div className="spec-artifact-layout">
+        <section
+          className="spec-panel spec-artifact-list"
+          aria-label={t('screens.artifacts.title')}
+        >
+          <div className="spec-actions">
+            <label className="spec-search">
+              <Search size={13} aria-hidden="true" />
+              <input
+                type="search"
+                aria-label={t('screens.artifacts.search')}
+                placeholder={t('screens.artifacts.search')}
+                maxLength={200}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </label>
+            <select
+              aria-label={t('screens.feature')}
+              value={selectedFeature?.featureId ?? ''}
+              onChange={(event) => {
+                const next = event.target.value;
+                const apply = () => {
+                  onClose();
+                  setFeatureId(next);
+                };
+                if (closeGuard.current) closeGuard.current(apply);
+                else apply();
+              }}
+            >
+              <option value="">{t('screens.allFeatures')}</option>
+              {features.map((feature) => (
+                <option value={feature.featureId} key={feature.featureId}>
+                  {featureDisplayName(feature, t('features.defaultName'))}
                 </option>
               ))}
-          </select>
-        </label>
+            </select>
+          </div>
+          {selectedFeature ? (
+            <p>{t('screens.artifacts.noAttribution')}</p>
+          ) : snapshot ? (
+            <ArtifactSources
+              snapshot={snapshot}
+              sessions={sessions}
+              query={query}
+              online={online}
+              selection={selection}
+              onOpen={onOpen}
+            />
+          ) : (
+            <p>—</p>
+          )}
+        </section>
+        <section className="spec-panel spec-artifact-preview" aria-label={t('artifacts.preview')}>
+          {selection && !selectedFeature ? (
+            <ArtifactPanel
+              key={selection.eventId}
+              request={selection}
+              closeGuard={closeGuard}
+              onClose={onClose}
+              library
+            />
+          ) : (
+            <p>{t('screens.artifacts.choose')}</p>
+          )}
+        </section>
       </div>
-      <ArtifactSources
-        key={selectedId}
-        snapshot={snapshot}
-        sessions={sessions}
-        sessionId={selectedId}
-        query={query}
-        online={online}
-        onOpen={onOpen}
-      />
     </section>
   );
 }
@@ -105,16 +140,16 @@ export function ArtifactLibrary({
 function ArtifactSources({
   snapshot,
   sessions,
-  sessionId,
   query,
   online,
+  selection,
   onOpen,
 }: {
   snapshot: Snapshot;
   sessions: SessionView[];
-  sessionId: string;
   query: string;
   online: boolean;
+  selection?: ArtifactExtractionRequest;
   onOpen: (selection: ArtifactExtractionRequest) => void;
 }) {
   const { t, i18n } = useTranslation();
@@ -122,56 +157,52 @@ function ArtifactSources({
   const [revision, setRevision] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
   const refreshButton = useRef<HTMLButtonElement>(null);
-  const load = useCallback(
-    async (before: number, reset: boolean, scanned = 0, sourceCount = 0) => {
-      activeRequest.current?.abort();
-      const controller = new AbortController();
-      activeRequest.current = controller;
-      setReading((current) => ({
-        ...(reset ? emptyReading : current),
-        pending: true,
-        failed: false,
-      }));
-      try {
-        const params = new URLSearchParams({
-          before: String(before),
-          limit: String(artifactLibraryLimits.page),
-        });
-        if (sessionId) params.set('sessionId', sessionId);
-        const data = await api<unknown>(`/api/events?${params}`, { signal: controller.signal });
-        const events = parseArtifactPage(data, before, sessionId);
-        const cursor = data && typeof data === 'object' ? Reflect.get(data, 'cursor') : undefined;
-        if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('Invalid event cursor');
-        if (controller.signal.aborted) return;
-        const candidates = events.filter((event) => artifactSelection(event));
-        setReading((current) => {
-          const sources = [...(reset ? [] : current.sources), ...candidates]
-            .sort((a, b) => b.sequence - a.sequence)
-            .slice(0, artifactLibraryLimits.sources);
-          return {
-            sources,
-            scanned: scanned + events.length,
-            before: events[0]?.sequence ?? before,
-            cursor: reset ? (cursor as number) : current.cursor,
-            hasOlder: events.length === artifactLibraryLimits.page,
-            pending: false,
-            failed: false,
-          };
-        });
-        if (
-          !reset &&
-          (events.length < artifactLibraryLimits.page ||
-            scanned + events.length >= artifactLibraryLimits.observations ||
-            sourceCount + candidates.length >= artifactLibraryLimits.sources)
-        )
-          requestAnimationFrame(() => refreshButton.current?.focus());
-      } catch {
-        if (!controller.signal.aborted)
-          setReading((current) => ({ ...current, pending: false, failed: true }));
-      }
-    },
-    [sessionId],
-  );
+  const load = useCallback(async (before: number, reset: boolean, scanned = 0, sourceCount = 0) => {
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    setReading((current) => ({
+      ...(reset ? emptyReading : current),
+      pending: true,
+      failed: false,
+    }));
+    try {
+      const params = new URLSearchParams({
+        before: String(before),
+        limit: String(artifactLibraryLimits.page),
+      });
+      const data = await api<unknown>(`/api/events?${params}`, { signal: controller.signal });
+      const events = parseArtifactPage(data, before, '');
+      const cursor = data && typeof data === 'object' ? Reflect.get(data, 'cursor') : undefined;
+      if (!Number.isSafeInteger(cursor) || cursor < 0) throw new Error('Invalid event cursor');
+      if (controller.signal.aborted) return;
+      const candidates = events.filter((event) => artifactSelection(event));
+      setReading((current) => {
+        const sources = [...(reset ? [] : current.sources), ...candidates]
+          .sort((a, b) => b.sequence - a.sequence)
+          .slice(0, artifactLibraryLimits.sources);
+        return {
+          sources,
+          scanned: scanned + events.length,
+          before: events[0]?.sequence ?? before,
+          cursor: reset ? (cursor as number) : current.cursor,
+          hasOlder: events.length === artifactLibraryLimits.page,
+          pending: false,
+          failed: false,
+        };
+      });
+      if (
+        !reset &&
+        (events.length < artifactLibraryLimits.page ||
+          scanned + events.length >= artifactLibraryLimits.observations ||
+          sourceCount + candidates.length >= artifactLibraryLimits.sources)
+      )
+        requestAnimationFrame(() => refreshButton.current?.focus());
+    } catch {
+      if (!controller.signal.aborted)
+        setReading((current) => ({ ...current, pending: false, failed: true }));
+    }
+  }, []);
   useEffect(() => {
     if (online) void load(Number.MAX_SAFE_INTEGER, true);
     return () => activeRequest.current?.abort();
@@ -195,14 +226,16 @@ function ArtifactSources({
     .sort((a, b) => b.event.sequence - a.event.sequence);
   return (
     <>
-      <div className="artifact-library-summary">
-        <p role="status" aria-live="polite">
-          {t('artifactLibrary.coverage', {
+      <div className="spec-row-heading">
+        <span
+          title={t('artifactLibrary.coverage', {
             count: rows.length,
             sources: reading.sources.length,
             scanned: reading.scanned,
           })}
-        </p>
+        >
+          {t('screens.artifacts.count', { count: rows.length })}
+        </span>
         <button
           ref={refreshButton}
           className="button"
@@ -213,70 +246,51 @@ function ArtifactSources({
           {t('artifactLibrary.refresh')}
         </button>
       </div>
-      {!online && (
-        <p className="notice" role="status">
-          {t('artifactLibrary.offline')}
-        </p>
-      )}
+      {!online && <p role="status">{t('screens.offline')}</p>}
       {online && reading.cursor !== undefined && snapshot.cursor > reading.cursor && (
         <p className="notice" role="status">
-          {t('artifactLibrary.newer')}
+          {t('screens.artifacts.newer')}
         </p>
       )}
       {reading.failed && (
         <p className="notice" role="alert">
-          {t('artifactLibrary.failed')}
+          {t('screens.artifacts.loadFailed')}
         </p>
       )}
       {reading.pending && online && <p role="status">{t('artifactLibrary.loading')}</p>}
       {!reading.pending && !reading.failed && !rows.length && (
         <p className="empty-copy">{t('artifactLibrary.empty')}</p>
       )}
-      <div className="artifact-source-list">
+      <ul className="spec-artifact-items">
         {rows.map(({ event, session, workspace }) => (
-          <article className="panel artifact-source-card" key={event.id}>
-            <div className="panel-heading">
-              <h2>{session.agentName}</h2>
-              <time dateTime={event.timestamp}>
-                {new Intl.DateTimeFormat(i18n.resolvedLanguage ?? 'en-US', {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                }).format(new Date(event.timestamp))}
-              </time>
-            </div>
-            <p className="fine-print">
-              {workspace?.name ?? session.workspaceId} · {event.adapter} · <code>{session.id}</code>
-            </p>
-            <pre className="reading-content artifact-source-excerpt">
-              {event.payload.text?.slice(0, 300)}
-            </pre>
-            <details className="source-detail">
-              <summary>{t('source')}</summary>
-              <code>
-                {event.source.file}:{event.source.line} · {event.source.recordType}
-                <br />
-                {event.source.hash}
-              </code>
-            </details>
+          <li key={event.id}>
             <button
-              className="button"
+              type="button"
+              className="spec-artifact-item"
+              aria-pressed={selection?.eventId === event.id}
               disabled={!online || reading.failed}
               onClick={() => {
-                const selection = artifactSelection(event);
-                if (selection) onOpen(selection);
+                const request = artifactSelection(event);
+                if (request) onOpen(request);
               }}
             >
-              {t('artifactLibrary.open')}
+              <strong>{event.payload.text?.trim().split('\n', 1)[0]?.slice(0, 100)}</strong>
+              <span>
+                {workspace?.name ?? session.agentName} ·{' '}
+                <time dateTime={event.timestamp}>
+                  {new Intl.DateTimeFormat(i18n.resolvedLanguage, {
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }).format(new Date(event.timestamp))}
+                </time>
+              </span>
             </button>
-          </article>
+          </li>
         ))}
-      </div>
+      </ul>
       {capped && (
-        <p className="notice" role="status">
-          {t('artifactLibrary.limit', {
-            observations: artifactLibraryLimits.observations,
-            sources: artifactLibraryLimits.sources,
-          })}
+        <p title={t('artifactLibrary.limit', artifactLibraryLimits)}>
+          {t('screens.artifacts.limited')}
         </p>
       )}
       <button
@@ -286,7 +300,6 @@ function ArtifactSources({
       >
         {t('artifactLibrary.older')}
       </button>
-      {!reading.hasOlder && <p className="fine-print">{t('artifactLibrary.end')}</p>}
     </>
   );
 }
