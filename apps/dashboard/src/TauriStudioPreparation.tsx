@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { CliReviewStatus } from './CliReviewStatus.js';
 import { FolderOpen, Terminal } from 'lucide-react';
 import type {
   TauriStudio,
@@ -241,7 +242,25 @@ export function TauriStudioPreparation({
           </select>
         </label>
       </div>
-      {chosen && chosen.reason !== 'ready' && (
+      {chosen && (
+        <CliReviewStatus
+          entry={chosen}
+          busy={disabled || !scopeMatches}
+          onReview={(entry) => {
+            if (!entry.reviewId || !catalog || catalogGeneration === undefined) return;
+            void request({
+              action: 'review-cli',
+              workspaceId,
+              featureId,
+              catalogId: catalog.catalogId,
+              generation: catalogGeneration,
+              provider: entry.provider,
+              reviewId: entry.reviewId,
+            }).then(refresh);
+          }}
+        />
+      )}
+      {chosen && chosen.reason !== 'ready' && !chosen.reviewId && (
         <p className="studio-next" role="status">
           {t(`studio.tauri.catalog_${terminalCatalogReason(chosen)}`)}
         </p>

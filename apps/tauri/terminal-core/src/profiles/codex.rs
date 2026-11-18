@@ -1,5 +1,6 @@
 //! Port of the profile/environment parts of `codex-profile.ts`. The filesystem checks live in
 //! [`super::fsx`].
+use super::cli_review::accepted_review;
 use super::config::{parse_codex_config, CodexConfig, McpLaunch};
 use super::fsx::{
     lstat, terminal_directory, terminal_executable_sha256, terminal_file, DEFAULT_FILE_BUDGET,
@@ -87,6 +88,7 @@ pub fn validate_managed_codex_config(
     }
     if config.interactive.as_ref().is_some_and(|i| i.mcp)
         && !codex_mcp_version(&config.executable_version)
+        && !accepted_review("codex", &config.executable, &config.executable_version, config.preparation.as_ref())
     {
         return Err(ProfileError::refused(
             "No reviewed interactive MCP configuration for this Codex version",
@@ -128,7 +130,8 @@ pub fn validate_managed_codex_config(
 
 /// `mcp_servers.<name>={...}` inline table (`codexMcpArguments`).
 fn codex_mcp_arguments(config: &CodexConfig, mcp: &McpLaunch) -> Result<Vec<String>> {
-    if !codex_mcp_version(&config.executable_version) {
+    if !codex_mcp_version(&config.executable_version)
+        && !accepted_review("codex", &config.executable, &config.executable_version, config.preparation.as_ref()) {
         return Err(ProfileError::refused("Unreviewed Codex MCP version"));
     }
     if terminal_digest(terminal_file(

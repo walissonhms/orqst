@@ -1,4 +1,4 @@
-// Passive local candidates only. Nothing here invokes a runtime, CLI, shell or provider.
+// Discovery inspects local evidence. Only the native acceptance path can probe a CLI version.
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -17,6 +17,20 @@ import {
   reviewedAntigravityBinary,
   reviewedClaudeTuiBinary,
 } from '../../../packages/core/src/terminal/interactive-profile.js';
+import {
+  cliPublisherIdentities,
+  cliUpdatePathSource,
+  hasCliExecutableReview,
+  inspectCliSignature,
+  isAutomaticCliReview,
+  publishCliExecutableReview,
+  readCliExecutableReview,
+  reviewedVersionInstallRoot,
+  signatureContinuity,
+  type CliExecutableReview,
+  type CliVersionDirectoryUpdate,
+} from '../../../packages/core/src/terminal/cli-executable-review.js';
+import { probeCliVersion } from '../../../packages/core/src/terminal/cli-version-probe.js';
 import { reviewedDesktopCodexBinaries } from './terminal-creation.js';
 
 function inspectDiscovery(
@@ -85,25 +99,6 @@ export function inspectTerminalExecutables(
   return inspectReviewedExecutables(provider, searchPath, home, reviewedPins(provider));
 }
 
-export function inspectCatalogExecutables(
-  providers: readonly LocalCliProvider[],
-  searchPath: string,
-  home: string,
-) {
-  try {
-    return discoverLocalClis(searchPath, home, [], [...new Set(providers)]).map((entry) => ({
-      provider: entry.provider,
-      ...inspectDiscovery(entry, reviewedPins(entry.provider), cachedTerminalExecutableSha256),
-    }));
-  } catch {
-    return [...new Set(providers)].map((provider) => ({
-      provider,
-      executables: [],
-      refusal: 'executable_inspection_failed' as const,
-    }));
-  }
-}
-
 export function discoverTerminalExecutable(
   provider: LocalCliProvider,
   searchPath: string,
@@ -142,4 +137,173 @@ export function discoverTerminalNode(searchPath: string, home: string): string[]
     }
   }
   return [...candidates];
+}
+
+export interface TerminalCliCandidate {
+  provider: LocalCliProvider;
+  path: string;
+  sha256: string;
+  launcher?: string;
+  decision: 'exact' | 'automatic' | 'review';
+  version?: string;
+  previous?: CliExecutableReview;
+  baseline?: CliExecutableReview;
+  automaticSource?: ReturnType<typeof signatureContinuity>;
+}
+
+function reviewedBaseline(provider: LocalCliProvider, candidate: { path: string }) {
+  // The legacy agy audit links the exact path, pin and Google identifier. It
+  // did not capture a ticket verdict, so this migration requires notarization.
+  if (provider === 'antigravity' && candidate.path === '/Users/walissonhmsouza/.local/bin/agy')
+    return {
+      ...reviewedAntigravityBinary,
+      path: candidate.path,
+      source: 'packaged_pin',
+      signature: { ...cliPublisherIdentities.antigravity, notarized: true },
+    } satisfies CliExecutableReview;
+}
+
+export function inspectCliCandidate(
+  provider: LocalCliProvider,
+  path: string,
+  preferences: string,
+  launcher?: string,
+): TerminalCliCandidate {
+  const sha256 = cachedTerminalExecutableSha256(path);
+  const candidate = { provider, path, sha256, launcher };
+  const previous = readCliExecutableReview(preferences, provider);
+  const baseline = previous ?? reviewedBaseline(provider, candidate);
+  const pin = reviewedPins(provider).find((pin) => pin.sha256 === sha256);
+  if (previous?.path === path && previous.sha256 === sha256) {
+    if (
+      !isAutomaticCliReview(previous.source) ||
+      ((previous.source !== 'signature_continuity_version_dir' || launcher === previous.launcher) &&
+        hasCliExecutableReview(provider, {
+          executable: candidate,
+          executableVersion: previous.version,
+          preparation: { preferencesDirectory: preferences },
+        }))
+    )
+      return { ...candidate, decision: 'exact', version: previous.version, previous };
+  } else if (!previous && pin) {
+    return { ...candidate, decision: 'exact', version: pin.version };
+  }
+  if (baseline?.signature && cliUpdatePathSource(baseline, candidate)) {
+    const automaticSource = signatureContinuity(
+      baseline,
+      candidate,
+      inspectCliSignature(provider, candidate, baseline.signature.notarized),
+    );
+    if (automaticSource)
+      return {
+        ...candidate,
+        decision: 'automatic',
+        automaticSource,
+        version: pin?.version,
+        previous,
+        baseline,
+      };
+  }
+  return { ...candidate, decision: 'review', previous };
+}
+
+export async function acceptCliCandidate(
+  candidate: TerminalCliCandidate,
+  preferences: string,
+  current: () => boolean,
+  check: (update?: CliVersionDirectoryUpdate) => Promise<boolean>,
+): Promise<CliExecutableReview | undefined> {
+  const { provider, path, sha256, launcher, previous, baseline, decision, automaticSource } =
+    candidate;
+  if (
+    !current() ||
+    JSON.stringify(inspectCliCandidate(provider, path, preferences, launcher)) !==
+      JSON.stringify(candidate)
+  )
+    throw new Error('CLI selection changed');
+  if (decision === 'exact' && previous) return previous;
+  const signature = inspectCliSignature(provider, candidate, true);
+  if (
+    decision === 'automatic' &&
+    (!baseline ||
+      !automaticSource ||
+      signatureContinuity(baseline, candidate, signature) !== automaticSource)
+  )
+    throw new Error('CLI publisher continuity changed');
+  const versionDirectoryUpdate =
+    automaticSource === 'signature_continuity_version_dir' && launcher
+      ? { provider, candidate: { path, sha256, launcher } }
+      : undefined;
+  const checkCurrent = () => check(versionDirectoryUpdate);
+  // An exact packaged pin seeds the baseline only when the actual binary is signed.
+  if (decision === 'exact' && !signature) return;
+  const version =
+    candidate.version ?? (await probeCliVersion(provider, path, sha256, current, checkCurrent));
+  if (
+    !(await checkCurrent()) ||
+    !current() ||
+    JSON.stringify(inspectCliCandidate(provider, path, preferences, launcher)) !==
+      JSON.stringify(candidate)
+  )
+    throw new Error('CLI selection changed during review');
+  const installRoot = automaticSource
+    ? baseline?.installRoot
+    : signature && launcher
+      ? reviewedVersionInstallRoot(path, launcher, version)
+      : undefined;
+  const accepted: CliExecutableReview = {
+    path,
+    sha256,
+    version,
+    // An exact review can allow this digest without lowering a previous notarization floor.
+    signature: previous?.signature?.notarized && !signature?.notarized ? undefined : signature,
+    source: automaticSource ?? (decision === 'review' ? 'native_review' : 'packaged_pin'),
+    ...(installRoot && launcher ? { installRoot, launcher } : {}),
+    ...(versionDirectoryUpdate && baseline ? { previousPath: baseline.path } : {}),
+    ...(baseline ? { previousSha256: baseline.sha256 } : {}),
+  };
+  publishCliExecutableReview(preferences, provider, previous, accepted);
+  return accepted;
+}
+
+export function inspectCatalogExecutables(
+  providers: readonly LocalCliProvider[],
+  searchPath: string,
+  home: string,
+  preferences: string,
+) {
+  return discoverLocalClis(searchPath, home, [], [...new Set(providers)]).map((entry) => {
+    const choices: TerminalCliCandidate[] = [];
+    let failed = entry.lookup === 'incomplete';
+    for (const { canonical, launcher } of entry.candidates) {
+      try {
+        choices.push(inspectCliCandidate(entry.provider, canonical, preferences, launcher));
+      } catch {
+        failed = true;
+      }
+    }
+    const available = choices.filter((candidate) => candidate.decision !== 'review');
+    const reviewed =
+      entry.provider === 'opencode' || entry.provider === 'antigravity'
+        ? available.slice(0, 1)
+        : available;
+    const candidate =
+      reviewed.length === 1
+        ? reviewed[0]
+        : !reviewed.length && choices.length === 1
+          ? choices[0]
+          : undefined;
+    return {
+      provider: entry.provider,
+      executables: reviewed.map(({ path }) => path),
+      candidate,
+      refusal: failed
+        ? ('executable_inspection_failed' as const)
+        : choices.length > 1
+          ? ('ambiguous_executable' as const)
+          : choices.length
+            ? ('executable_unreviewed' as const)
+            : ('executable_not_found' as const),
+    };
+  });
 }

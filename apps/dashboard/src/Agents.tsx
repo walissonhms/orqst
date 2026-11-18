@@ -1,3 +1,5 @@
+import { CliReviewStatus, reviewTerminalCli } from './CliReviewStatus';
+import { loadTerminalCatalog } from './terminal-catalog-cache';
 import { RouteHeaderActions } from './AppShell';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +17,6 @@ export interface CatalogScope {
   workspaceId: string;
   featureId: string | null;
 }
-const catalogCache = new Map<string, TerminalPreparationCatalog>();
 
 function useCatalog(scope?: CatalogScope) {
   const native =
@@ -24,25 +25,28 @@ function useCatalog(scope?: CatalogScope) {
   const featureId = scope?.featureId;
   const key = JSON.stringify([workspaceId, featureId]);
   const [revision, setRevision] = useState(0);
-  const [status, setStatus] = useState<{ key: string; revision: number; failed: boolean }>();
+  const [status, setStatus] = useState<{
+    key: string;
+    revision: number;
+    catalog?: TerminalPreparationCatalog;
+    generation?: number;
+  }>();
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const available = !!native && !!workspaceId && featureId !== undefined;
   useEffect(() => {
     if (!native || !workspaceId || featureId === undefined) return;
     let active = true;
-    void native
-      .request({ action: 'catalog', workspaceId, featureId })
+    void loadTerminalCatalog(native, { workspaceId, featureId }, revision > 0)
       .then((reply) => {
         if (!active) return;
         if (reply.status !== 'catalog') throw new Error('Catalog unavailable');
         const catalog = terminalPreparationCatalogSchema.parse(reply.catalog);
         if (catalog.workspaceId !== workspaceId || catalog.featureId !== featureId)
           throw new Error('Catalog scope mismatch');
-        catalogCache.set(key, catalog);
-        setStatus({ key, revision, failed: false });
+        setStatus({ key, revision, catalog, generation: reply.snapshot?.generation });
       })
       .catch(() => {
-        if (active) setStatus({ key, revision, failed: true });
+        if (active) setStatus({ key, revision });
       });
     return () => {
       active = false;
@@ -50,9 +54,11 @@ function useCatalog(scope?: CatalogScope) {
   }, [native, workspaceId, featureId, key, revision]);
   const current = status?.key === key && status.revision === revision ? status : undefined;
   return {
-    catalog: available && !current?.failed ? catalogCache.get(key) : undefined,
+    catalog: available ? current?.catalog : undefined,
+    native,
+    generation: current?.generation,
     pending: available && !current,
-    failed: current?.failed,
+    failed: !!current && !current.catalog,
     available,
     refresh,
   };
@@ -60,7 +66,18 @@ function useCatalog(scope?: CatalogScope) {
 
 export function Agents({ scope, compact = false }: { scope?: CatalogScope; compact?: boolean }) {
   const { t } = useTranslation();
-  const { catalog, pending, failed, available, refresh } = useCatalog(scope);
+  const { catalog, native, generation, pending, failed, available, refresh } = useCatalog(scope);
+  const [reviewing, setReviewing] = useState(false);
+  async function review(entry: TerminalPreparationCatalog['providers'][number]) {
+    if (!catalog || !native || generation === undefined || reviewing) return;
+    setReviewing(true);
+    try {
+      await reviewTerminalCli(native, catalog, generation, entry);
+    } finally {
+      setReviewing(false);
+      refresh();
+    }
+  }
   const rows = providers.map((provider) => ({
     provider,
     entry: catalog?.providers.find((candidate) => candidate.provider === provider),
@@ -79,7 +96,7 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
             className="button"
             type="button"
             onClick={refresh}
-            disabled={!available || pending}
+            disabled={!available || pending || reviewing}
           >
             <RefreshCw size={13} />
             {t('analytics.refresh')}
@@ -124,6 +141,13 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
                     title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}
                   >
                     {status(entry)}
+                    {entry && (
+                      <CliReviewStatus
+                        entry={entry}
+                        busy={reviewing || pending || generation === undefined}
+                        onReview={(entry) => void review(entry).catch(() => undefined)}
+                      />
+                    )}
                   </td>
                 ))}
               </tr>

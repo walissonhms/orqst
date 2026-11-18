@@ -1,3 +1,4 @@
+import { hasCliExecutableReview } from './cli-executable-review.js';
 import {
   terminalModelSelectionSchema,
   terminalModelArguments,
@@ -275,7 +276,11 @@ export function validateManagedCodexConfig(
   assertSeparateTerminalState(config.project, config.state);
   if (config.interactive && !config.authentication)
     throw new Error('Interactive native reuse requires existing authentication');
-  if (config.interactive?.mcp && !supportsCodexMcpVersion(config.executableVersion))
+  if (
+    config.interactive?.mcp &&
+    !supportsCodexMcpVersion(config.executableVersion) &&
+    !hasCliExecutableReview('codex', config)
+  )
     throw new Error('No reviewed interactive MCP configuration for this Codex version');
   if (config.authentication) {
     terminalDirectory(config.authentication.home);
@@ -372,7 +377,10 @@ export function managedCodexProfiles(
 /** Version-scoped inline table; never writes or replaces the user's native MCP configuration. */
 function codexMcpArguments(config: ManagedCodexConfig, raw: TerminalMcpLaunch): string[] {
   const mcp = terminalMcpLaunchSchema.parse(raw);
-  if (!supportsCodexMcpVersion(config.executableVersion))
+  if (
+    !supportsCodexMcpVersion(config.executableVersion) &&
+    !hasCliExecutableReview('codex', config)
+  )
     throw new Error('Unreviewed Codex MCP version');
   if (terminalDigest(terminalFile(mcp.relay.path, false, 16 * 1024 * 1024)) !== mcp.relay.sha256)
     throw new Error('MCP relay changed');

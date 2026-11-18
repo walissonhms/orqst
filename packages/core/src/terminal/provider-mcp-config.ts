@@ -56,19 +56,21 @@ const commonBlockers = [
 function assertReviewed(
   provider: keyof typeof reviewedProviderMcpBinaries,
   input: z.infer<typeof inputSchema>,
+  reviewedUpdate = false,
 ) {
   const reviewed = reviewedProviderMcpBinaries[provider];
   const exact =
     provider === 'claude'
       ? !!reviewedClaudeMcpBinary(input.executableVersion, input.executableSha256)
       : input.executableVersion === reviewed.version && input.executableSha256 === reviewed.sha256;
-  if (!exact) throw new Error('No reviewed MCP configuration for this exact provider binary');
+  if (!exact && !reviewedUpdate)
+    throw new Error('No reviewed MCP configuration for this exact provider binary');
 }
 
 /** Offline argv candidate only; HOME/CLAUDE_CONFIG_DIR and native Keychain identity stay untouched. */
-export function claudeInteractiveMcpConfiguration(raw: unknown) {
+export function claudeInteractiveMcpConfiguration(raw: unknown, reviewedUpdate = false) {
   const input = claudeInputSchema.parse(raw);
-  assertReviewed('claude', input);
+  assertReviewed('claude', input, reviewedUpdate);
   const { mcp } = input;
   return {
     provider: 'claude' as const,
@@ -106,9 +108,9 @@ export function claudeInteractiveMcpConfiguration(raw: unknown) {
 }
 
 /** Offline inline-config candidate only; no invented --mcp-config/--config CLI flags. */
-export function opencodeInteractiveMcpConfiguration(raw: unknown) {
+export function opencodeInteractiveMcpConfiguration(raw: unknown, reviewedUpdate = false) {
   const input = inputSchema.parse(raw);
-  assertReviewed('opencode', input);
+  assertReviewed('opencode', input, reviewedUpdate);
   const { mcp } = input;
   return {
     provider: 'opencode' as const,

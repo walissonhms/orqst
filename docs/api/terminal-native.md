@@ -1,5 +1,17 @@
 # Native terminal client boundary
 
+## Studio CLI review and update notice
+
+The scoped Studio catalog can include an opaque `reviewId` for a sole
+unreviewed executable or a bounded `verifiedUpdate` version for a verified
+replacement. `review-cli` accepts only the catalog ID, review ID, provider,
+workspace, Feature and native generation. It invokes the focused native
+review, which discloses the exact executable path and hash. A successful
+batch can carry `verifiedUpdate` on its accepted item. The reason
+`cli_review_required` is a pre-enrollment refusal and permits a fresh picker
+review. No receipt, launcher path or signature is accepted from the renderer.
+See the [security review](../development/cli-signed-updates.md#security-review).
+
 ## Studio output continuation — 2026-11-18
 
 After a policy-reviewed Open launches an owned attempt, the existing native

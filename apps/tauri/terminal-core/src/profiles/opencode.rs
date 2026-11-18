@@ -1,13 +1,14 @@
 //! Port of `opencode-profile.ts` and `opencode-launch-plan.ts`. Never opens the native
 //! provider database or credential files.
 use super::claude::relay_unchanged;
+use super::cli_review::accepted_review;
 use super::codex::assert_separate_terminal_state;
 use super::config::{McpLaunch, NativeIdentity, OpenCodeConfig};
 use super::fsx::{terminal_directory, terminal_executable_sha256};
 use super::interactive::{BuiltProfile, PreparationValidator};
 use super::js::{self, Js};
 use super::local_cli_path::{terminal_tool_path, LEGACY_TERMINAL_PATH};
-use super::mcp::{opencode_interactive_mcp_configuration, McpReviewInput, REVIEWED_OPENCODE};
+use super::mcp::{reviewed_opencode_mcp_configuration, McpReviewInput, REVIEWED_OPENCODE};
 use super::model::open_code_model_configuration;
 use super::nodepath::{contains, dirname, join2, relative};
 use super::validate::slash_path;
@@ -29,22 +30,29 @@ pub struct OpenCodeLaunchInput<'a> {
 pub fn opencode_interactive_launch_plan(
     input: &OpenCodeLaunchInput,
 ) -> Result<(Js, Vec<(String, String)>)> {
+    interactive_launch_plan(input, false)
+}
+
+fn interactive_launch_plan(
+    input: &OpenCodeLaunchInput,
+    reviewed: bool,
+) -> Result<(Js, Vec<(String, String)>)> {
     slash_path(&Js::str(input.executable), "executable")?;
-    if input.executable_version != REVIEWED_OPENCODE.version {
+    if !reviewed && input.executable_version != REVIEWED_OPENCODE.version {
         return Err(ProfileError::schema("executableVersion"));
     }
-    if input.executable_sha256 != REVIEWED_OPENCODE.sha256 {
+    if !reviewed && input.executable_sha256 != REVIEWED_OPENCODE.sha256 {
         return Err(ProfileError::schema("executableSha256"));
     }
     slash_path(&Js::str(input.project), "project")?;
     slash_path(&Js::str(input.node_path), "nodePath")?;
     let mcp = match input.mcp {
-        Some(mcp) => Some(opencode_interactive_mcp_configuration(&McpReviewInput {
+        Some(mcp) => Some(reviewed_opencode_mcp_configuration(&McpReviewInput {
             executable_version: input.executable_version,
             executable_sha256: input.executable_sha256,
             node_path: input.node_path,
             mcp,
-        })?),
+        }, reviewed)?),
         None => None,
     };
     let mut environment: Vec<(String, String)> = input.native_identity.0.clone();
@@ -141,6 +149,11 @@ pub fn validate_open_code_selection(
 ) -> Result<()> {
     open_code_model_configuration(config.model.as_ref())?;
     prep.validate(config.preparation.as_ref(), &config.project)?;
+    if (config.executable_version != REVIEWED_OPENCODE.version || config.executable.sha256 != REVIEWED_OPENCODE.sha256)
+        && !accepted_review("opencode", &config.executable, &config.executable_version, config.preparation.as_ref())
+    {
+        return Err(ProfileError::refused("No reviewed opencode executable"));
+    }
     terminal_tool_path(config.tool_path.as_deref())?;
     let opted = &config.interactive;
     if opted.native_startup_authorized != opted.native_database_migrations_acknowledged
@@ -239,7 +252,7 @@ pub fn open_code_terminal_environment(
     mcp: Option<&McpLaunch>,
 ) -> Result<Vec<(String, String)>> {
     let model = open_code_model_configuration(config.model.as_ref())?;
-    let (_, mut environment) = opencode_interactive_launch_plan(&launch_input(config, mcp))?;
+    let (_, mut environment) = interactive_launch_plan(&launch_input(config, mcp), accepted_review("opencode", &config.executable, &config.executable_version, config.preparation.as_ref()))?;
     set(
         &mut environment,
         "PATH",

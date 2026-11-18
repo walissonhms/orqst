@@ -1661,6 +1661,20 @@ export function FeatureStudio({
           onClose={() => setStructuredFeature(undefined)}
         />
       )}
+      {[
+        ...new Map(
+          openingTerminals
+            .filter((entry) => entry.verifiedUpdate)
+            .map((entry) => [entry.provider, entry.verifiedUpdate]),
+        ).entries(),
+      ].map(([provider, version]) => (
+        <p className="feature-feedback fine-print" role="status" key={provider}>
+          {t('studio.cliReview.verified', {
+            name: t(`terminalStudio.providers.${provider}`),
+            version,
+          })}
+        </p>
+      ))}
       <div
         className="feature-studio"
         ref={studioRef}
@@ -1700,6 +1714,9 @@ export function FeatureStudio({
             if (nativeWorkspace) return <div className="ts-hole" aria-hidden="true" />;
             if (
               paneEvidence.get(terminal.id)?.process === 'live' ||
+              evidence?.entries.some(
+                ({ terminalId, state }) => terminalId === terminal.id && state === 'running',
+              ) ||
               terminal.cardState === 'starting' ||
               terminal.cardState === 'disconnected'
             )

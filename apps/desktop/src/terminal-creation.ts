@@ -1,3 +1,7 @@
+import {
+  hasCliExecutableReview,
+  readCliExecutableReview,
+} from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { terminalSlotLimit } from '@orqst/protocol';
 // Native provisioning only. No process, credential or captured session reads.
 import {
@@ -168,16 +172,27 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       ...(input.preparation ? { preparation: input.preparation } : {}),
       state: join(root, slot),
     };
+    const receipt =
+      input.preparation &&
+      readCliExecutableReview(input.preparation.preferencesDirectory, provider);
+    const reviewedUpdate =
+      receipt &&
+      hasCliExecutableReview(provider, {
+        ...common,
+        executableVersion: receipt.version,
+      })
+        ? receipt.version
+        : undefined;
     if (provider === 'codex') {
       const pin = reviewedDesktopCodexBinaries.find(({ sha256 }) => sha256 === executable.sha256);
-      if (!pin) throw new Error('No reviewed Codex binary');
+      if (!pin && !reviewedUpdate) throw new Error('No reviewed Codex binary');
       const codexHome = input.environment.CODEX_HOME ?? join(input.home, '.codex');
       directories.add(codexHome);
       nativeRoots.push(codexHome);
       return managedCodexConfigSchema.parse({
         ...common,
         version: 1,
-        executableVersion: pin.version,
+        executableVersion: reviewedUpdate ?? pin!.version,
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -199,7 +214,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
           : (reviewedClaudeMcpBinaries.find((binary) => binary.sha256 === executable.sha256) ??
             reviewedProviderMcpBinaries.claude)
         : reviewedClaudeTuiBinary;
-      if (executable.sha256 !== pin.sha256)
+      if (executable.sha256 !== pin.sha256 && !reviewedUpdate)
         throw new Error(
           input.mcp
             ? 'No reviewed Claude MCP launch contract for this version/hash'
@@ -212,7 +227,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         ...common,
         version: 2,
         provider: 'claude',
-        executableVersion: pin.version,
+        executableVersion: reviewedUpdate ?? pin.version,
         sessionId: randomUUID(),
         // Owner decision 2026-11-06: hub terminals keep owned hooks with MCP.
         ...(!input.mcp || input.hub ? { ownedHooks: true } : {}),
@@ -230,14 +245,14 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       });
     }
     if (provider === 'antigravity') {
-      if (executable.sha256 !== reviewedAntigravityBinary.sha256)
+      if (executable.sha256 !== reviewedAntigravityBinary.sha256 && !reviewedUpdate)
         throw new Error('No reviewed Antigravity binary version/hash');
       nativeRoots.push(join(input.home, '.gemini'));
       const config = managedAntigravityConfigSchema.parse({
         ...common,
         version: 4,
         provider: 'antigravity',
-        executableVersion: reviewedAntigravityBinary.version,
+        executableVersion: reviewedUpdate ?? reviewedAntigravityBinary.version,
         authentication: {
           mode: 'reuse-existing',
           home: input.home,
@@ -271,7 +286,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
       ...common,
       version: 3,
       provider: 'opencode',
-      executableVersion: reviewedProviderMcpBinaries.opencode.version,
+      executableVersion: reviewedUpdate ?? reviewedProviderMcpBinaries.opencode.version,
       authentication: { mode: 'reuse-existing', nativeIdentity, sharedNativeConfiguration: true },
       interactive: {
         sharedNativeSessions: true,

@@ -1258,6 +1258,12 @@
         "disconnected": "Disconnected",
         "ended": "Ended"
       }
+    },
+    "cliReview": {
+      "refresh": "Refresh",
+      "required": "CLI updated · review required",
+      "action": "Review",
+      "verified": "{{name}} updated to {{version}} · signature verified"
     }
   },
   "tauriPreparation": {
@@ -1316,7 +1322,9 @@
     "reviewBack": "Back to summary",
     "reviewSource": "Source: {{provider}} · {{model}} · {{id}}",
     "reviewWorker": "Worker: {{provider}} · {{model}} · {{id}}",
-    "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them."
+    "code_owned_exit_pending": "Principal-process exit has a receipt; child processes are unvalidated; a new terminal may share native resources (such as the OpenCode database) with them.",
+    "cliUpdate": "Review the exact executable path and SHA-256. Approving allows ORQST to run a bounded version check for this executable.",
+    "cliUpdateApprove": "Approve executable"
   },
   "tauriDesktop": {
     "connected": "Core connected",
@@ -1542,7 +1550,8 @@
       "native_authority_refused": "Action refused",
       "process_crashed": "Process exited (code {{exitCode}})",
       "open_refused": "Terminal could not open",
-      "opening_uncertain": "Opening could not be verified"
+      "opening_uncertain": "Opening could not be verified",
+      "cli_review_required": "CLI updated · review required"
     },
     "retry": "Try again",
     "changeCli": "Change CLI",
@@ -1661,7 +1670,7 @@
       "reason_ready": "Ready",
       "reason_executable_not_found": "CLI not found",
       "reason_antigravity_executable_unreviewed": "CLI updated · review required",
-      "reason_executable_unreviewed": "Unreviewed CLI version or checksum",
+      "reason_executable_unreviewed": "CLI updated · review required",
       "reason_executable_inspection_failed": "CLI verification failed",
       "reason_ambiguous_executable": "Multiple CLI installations found",
       "reason_catalog_limited": "CLI or model catalog could not be validated",
@@ -1812,7 +1821,8 @@
         "opening_uncertain": "Opening may or may not have happened",
         "not_attempted": "Not attempted because an earlier step stopped",
         "focus_required": "Bring ORQST to the front and try again",
-        "busy": "Another operation is running"
+        "busy": "Another operation is running",
+        "cli_review_required": "CLI updated · review required"
       },
       "possibleEffects": "Check the terminal area before trying again."
     },

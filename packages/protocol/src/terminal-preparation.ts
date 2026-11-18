@@ -3,6 +3,10 @@ import { featureScopeSchema, featureTerminalDisplaySchema } from './features.js'
 import { terminalDisplayNameSchema } from './terminal-workspace.js';
 
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
+const cliVersion = z
+  .string()
+  .max(40)
+  .regex(/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/);
 export const terminalProviderSchema = z.enum(['codex', 'claude', 'opencode', 'antigravity']);
 const scope = {
   workspaceId: featureScopeSchema.shape.workspaceId,
@@ -11,6 +15,13 @@ const scope = {
 export const terminalCatalogRequestSchema = z.strictObject({
   action: z.literal('catalog'),
   ...scope,
+});
+export const terminalCliReviewRequestSchema = z.strictObject({
+  action: z.literal('review-cli'),
+  ...scope,
+  catalogId: digest,
+  provider: terminalProviderSchema,
+  reviewId: digest,
 });
 export const terminalSelectedRequestSchema = z.strictObject({
   action: z.literal('create-selected'),
@@ -56,6 +67,7 @@ export const terminalBatchItemSchema = z.strictObject({
     'account_unsupported',
     'capacity_exceeded',
     'selection_unavailable',
+    'cli_review_required',
     'catalog_changed',
     'review_cancelled',
     'context_changed',
@@ -71,6 +83,7 @@ export const terminalBatchItemSchema = z.strictObject({
   effects: z.enum(['not_started', 'possible']),
   terminalId: z.uuid().optional(),
   slot: z.number().int().min(0).max(7).optional(),
+  verifiedUpdate: cliVersion.optional(),
 });
 export const terminalBatchReplySchema = z
   .strictObject({
@@ -207,6 +220,8 @@ export const terminalPreparationCatalogSchema = z.strictObject({
         ]),
         path: z.string().min(1).max(4096).optional(),
         version: z.string().min(1).max(160).optional(),
+        reviewId: digest.optional(),
+        verifiedUpdate: cliVersion.optional(),
         models: z
           .array(
             z.strictObject({

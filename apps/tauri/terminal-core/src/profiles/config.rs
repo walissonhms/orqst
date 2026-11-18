@@ -1,6 +1,7 @@
 //! Manifest schemas of `codex-profile.ts`, `interactive-profile.ts`, `opencode-profile.ts`,
 //! `opencode-launch-plan.ts`, `mcp-launch.ts`, `model-selection.ts` and
 //! `preparation-context.ts`, parsed from [`Js`] with the same accept/refuse decisions.
+use super::cli_review::version_label;
 use super::js::{js_len, Js};
 use super::mcp::{
     REVIEWED_ANTIGRAVITY, REVIEWED_CLAUDE_MCP, REVIEWED_CLAUDE_TUI, REVIEWED_OPENCODE,
@@ -583,12 +584,13 @@ pub fn parse_claude_config(value: &Js) -> Result<ClaudeConfig> {
     literal_str(required(value, "provider")?, "provider", "claude")?;
     literal_str(required(value, "trust")?, "trust", "native-same-user")?;
     let executable_version = string(required(value, "executableVersion")?, "executableVersion")?;
-    if executable_version != REVIEWED_CLAUDE_MCP.version
-        && executable_version != REVIEWED_CLAUDE_TUI.version
+    let c = common(value, slash_path)?;
+    if !version_label(executable_version) || (c.preparation.is_none()
+        && executable_version != REVIEWED_CLAUDE_MCP.version
+        && executable_version != REVIEWED_CLAUDE_TUI.version)
     {
         return schema("executableVersion");
     }
-    let c = common(value, slash_path)?;
     let session_id = uuid(required(value, "sessionId")?, "sessionId")?;
     let owned_hooks = flag(value, "ownedHooks")?;
     let a = required(value, "authentication")?;
@@ -691,13 +693,12 @@ pub fn parse_opencode_config(value: &Js) -> Result<OpenCodeConfig> {
     }
     literal_str(required(value, "provider")?, "provider", "opencode")?;
     literal_str(required(value, "trust")?, "trust", "native-same-user")?;
-    literal_str(
-        required(value, "executableVersion")?,
-        "executableVersion",
-        REVIEWED_OPENCODE.version,
-    )?;
+    let executable_version = string(required(value, "executableVersion")?, "executableVersion")?;
     let c = common(value, slash_path)?;
-    if c.executable.sha256 != REVIEWED_OPENCODE.sha256 {
+    if !version_label(executable_version) || (c.preparation.is_none() && executable_version != REVIEWED_OPENCODE.version) {
+        return schema("executableVersion");
+    }
+    if c.preparation.is_none() && c.executable.sha256 != REVIEWED_OPENCODE.sha256 {
         return schema("executable.sha256");
     }
     let a = required(value, "authentication")?;
@@ -743,7 +744,7 @@ pub fn parse_opencode_config(value: &Js) -> Result<OpenCodeConfig> {
     }
     Ok(OpenCodeConfig {
         executable: c.executable,
-        executable_version: REVIEWED_OPENCODE.version.to_owned(),
+        executable_version: executable_version.to_owned(),
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,
@@ -783,13 +784,12 @@ pub fn parse_antigravity_config(value: &Js) -> Result<AntigravityConfig> {
     }
     literal_str(required(value, "provider")?, "provider", "antigravity")?;
     literal_str(required(value, "trust")?, "trust", "native-same-user")?;
-    literal_str(
-        required(value, "executableVersion")?,
-        "executableVersion",
-        REVIEWED_ANTIGRAVITY.version,
-    )?;
+    let executable_version = string(required(value, "executableVersion")?, "executableVersion")?;
     let c = common(value, slash_path)?;
-    if c.executable.sha256 != REVIEWED_ANTIGRAVITY.sha256 {
+    if !version_label(executable_version) || (c.preparation.is_none() && executable_version != REVIEWED_ANTIGRAVITY.version) {
+        return schema("executableVersion");
+    }
+    if c.preparation.is_none() && c.executable.sha256 != REVIEWED_ANTIGRAVITY.sha256 {
         return schema("executable.sha256");
     }
     let a = required(value, "authentication")?;
@@ -809,7 +809,7 @@ pub fn parse_antigravity_config(value: &Js) -> Result<AntigravityConfig> {
     literal_true(required(i, "sharedNativeSessions")?, "sharedNativeSessions")?;
     Ok(AntigravityConfig {
         executable: c.executable,
-        executable_version: REVIEWED_ANTIGRAVITY.version.to_owned(),
+        executable_version: executable_version.to_owned(),
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,

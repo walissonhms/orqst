@@ -105,11 +105,19 @@ pub fn claude_interactive_mcp_configuration(
     input: &McpReviewInput,
     session_id: &str,
 ) -> Result<ClaudeMcpConfiguration> {
+    reviewed_claude_mcp_configuration(input, session_id, false)
+}
+
+pub(super) fn reviewed_claude_mcp_configuration(
+    input: &McpReviewInput,
+    session_id: &str,
+    reviewed: bool,
+) -> Result<ClaudeMcpConfiguration> {
     check_input(input)?;
     if !uuid_pattern().is_match(session_id) {
         return Err(ProfileError::schema("sessionId"));
     }
-    if reviewed_claude_mcp_binary(input.executable_version, input.executable_sha256).is_none() {
+    if !reviewed && reviewed_claude_mcp_binary(input.executable_version, input.executable_sha256).is_none() {
         return Err(not_reviewed());
     }
     let mcp = input.mcp;
@@ -191,9 +199,16 @@ pub struct OpenCodeMcpConfiguration {
 pub fn opencode_interactive_mcp_configuration(
     input: &McpReviewInput,
 ) -> Result<OpenCodeMcpConfiguration> {
+    reviewed_opencode_mcp_configuration(input, false)
+}
+
+pub(super) fn reviewed_opencode_mcp_configuration(
+    input: &McpReviewInput,
+    reviewed: bool,
+) -> Result<OpenCodeMcpConfiguration> {
     check_input(input)?;
-    if input.executable_version != REVIEWED_OPENCODE.version
-        || input.executable_sha256 != REVIEWED_OPENCODE.sha256
+    if !reviewed && (input.executable_version != REVIEWED_OPENCODE.version
+        || input.executable_sha256 != REVIEWED_OPENCODE.sha256)
     {
         return Err(not_reviewed());
     }

@@ -1,3 +1,4 @@
+import { cliExecutableVersion } from './cli-executable-review.js';
 // Review only. No filesystem, credential, database, socket or process access.
 import { z } from 'zod';
 
@@ -20,16 +21,22 @@ const modelSchema = z
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._:/#@+-]*$/);
 const inputSchema = z.strictObject({
   executable: path,
-  executableVersion: z.literal(reviewedAntigravityBinary.version),
-  executableSha256: z.literal(reviewedAntigravityBinary.sha256),
+  executableVersion: cliExecutableVersion,
+  executableSha256: z.string().regex(/^[a-f0-9]{64}$/),
   project: path,
   home: path,
   model: modelSchema.nullable().optional(),
 });
 
 /** An inspectable candidate, deliberately not a TerminalProfile or a native execution grant. */
-export function antigravityInteractiveLaunchPlan(raw: unknown) {
+export function antigravityInteractiveLaunchPlan(raw: unknown, reviewed = false) {
   const input = inputSchema.parse(raw);
+  if (
+    !reviewed &&
+    (input.executableVersion !== reviewedAntigravityBinary.version ||
+      input.executableSha256 !== reviewedAntigravityBinary.sha256)
+  )
+    throw new Error('No reviewed launch plan for this executable');
   return {
     version: 1 as const,
     provider: 'antigravity' as const,

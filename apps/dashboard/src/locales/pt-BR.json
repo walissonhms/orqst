@@ -1258,6 +1258,12 @@
         "disconnected": "Desconectado",
         "ended": "Encerrado"
       }
+    },
+    "cliReview": {
+      "refresh": "Atualizar",
+      "required": "CLI atualizado · revisão necessária",
+      "action": "Revisar",
+      "verified": "{{name}} atualizado para {{version}} · assinatura verificada"
     }
   },
   "tauriPreparation": {
@@ -1316,7 +1322,9 @@
     "reviewBack": "Voltar ao resumo",
     "reviewSource": "Origem: {{provider}} · {{model}} · {{id}}",
     "reviewWorker": "Destino: {{provider}} · {{model}} · {{id}}",
-    "code_owned_exit_pending": "A saída do processo principal tem recibo; processos descendentes não foram validados; um novo terminal pode compartilhar recursos nativos (como o banco do OpenCode) com eles."
+    "code_owned_exit_pending": "A saída do processo principal tem recibo; processos descendentes não foram validados; um novo terminal pode compartilhar recursos nativos (como o banco do OpenCode) com eles.",
+    "cliUpdate": "Confira o caminho e o SHA-256 do executável. A aprovação permite que o ORQST execute uma verificação de versão limitada para esse arquivo.",
+    "cliUpdateApprove": "Aprovar executável"
   },
   "tauriDesktop": {
     "connected": "Core conectado",
@@ -1542,7 +1550,8 @@
       "native_authority_refused": "Ação recusada",
       "process_crashed": "Processo terminou (código {{exitCode}})",
       "open_refused": "Falha ao abrir terminal",
-      "opening_uncertain": "Abertura não confirmada"
+      "opening_uncertain": "Abertura não confirmada",
+      "cli_review_required": "CLI atualizado · revisão necessária"
     },
     "retry": "Tentar novamente",
     "changeCli": "Alterar CLI",
@@ -1661,7 +1670,7 @@
       "reason_ready": "Pronto",
       "reason_executable_not_found": "CLI não encontrada",
       "reason_antigravity_executable_unreviewed": "CLI atualizado · revisão necessária",
-      "reason_executable_unreviewed": "Versão ou checksum da CLI não revisado",
+      "reason_executable_unreviewed": "CLI atualizado · revisão necessária",
       "reason_executable_inspection_failed": "Falha ao verificar a CLI",
       "reason_ambiguous_executable": "Várias instalações da CLI encontradas",
       "reason_catalog_limited": "Catálogo da CLI ou modelos não pôde ser validado",
@@ -1812,7 +1821,8 @@
         "opening_uncertain": "A abertura pode ou não ter acontecido",
         "not_attempted": "Não tentado porque uma etapa anterior parou",
         "focus_required": "Traga o ORQST para a frente e tente de novo",
-        "busy": "Outra operação está em andamento"
+        "busy": "Outra operação está em andamento",
+        "cli_review_required": "CLI atualizado · revisão necessária"
       },
       "possibleEffects": "Confira a área de terminais antes de tentar de novo."
     },

@@ -13,6 +13,7 @@ import {
   validateTerminalModelSelection,
   type TerminalModelSelection,
 } from '../../../packages/core/src/terminal/model-selection.js';
+import { isAutomaticCliReview } from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import {
@@ -21,6 +22,7 @@ import {
   resolveCatalogSelection,
   terminalCatalogId,
 } from './terminal-catalog.js';
+import { acceptCliCandidate } from './terminal-discovery.js';
 import type { TauriPreparationPorts } from './tauri-terminal-preparation.js';
 
 type Prepared = Omit<TerminalBatchItem, 'status'> & {
@@ -91,7 +93,9 @@ export async function prepareTauriBatch(
     index: number;
     provider: TerminalBatchRequest['requests'][number]['provider'];
     modelId: string;
-    plan: ReturnType<typeof prepareTerminalCreation>;
+    plan?: ReturnType<typeof prepareTerminalCreation>;
+    input: TerminalCreationInput;
+    candidate: NonNullable<ReturnType<typeof resolveCatalogSelection>>['candidate'];
   }> = [];
   const defaultFeatureTitle = context.environment.LANG?.toLowerCase().startsWith('pt')
     ? 'Geral'
@@ -129,12 +133,16 @@ export async function prepareTauriBatch(
       !selected ||
       (saved && (saved.provider !== selected.provider || saved.value !== selected.model.value))
     ) {
-      item.reason = 'selection_unavailable';
+      item.reason =
+        discovered.providers.find(({ provider }) => provider === input.provider)?.candidate
+          ?.decision === 'review'
+          ? 'cli_review_required'
+          : 'selection_unavailable';
       continue;
     }
     try {
       const supportsHub = input.provider !== 'antigravity';
-      const plan = prepareTerminalCreation({
+      const creationInput: TerminalCreationInput = {
         ...context,
         ...selected,
         count: 1,
@@ -145,8 +153,19 @@ export async function prepareTauriBatch(
         mcp: supportsHub,
         ...(supportsHub ? { hub: true } : {}),
         ...(input.provider === 'opencode' ? { openCodeStartupAuthorized: true } : {}),
+      };
+      const plan =
+        selected.candidate?.decision === 'automatic'
+          ? undefined
+          : prepareTerminalCreation(creationInput);
+      plans.push({
+        index,
+        provider: input.provider,
+        modelId: modelId!,
+        plan,
+        input: creationInput,
+        candidate: selected.candidate,
       });
-      plans.push({ index, provider: input.provider, modelId: modelId!, plan });
       selectedModels.set(modelId!, selected.model);
     } catch {
       item.reason = 'preparation_failed';
@@ -186,7 +205,12 @@ export async function prepareTauriBatch(
       fresh.catalogId !== expectedCatalogId ||
       plans.some(({ provider, modelId }) => !resolveCatalogSelection(fresh, provider, modelId))
     ) {
-      for (const { index } of plans) items[index]!.reason = 'catalog_changed';
+      for (const { index, provider } of plans)
+        items[index]!.reason =
+          fresh.providers.find((entry) => entry.provider === provider)?.candidate?.decision ===
+          'review'
+            ? 'cli_review_required'
+            : 'catalog_changed';
       return result();
     }
   } catch {
@@ -196,14 +220,38 @@ export async function prepareTauriBatch(
   let previousLayout: TerminalLayoutRecord | null = null;
   let capturedLayout = false;
   const verifiedExecutables = new Set<string>();
-  for (const { index, plan } of plans) {
+  const reviewedCandidates = new Map<string, string | undefined>();
+  for (const { index, plan, candidate, input } of plans) {
     const item = items[index]!;
     try {
       // Provision rechecks this plan's exact model, executable and directory
       // evidence. The only catalog-wide change here is our own assignment.
+      revalidateScope();
+      if (
+        (candidate && !candidate.previous && candidate.decision === 'exact') ||
+        candidate?.decision === 'automatic'
+      ) {
+        if (!reviewedCandidates.has(candidate.path)) {
+          const accepted = await acceptCliCandidate(
+            candidate,
+            trusted.preferencesDirectory,
+            reviewed,
+            async (update) => {
+              if (!((await ports.check?.(update)) ?? !update)) return false;
+              revalidateScope();
+              return true;
+            },
+          );
+          reviewedCandidates.set(
+            candidate.path,
+            isAutomaticCliReview(accepted?.source) ? accepted?.version : undefined,
+          );
+        }
+      }
       const workspace = revalidateScope();
+      const preparedPlan = plan ?? prepareTerminalCreation(input);
       item.effects = 'possible';
-      const files = plan.provision(
+      const files = preparedPlan.provision(
         reviewed,
         (terminalIds) => {
           if (!reviewed()) throw new Error('Batch context changed');
@@ -263,6 +311,8 @@ export async function prepareTauriBatch(
       item.terminalId = member.config.identity.terminalId;
       item.file = files[0]!;
       item.name = saved?.name ?? request.requests[index]!.name;
+      const verifiedUpdate = candidate && reviewedCandidates.get(candidate.path);
+      if (verifiedUpdate) item.verifiedUpdate = verifiedUpdate;
       item.status = 'prepared';
       item.reason = 'not_attempted'; // Core admission has not happened yet.
     } catch {

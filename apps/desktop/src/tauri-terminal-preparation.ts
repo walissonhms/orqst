@@ -4,6 +4,7 @@ import {
   terminalPreparationFailureSchema,
   type TerminalPreparationFailure,
   terminalCatalogRequestSchema,
+  terminalCliReviewRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
   terminalMcpPairMembers,
@@ -22,6 +23,7 @@ import {
   type TerminalPreparationContext,
 } from '../../../packages/core/src/terminal/preparation-context.js';
 import {
+  cliReviewId,
   inspectTerminalPreparationCatalog,
   resolveCatalogSelection,
   terminalPreparationCatalog,
@@ -33,6 +35,8 @@ import {
   type TerminalCreationInput,
   type TerminalCreationOverview,
 } from './terminal-creation.js';
+import type { CliVersionDirectoryUpdate } from '../../../packages/core/src/terminal/cli-executable-review.js';
+import { acceptCliCandidate } from './terminal-discovery.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTauriBatch } from './tauri-terminal-batch.js';
 import { join } from 'node:path';
@@ -44,6 +48,7 @@ import {
 
 export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalCatalogRequestSchema,
+  terminalCliReviewRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
   terminalBatchRequestSchema,
@@ -63,12 +68,13 @@ export interface TauriPreparationPorts {
   current(): boolean;
   choose(directory: boolean): Promise<string | undefined>;
   confirm(
-    key: 'create' | 'acknowledge' | 'open' | 'selected' | 'mcpPair',
+    key: 'create' | 'acknowledge' | 'open' | 'selected' | 'mcpPair' | 'cliUpdate',
     detail: string,
     overview?: TerminalCreationOverview,
   ): Promise<boolean>;
   /** Native latch precedes the first possible write, including an uncertain partial write. */
   commit(): Promise<boolean>;
+  check?(update?: CliVersionDirectoryUpdate): Promise<boolean>;
 }
 
 export class TauriPreparationError extends Error {
@@ -162,6 +168,68 @@ export async function prepareTauriTerminals(
       );
       return { status: 'removed', terminalId: request.terminalId };
     }
+    if (request.action === 'review-cli') {
+      if (!trusted) return fail('failed');
+      const inspect = () =>
+        inspectTerminalPreparationCatalog(
+          {
+            action: 'catalog',
+            workspaceId: request.workspaceId,
+            featureId: request.featureId,
+          },
+          trusted,
+          context,
+          [request.provider],
+        );
+      const first = inspect();
+      const candidate = first.providers[0]?.candidate;
+      if (
+        first.catalogId !== request.catalogId ||
+        candidate?.decision !== 'review' ||
+        request.reviewId !== cliReviewId(candidate)
+      )
+        return fail('catalog_changed');
+      const detail = JSON.stringify({
+        provider: candidate.provider,
+        executable: candidate.path,
+        launcher: candidate.launcher,
+        sha256: candidate.sha256,
+        previous: candidate.previous && {
+          path: candidate.previous.path,
+          sha256: candidate.previous.sha256,
+        },
+      }).replace(/\p{Cf}/gu, (c) => `\\u{${c.codePointAt(0)!.toString(16)}}`);
+      if (detail.length > 4096) return fail('review_too_large');
+      const stillSelected = () => {
+        const latest = inspect();
+        const next = latest.providers[0]?.candidate;
+        return (
+          latest.catalogId === request.catalogId &&
+          next?.decision === 'review' &&
+          cliReviewId(next) === request.reviewId
+        );
+      };
+      stage = 'review';
+      const deadline = now() + 60_000;
+      const live = () => current() && now() < deadline;
+      if (!(await ports.confirm('cliUpdate', detail)) || !live())
+        return { status: 'cancelled', files: [] };
+      if (!stillSelected()) return fail('catalog_changed');
+      preflight();
+      stage = 'commit';
+      if (!(await ports.commit()) || !live()) return { status: 'cancelled', files: [] };
+      effects = 'possible';
+      stage = 'revalidation';
+      if (!stillSelected()) return fail('catalog_changed');
+      await acceptCliCandidate(
+        candidate,
+        trusted.preferencesDirectory,
+        live,
+        async () => ((await ports.check?.()) ?? true) && stillSelected(),
+      );
+      if (inspect().catalogId !== request.catalogId || !live()) return fail('catalog_changed');
+      return { status: 'prepared', files: [] };
+    }
     if (request.action === 'create-batch') {
       if (!trusted || !Number.isInteger(availableSlots) || availableSlots < 0 || availableSlots > 8)
         return fail('failed');
@@ -234,6 +302,25 @@ export async function prepareTauriTerminals(
         fence: discovered.workspace.fence,
       });
       const supportsHub = !pair && sourceProvider !== 'antigravity';
+      const candidates = [source.candidate, companion?.candidate];
+      let committed = false;
+      if (candidates.some((candidate) => candidate?.decision === 'automatic')) {
+        stage = 'commit';
+        preflight();
+        if (!(await ports.commit()) || !current()) return { status: 'cancelled', files: [] };
+        committed = true;
+        effects = 'possible';
+        for (const candidate of candidates)
+          if (candidate?.decision === 'automatic')
+            await acceptCliCandidate(
+              candidate,
+              trusted.preferencesDirectory,
+              current,
+              async (update) =>
+                ((await ports.check?.(update)) ?? !update) &&
+                inspect().catalogId === request.catalogId,
+            );
+      }
       const plan = prepareTerminalCreation({
         ...context,
         ...source,
@@ -278,12 +365,22 @@ export async function prepareTauriTerminals(
       revalidate();
       preflight();
       stage = 'commit';
-      if (!(await ports.commit()) || !reviewed()) return { status: 'cancelled', files: [] };
+      if ((!committed && !(await ports.commit())) || !reviewed())
+        return { status: 'cancelled', files: [] };
       stage = 'revalidation';
       revalidate();
       preflight();
       stage = 'provision';
-      effects = 'possible'; // Entering provision may leave partial files; never infer rollback.
+      effects = 'possible';
+      for (const candidate of candidates)
+        if (candidate?.decision === 'exact' && !candidate.previous)
+          await acceptCliCandidate(
+            candidate,
+            trusted.preferencesDirectory,
+            reviewed,
+            async () =>
+              ((await ports.check?.()) ?? true) && inspect().catalogId === request.catalogId,
+          ); // Entering provision may leave partial files; never infer rollback.
       let previousLayout: TerminalLayoutRecord | null = null;
       files = plan.provision(reviewed, (terminalIds) => {
         if (!reviewed()) throw new Error('Feature enrollment expired');

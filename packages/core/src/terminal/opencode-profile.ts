@@ -1,3 +1,4 @@
+import { cliExecutableVersion, hasCliExecutableReview } from './cli-executable-review.js';
 import { terminalModelSelectionSchema, openCodeModelConfiguration } from './model-selection.js';
 import {
   terminalPreparationBindingSchema,
@@ -25,12 +26,12 @@ import type { TerminalProfile } from './supervisor.js';
 
 const path = opencodeNativeIdentitySchema.shape.HOME;
 const binary = z.strictObject({ path, sha256: z.string().regex(/^[a-f0-9]{64}$/) });
-export const managedOpenCodeConfigSchema = z.strictObject({
+const managedOpenCodeConfig = z.strictObject({
   version: z.literal(3),
   provider: z.literal('opencode'),
   trust: z.literal('native-same-user'),
-  executable: binary.extend({ sha256: z.literal(reviewedProviderMcpBinaries.opencode.sha256) }),
-  executableVersion: z.literal(reviewedProviderMcpBinaries.opencode.version),
+  executable: binary,
+  executableVersion: cliExecutableVersion,
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
   identity: terminalIdentitySchema.optional(),
@@ -57,6 +58,12 @@ export const managedOpenCodeConfigSchema = z.strictObject({
     })
     .refine((value) => !value.hub || value.mcp, 'The message hub requires MCP'),
 });
+export const managedOpenCodeConfigSchema = managedOpenCodeConfig.refine(
+  (value) =>
+    value.preparation !== undefined ||
+    (value.executableVersion === reviewedProviderMcpBinaries.opencode.version &&
+      value.executable.sha256 === reviewedProviderMcpBinaries.opencode.sha256),
+);
 export type ManagedOpenCodeConfig = z.infer<typeof managedOpenCodeConfigSchema>;
 
 /** Also used before provisioning; checks directories only, never the DB or its ledger. */
@@ -65,6 +72,12 @@ export function validateOpenCodeSelection(
   verifyExecutable = terminalExecutableSha256,
 ): void {
   managedOpenCodeConfigSchema.parse(config);
+  if (
+    (config.executableVersion !== reviewedProviderMcpBinaries.opencode.version ||
+      config.executable.sha256 !== reviewedProviderMcpBinaries.opencode.sha256) &&
+    !hasCliExecutableReview('opencode', config)
+  )
+    throw new Error('No reviewed opencode executable');
   openCodeModelConfiguration(config.model);
   validateTerminalPreparationBinding(config.preparation, config.project);
   terminalToolPath(config.toolPath);
@@ -116,15 +129,18 @@ export function openCodeTerminalEnvironment(
 ) {
   const model = openCodeModelConfiguration(config.model);
   const environment = {
-    ...opencodeInteractiveLaunchPlan({
-      executable: config.executable.path,
-      executableVersion: config.executableVersion,
-      executableSha256: config.executable.sha256,
-      project: config.project,
-      nativeIdentity: config.authentication.nativeIdentity,
-      nodePath: config.node.path,
-      ...(mcp ? { mcp } : {}),
-    }).environment,
+    ...opencodeInteractiveLaunchPlan(
+      {
+        executable: config.executable.path,
+        executableVersion: config.executableVersion,
+        executableSha256: config.executable.sha256,
+        project: config.project,
+        nativeIdentity: config.authentication.nativeIdentity,
+        nodePath: config.node.path,
+        ...(mcp ? { mcp } : {}),
+      },
+      hasCliExecutableReview('opencode', config),
+    ).environment,
     PATH: terminalToolPath(config.toolPath),
     TMPDIR: join(config.state, 'tmp'),
   };

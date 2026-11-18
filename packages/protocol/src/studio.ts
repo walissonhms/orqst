@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { TERMINAL_SLOT_CEILING } from './terminal-capacity.js';
 import {
   terminalCatalogRequestSchema,
+  terminalCliReviewRequestSchema,
   terminalSelectedRequestSchema,
   terminalMcpPairRequestSchema,
   terminalBatchRequestSchema,
@@ -34,6 +35,9 @@ export type StudioReply = z.infer<typeof studioReplySchema>;
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
   terminalCatalogRequestSchema,
+  terminalCliReviewRequestSchema.extend({
+    generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  }),
   terminalBatchRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   }),

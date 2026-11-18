@@ -1,3 +1,4 @@
+import { cliExecutableVersion, hasCliExecutableReview } from './cli-executable-review.js';
 import {
   terminalModelSelectionSchema,
   terminalModelArguments,
@@ -63,15 +64,12 @@ export const reviewedClaudeTuiBinary = Object.freeze({
   version: '2.1.318',
   sha256: '677a2ea7bf576cedd20e191d973914ed8a41796f53a63b1923381ddc4d5b5e7d',
 });
-export const managedClaudeConfigSchema = z.strictObject({
+const managedClaudeConfig = z.strictObject({
   version: z.literal(2),
   provider: z.literal('claude'),
   trust: z.literal('native-same-user'),
   executable: binary,
-  executableVersion: z.enum([
-    reviewedProviderMcpBinaries.claude.version,
-    reviewedClaudeTuiBinary.version,
-  ]),
+  executableVersion: cliExecutableVersion,
   node: binary,
   toolPath: terminalToolPathSchema.optional(),
   identity: terminalIdentitySchema.optional(),
@@ -97,6 +95,12 @@ export const managedClaudeConfigSchema = z.strictObject({
     })
     .refine((value) => !value.hub || value.mcp, 'The message hub requires MCP'),
 });
+export const managedClaudeConfigSchema = managedClaudeConfig.refine(
+  (value) =>
+    value.preparation !== undefined ||
+    value.executableVersion === reviewedClaudeTuiBinary.version ||
+    value.executableVersion === reviewedProviderMcpBinaries.claude.version,
+);
 export type ManagedClaudeConfig = z.infer<typeof managedClaudeConfigSchema>;
 export type InteractiveTerminalConfig =
   ManagedCodexConfig | ManagedClaudeConfig | ManagedOpenCodeConfig | ManagedAntigravityConfig;
@@ -122,7 +126,11 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
     : config.executableVersion === reviewedClaudeTuiBinary.version
       ? reviewedClaudeTuiBinary
       : reviewedProviderMcpBinaries.claude;
-  if (config.executableVersion !== pin.version || config.executable.sha256 !== pin.sha256)
+  const updated = hasCliExecutableReview('claude', config);
+  if (
+    !updated &&
+    (config.executableVersion !== pin.version || config.executable.sha256 !== pin.sha256)
+  )
     throw new Error(
       config.interactive.mcp
         ? 'No reviewed Claude MCP launch contract for this version/hash'
@@ -131,7 +139,8 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
   // Owner decision 2026-11-06: hub terminals keep owned hooks together with MCP.
   if (
     config.ownedHooks &&
-    (config.executableVersion !== '2.1.318' || (config.interactive.mcp && !config.interactive.hub))
+    ((config.executableVersion !== '2.1.318' && !updated) ||
+      (config.interactive.mcp && !config.interactive.hub))
   )
     throw new Error('Owned hooks require the reviewed Claude TUI contract');
 }
@@ -210,13 +219,16 @@ export function interactiveTerminalProfiles(
   )
     throw new Error('MCP relay changed');
   const candidate = mcp
-    ? claudeInteractiveMcpConfiguration({
-        executableVersion: config.executableVersion,
-        executableSha256: config.executable.sha256,
-        nodePath: config.node.path,
-        sessionId: config.sessionId,
-        mcp,
-      })
+    ? claudeInteractiveMcpConfiguration(
+        {
+          executableVersion: config.executableVersion,
+          executableSha256: config.executable.sha256,
+          nodePath: config.node.path,
+          sessionId: config.sessionId,
+          mcp,
+        },
+        hasCliExecutableReview('claude', config),
+      )
     : undefined;
   return [
     {

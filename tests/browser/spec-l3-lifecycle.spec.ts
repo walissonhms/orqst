@@ -128,12 +128,38 @@ test('L3 projects the submit before the native reply and preserves failure on th
     },
     { workspaceId, featureId, terminalId, savedId, releasedId, modelId },
   );
+  const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
   const evidence = process.env.ORQST_SPEC_L3_SCREENSHOTS;
+  async function capture(state: string, width: 1440 | 1280) {
+    if (integrated)
+      await page.screenshot({
+        path: resolve(integrated, width === 1440 ? '1440x900' : '1280x800', state + '.png'),
+      });
+    else if (evidence) await page.screenshot({ path: resolve(evidence, `${state}-${width}.png`) });
+  }
   if (evidence) await mkdir(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/studio');
-  await expect(page.getByRole('button', { name: 'Feature sintética 3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Feature sintética/ })).toBeVisible();
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'fixtureCatalogs'))).toBe(1);
+  const live = page.locator(`[data-pane-id="${terminalId}"]`);
+  await expect(live).toBeVisible();
+  await page.evaluate((id) => {
+    window.dispatchEvent(
+      new CustomEvent('orqst-owned-pty-lifecycle', {
+        detail: {
+          terminalId: id,
+          evidence: { transport: 'connected', process: 'live', firstFrame: true },
+        },
+      }),
+    );
+  }, terminalId);
+  await expect(live).toHaveAttribute('data-lifecycle', 'unknown');
+  await expect(live.locator('.ts-open')).toHaveCount(0);
+  await capture('live-pty', 1440);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await capture('live-pty', 1280);
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -146,20 +172,19 @@ test('L3 projects the submit before the native reply and preserves failure on th
   const submitToCardMs: unknown = await page.evaluate(() => Reflect.get(window, 'submitToCardMs'));
   expect(typeof submitToCardMs).toBe('number');
   console.log(`Synthetic submit to starting DOM: ${String(submitToCardMs)} ms`);
-  await page.screenshot({
-    path: evidence ? resolve(evidence, 'starting-1440.png') : info.outputPath('starting.png'),
-  });
+  await capture('starting', 1440);
+  if (!evidence && !integrated) await page.screenshot({ path: info.outputPath('starting.png') });
   await page.setViewportSize({ width: 1280, height: 800 });
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'starting-1280.png') });
+  await capture('starting', 1280);
 
   await page.evaluate(() => Reflect.get(window, 'refuseFixtureOpen')());
   await expect(card.getByText('Catálogo mudou', { exact: true })).toBeVisible();
   await expect(card.getByRole('button', { name: 'Tentar novamente' })).toBeEnabled();
   await expect(card.getByRole('button', { name: 'Alterar CLI' })).toBeEnabled();
   await expect(card.getByRole('button', { name: 'Ver logs' })).toBeEnabled();
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'failed-1280.png') });
+  await capture('failed', 1280);
   await page.setViewportSize({ width: 1440, height: 900 });
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'failed-1440.png') });
+  await capture('failed', 1440);
 
   await card.getByRole('button', { name: 'Ver logs' }).click();
   await expect(card.getByText('catalog_changed')).toBeVisible();
@@ -176,7 +201,7 @@ test('L3 projects the submit before the native reply and preserves failure on th
   await expect(uncertainRow.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
   await recovery.click();
   await expect(uncertainRow.getByText(/--offline-recovery/)).toBeVisible();
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'recovery-1440.png') });
+  await capture('recovery', 1440);
   await recovery.click();
   await expect(page.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();
   await page.evaluate((id) => {
@@ -191,10 +216,11 @@ test('L3 projects the submit before the native reply and preserves failure on th
   }, terminalId);
   await expect(page.getByRole('article', { name: 'T-001 OpenCode' })).toHaveCount(0);
   await expect(page.getByText('Encerrados (3)', { exact: true })).toBeVisible();
+  await expect(page.locator('.ts-dock + .pane-lifecycle-dock .pane-lifecycle-ended')).toBeVisible();
   await expect(page.getByText('Encerrado', { exact: true })).toHaveCount(2);
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'ended-1440.png') });
+  await capture('ended', 1440);
   await page.setViewportSize({ width: 1280, height: 800 });
-  if (evidence) await page.screenshot({ path: resolve(evidence, 'ended-1280.png') });
+  await capture('ended', 1280);
   if (evidence) {
     const approved = await readFile(
       'docs/design/v6/source/ORQST_workspace_v6_features.html',

@@ -97,7 +97,9 @@ async function main() {
         confirm: async (key, detail, overview) =>
           (await ask({
             kind: 'confirm',
-            title: translate('managedTerminal.createTeam'),
+            title: translate(
+              key === 'cliUpdate' ? 'studio.cliReview.action' : 'managedTerminal.createTeam',
+            ),
             message: translate(`tauriPreparation.${key}`),
             detail,
             ...(overview
@@ -126,6 +128,7 @@ async function main() {
             cancel: translate('terminalNative.cancel'),
             approve: translate(`tauriPreparation.${key}Approve`),
           })) === true,
+        check: async (cliUpdate) => (await ask({ kind: 'check', cliUpdate })) === true,
         commit: async () => (await ask({ kind: 'commit' })) === true,
       },
       Date.now,
