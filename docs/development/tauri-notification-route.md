@@ -2,6 +2,8 @@
 
 ## Source behavior and authority
 
+The dashboard UA matching regression and current alert acceptance checks are recorded in the [V6 dashboard review](dashboard-alerts-review.md).
+
 Electron's `main.ts::notify` already captures the source-gated `NativeAlert.sessionId`
 and rechecks an authenticated snapshot on click. Tauri previously discarded that
 identity in `desktop-sidecar.ts` and its `on_action` handler only focused main.

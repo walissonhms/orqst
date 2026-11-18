@@ -162,7 +162,12 @@ export interface Snapshot {
   };
 }
 export type StreamMessage =
-  | { type: 'event'; event: StoredEvent; live: boolean }
+  | {
+      type: 'event';
+      event: StoredEvent;
+      live: boolean;
+      notification?: { silent: boolean };
+    }
   | { type: 'ready'; cursor: number }
   | { type: 'resync'; cursor: number };
 export const emptyUsage = (): Usage => ({ input: 0, output: 0, cached: 0, total: 0 });

@@ -50,7 +50,12 @@ A client at the current cursor receives `ready` immediately.
 
 ```ts
 type StreamMessage =
-  | { type: 'event'; event: StoredEvent; live: boolean }
+  | {
+      type: 'event';
+      event: StoredEvent;
+      live: boolean;
+      notification?: { silent: boolean };
+    }
   | { type: 'ready'; cursor: number }
   | { type: 'resync'; cursor: number };
 ```
@@ -59,6 +64,11 @@ type StreamMessage =
 
 A stored event. `live` is `true` only for activity observed after the initial
 scan and within the live time window; replayed history is always `false`.
+
+For a live alert event with a matching unread notification in the local store,
+the Bridge includes `notification.silent` from the shared sound preference.
+Clients should require this field for browser alerts. A muted category or replay
+can still deliver the event for monitoring without a notification.
 
 ```json
 {
@@ -84,7 +94,8 @@ scan and within the live time window; replayed history is always `false`.
     "payload": { "status": "completed" },
     "sequence": 12
   },
-  "live": true
+  "live": true,
+  "notification": { "silent": true }
 }
 ```
 

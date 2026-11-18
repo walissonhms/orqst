@@ -1145,7 +1145,7 @@ button:disabled {
   color: var(--feature-text);
 }
 @media (max-width: 720px) {
-  .studio-workspace > .feature-workspace {
+  .studio-shell .studio-workspace > .feature-workspace {
     --feature-sidebar-width: 46px;
   }
 }

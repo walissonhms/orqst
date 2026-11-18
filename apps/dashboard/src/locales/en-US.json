@@ -175,7 +175,6 @@
   "notificationCompleted": "Turn completed",
   "notificationFailed": "Execution failed",
   "notificationIntervention": "Your input is needed",
-  "liveOnly": "Live alerts",
   "resultTitle": "Delivered work",
   "tokenRecords": "Token records",
   "limitNotice": "Showing {{count}} recent events. Open a session for its full retained history.",
@@ -532,6 +531,13 @@
       "remoteControl": "Session control"
     },
     "notifications": {
+      "read": "Read",
+      "itemUnread": "Unread",
+      "loading": "Loading notifications…",
+      "unavailable": "Notification history is unavailable while disconnected.",
+      "stale": "Showing the last confirmed notification history. Reconnect to update it.",
+      "staleCount": "{{count}} unread at last refresh",
+      "markReadFailed": "Could not confirm that notifications were marked read. Try again.",
       "filter": "Notification filter",
       "all": "All notifications",
       "unread": "Unread only",
@@ -1567,6 +1573,8 @@
     "arrangeFocus": "Click the terminal area to show the terminal"
   },
   "overviewPage": {
+    "lastObservedState": "Last observed session state",
+    "measurementUnavailable": "Unavailable",
     "title": "Overview",
     "subtitle": "What is running, what needs you and what it costs, from observed sessions.",
     "recentActivity": "With activity in the last 15 min"

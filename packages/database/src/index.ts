@@ -537,6 +537,10 @@ export class Store {
       read: Boolean(row.is_read),
     }));
   }
+  notificationDelivery(eventId: string): { silent: boolean } | undefined {
+    const unread = this.get('SELECT 1 FROM notifications WHERE id=? AND is_read=0', eventId);
+    return unread ? { silent: !this.preferences().sound } : undefined;
+  }
   readNotifications(): void {
     this.run('UPDATE notifications SET is_read=1');
   }

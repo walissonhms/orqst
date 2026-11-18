@@ -309,7 +309,12 @@ to 200 notifications, preferences, adapter descriptors, and diagnostics.
 
 ```ts
 type StreamMessage =
-  | { type: 'event'; event: StoredEvent; live: boolean }
+  | {
+      type: 'event';
+      event: StoredEvent;
+      live: boolean;
+      notification?: { silent: boolean };
+    }
   | { type: 'ready'; cursor: number }
   | { type: 'resync'; cursor: number };
 ```
