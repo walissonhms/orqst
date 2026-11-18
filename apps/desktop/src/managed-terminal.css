@@ -395,27 +395,29 @@ main[data-chrome='studio'] {
 main[data-chrome='studio'] .pane-header {
   display: none;
 }
-/* Studio card body: the terminal fills the card like the approved preview. Controls show
-   only while a step is still needed, and only the next action; status only on errors. */
+/* The Studio owns the pane header. Keep only the PTY and actionable exceptions below it. */
+:root:has(main[data-chrome='studio']) {
+  --orqst-terminal: var(--orqst-background);
+}
 :root:has(main[data-chrome='studio']),
 main[data-chrome='studio'] {
   background: var(--orqst-terminal);
 }
 main[data-chrome='studio'] #terminal {
-  padding: 10px 12px;
+  padding: 9px 10px;
 }
-main[data-chrome='studio'][data-next='typing'] .process-controls,
-main[data-chrome='studio'][data-next='typing']
-  #status:not([data-feedback='error']):not([data-blocked='true']),
-main[data-chrome='studio']:is([data-next='start'], [data-next='attach'], [data-next='input'])
-  .process-controls
-  .guidance {
+main[data-chrome='studio'] .process-controls,
+main[data-chrome='studio'] .action-row button {
   display: none;
 }
-/* Routine steps show only the next action. Exited, uncertain, gap, blocked and incomplete
-   openings keep every control, the guidance and the status so the owner sees why. */
-main[data-chrome='studio']:is([data-next='start'], [data-next='attach'], [data-next='input'])
-  .action-row
-  button:disabled:not([aria-busy='true']) {
+main[data-chrome='studio'][data-next='start'] .process-controls,
+main[data-chrome='studio'][data-next='attach'] .process-controls,
+main[data-chrome='studio'][data-next='start'] #start,
+main[data-chrome='studio'][data-next='attach'] #attach {
+  display: block;
+}
+/* Inside a PTY, show native process actions only on the context-menu gesture. */
+main[data-chrome='studio'] > .pane-menu > summary,
+main[data-chrome='studio'] > .pane-menu .pane-menu-panel > :not(.pane-actions) {
   display: none;
 }

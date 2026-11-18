@@ -1,25 +1,14 @@
 // Real xterm renderer with in-memory native facade. No host, Core, PTY, provider or server.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { build } from 'esbuild';
 import { chromium, expect } from '@playwright/test';
 import { terminalNativeRequestSchema, type TerminalNativeRequest } from '@orqst/protocol';
+import { buildSharedTestRenderer } from './helpers/shared-test-resources.js';
 import { terminalDocument } from '../apps/desktop/src/terminal-document.js';
 import en from '../apps/dashboard/src/locales/en-US.json';
 import pt from '../apps/dashboard/src/locales/pt-BR.json';
 
 assert.deepEqual(process.argv.slice(2), ['--authorize-synthetic-terminal-renderer']);
-const bundle = await build({
-  entryPoints: ['apps/desktop/src/managed-terminal-client.ts'],
-  bundle: true,
-  write: false,
-  platform: 'browser',
-  format: 'iife',
-  target: 'es2022',
-  logLevel: 'silent',
-});
-const js = bundle.outputFiles[0]!.text;
-const css = await readFile('apps/desktop/node_modules/@xterm/xterm/css/xterm.css', 'utf8');
+const { script, style } = await buildSharedTestRenderer('terminal');
 const instanceId = '00000000-0000-4000-8000-000000000001';
 const epoch = '00000000-0000-4000-8000-000000000002';
 const snapshot = { instanceId, epoch, state: 'running' };
@@ -29,36 +18,68 @@ try {
     ['en-US', en],
     ['pt-BR', pt],
   ] as const) {
-    for (const opening of ['ready', 'incomplete'] as const) {
+    for (const opening of ['ready', 'incomplete', 'studio-incomplete'] as const) {
+      const studioChrome = opening === 'studio-incomplete';
       const page = await browser.newPage({ locale: language });
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       const calls: TerminalNativeRequest[] = [];
       let delivered = false;
+      let resizeDenied = false;
+      let isExited = false;
+      let wrongInstance = false;
       await page.exposeFunction('syntheticNativeRequest', (raw: unknown) => {
         const request = terminalNativeRequestSchema.parse(raw);
         calls.push(request);
+        if (studioChrome && request.action === 'resize' && !resizeDenied) {
+          resizeDenied = true;
+          return { status: 'denied' };
+        }
         if (request.action === 'read') {
-          const bytes = delivered ? [] : [...Buffer.from('SYNTHETIC OUTPUT\r\n')];
+          if (!delivered && studioChrome) assert.equal(request.cursor, 0);
+          const bytes = delivered
+            ? []
+            : [
+                ...Buffer.from(
+                  studioChrome ? 'SYNTHETIC OpenCode first frame\r\n' : 'SYNTHETIC OUTPUT\r\n',
+                ),
+              ];
           delivered = true;
           return { status: 'ok', instanceId, output: { bytes, nextCursor: 20, gap: false } };
         }
-        return { status: 'ok', instanceId, snapshot };
+        return {
+          status: 'ok',
+          instanceId,
+          snapshot: {
+            ...snapshot,
+            instanceId: wrongInstance ? epoch : instanceId,
+            state: isExited || wrongInstance ? 'exited' : 'running',
+          },
+        };
       });
       await page.addInitScript({
         content: `
-        Object.defineProperty(window,'orqstTerminal',{value:{contractVersion:1,request:window.syntheticNativeRequest}});
+        let manual = false;
+        window.addEventListener('click', (event) => {
+          if (event.isTrusted && ['attach', 'input'].includes(event.target?.id)) manual = true;
+        }, true);
+        Object.defineProperty(window,'orqstTerminal',{value:{contractVersion:1,request:(request) => {
+          if (['attach', 'input'].includes(request.action) && !manual)
+            return Promise.resolve({status:'denied'});
+          return window.syntheticNativeRequest(request);
+        }}});
         Object.defineProperty(window,'orqstTerminalPane',{value:{show:async()=>false,onLayout:(listener)=>{window.syntheticLayout=listener;return ()=>{};}}});
       `,
       });
       const html = terminalDocument({
-        language,
+        language: studioChrome ? 'en-US' : language,
         slot: 0,
-        providers: ['SYNTHETIC Codex'],
-        provider: 'SYNTHETIC Codex',
+        providers: [studioChrome ? 'OpenCode' : 'SYNTHETIC Codex'],
+        provider: studioChrome ? 'OpenCode' : 'SYNTHETIC Codex',
         project: '/SYNTHETIC/project',
         version: 'SYNTHETIC',
-        startProfile: 'codex-terminal-v1',
+        startProfile: studioChrome ? 'opencode-terminal-v1' : 'codex-terminal-v1',
+        studioChrome,
         operationalOpen: true,
         nativeAuthentication: true,
         scope: 'reuseScope',
@@ -71,9 +92,9 @@ try {
         const path = new URL(route.request().url()).pathname;
         return route.fulfill(
           path === '/client.js'
-            ? { contentType: 'application/javascript', body: js }
+            ? { contentType: 'application/javascript', body: script }
             : path === '/style.css'
-              ? { contentType: 'text/css', body: css }
+              ? { contentType: 'text/css', body: style }
               : { contentType: 'text/html', body: html },
         );
       });
@@ -93,10 +114,51 @@ try {
               },
             }),
           ),
-        { instanceId, epoch, opening },
+        { instanceId, epoch, opening: studioChrome ? 'incomplete' : opening },
       );
       await expect(page.locator('#instance')).toHaveText(instanceId);
       await expect(page.locator('#start')).toBeDisabled();
+      if (studioChrome) {
+        await expect(page.locator('.xterm')).toContainText('SYNTHETIC OpenCode first frame');
+        await expect(page.locator('.process-controls')).toBeHidden();
+        await expect(page.locator('#guidance')).toHaveCount(0);
+        await expect(page.locator('#status')).toBeHidden();
+        await expect(page.locator('html')).toHaveAttribute('lang', language);
+        await expect(page.locator('#terminal')).toHaveAttribute(
+          'aria-label',
+          locale.managedTerminal.output,
+        );
+        await expect
+          .poll(() => calls.filter((request) => request.action === 'resize').length)
+          .toBeGreaterThan(1);
+        assert.equal(
+          calls.some(({ action }) => ['attach', 'input', 'open', 'start'].includes(action)),
+          false,
+        );
+        wrongInstance = true;
+        const snapshots = calls.filter(({ action }) => action === 'snapshot').length;
+        await expect
+          .poll(() => calls.filter(({ action }) => action === 'snapshot').length)
+          .toBeGreaterThan(snapshots);
+        await expect(page.locator('#status')).toBeHidden();
+        wrongInstance = false;
+        isExited = true;
+        await expect(page.locator('#status')).toHaveText(locale.managedTerminal.exited);
+        await expect(page.locator('.process-controls')).toBeHidden();
+        await expect(page.locator('.xterm')).toContainText('SYNTHETIC OpenCode first frame');
+        await page.locator('.xterm-helper-textarea').focus();
+        await page.keyboard.press('Shift+F10');
+        await expect(page.locator('.pane-actions')).toBeVisible();
+        await expect(page.locator('#hide-pane-menu')).toHaveText(locale.managedTerminal.hideView);
+        await expect(page.locator('#detach')).toHaveText(locale.managedTerminal.detach);
+        await expect(page.locator('#stop')).toHaveText(locale.managedTerminal.stop);
+        await expect(page.locator('#kill')).toHaveText(locale.managedTerminal.kill);
+        await page.keyboard.press('Escape');
+        await expect(page.locator('.pane-actions')).toBeHidden();
+        assert.deepEqual(errors, []);
+        await page.close();
+        continue;
+      }
       if (opening === 'incomplete') {
         await expect(page.locator('#status')).toHaveText(locale.managedTerminal.openingIncomplete);
         await expect(page.locator('#attach')).toBeEnabled();
@@ -156,7 +218,7 @@ try {
       await page.close();
     }
     console.log(
-      `${language}: real xterm output/keyboard and partial instance continuation passed (facade only)`,
+      `${language}: real xterm output/keyboard, Studio auto-attach, resize retry and evidenced exit passed (facade only)`,
     );
   }
 } finally {

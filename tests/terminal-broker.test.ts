@@ -350,6 +350,75 @@ for (const stage of ['launch', 'requestAttach', 'attach', 'requestInput', 'enabl
   });
 }
 
+test('reviewed OpenCode output attaches on its first read after interrupted Open without granting input', async () => {
+  for (const scenario of ['retained', 'expired', 'policy-revoked', 'stale-document'] as const) {
+    let afterLaunch = () => {};
+    let policy = true;
+    let attachRequests = 0;
+    const s = setup(
+      (supervisor) =>
+        new Proxy(supervisor, {
+          get(target, property) {
+            if (property === 'launch')
+              return (...args: Parameters<TerminalSupervisor['launch']>) => {
+                target.launch(...args);
+                afterLaunch();
+              };
+            if (property === 'requestAttach')
+              return (...args: Parameters<TerminalSupervisor['requestAttach']>) => {
+                attachRequests++;
+                return target.requestAttach(...args);
+              };
+            const value: unknown = Reflect.get(target, property);
+            return typeof value === 'function' ? value.bind(target) : value;
+          },
+        }),
+      {
+        authorizeCli: async () => 'allowed',
+        current: () => (policy ? 'allowed' : 'revoked'),
+        epoch: () => 'synthetic-cli-review',
+      },
+    );
+    afterLaunch = () => {
+      s.events().data('SYNTHETIC OpenCode first frame');
+      s.focus(false);
+      s.broker.revokeInput();
+    };
+    try {
+      const opened = await s.send('open', { profileId: 'synthetic' });
+      if (opened.status !== 'ok') throw new Error('Expected retained instance');
+      assert.equal(opened.opening, 'incomplete');
+      const { instanceId } = opened;
+      if (scenario === 'expired') s.advance();
+      if (scenario === 'policy-revoked') policy = false;
+      if (scenario === 'stale-document') s.current(false);
+      const read = await s.send('read', { instanceId, cursor: 0 });
+      if (scenario === 'retained') {
+        assert.equal(read.status, 'ok');
+        if (read.status !== 'ok' || !read.output) throw new Error('Expected owned output');
+        assert.equal(Buffer.from(read.output.bytes).toString(), 'SYNTHETIC OpenCode first frame');
+        assert.equal(read.output.gap, false);
+        assert.equal(attachRequests, 2); // Interrupted opening and its output continuation.
+        s.focus(true);
+        assert.equal(
+          (await s.send('write', { instanceId, sequence: 0, text: 'must remain denied' })).status,
+          'denied',
+        );
+        assert.equal((await s.send('detach', { instanceId })).status, 'ok');
+        assert.equal((await s.send('read', { instanceId, cursor: 0 })).status, 'denied');
+      } else {
+        assert.equal(read.status, 'denied');
+        assert.equal(attachRequests, 1);
+      }
+      assert.equal(s.starts(), 1);
+      assert.deepEqual(s.signals, []);
+      assert.deepEqual(s.writes, []);
+    } finally {
+      s.supervisor.shutdown();
+    }
+  }
+});
+
 test('native Open cancellation and expired consent never start a process', async () => {
   for (const expired of [false, true]) {
     const s = setup();

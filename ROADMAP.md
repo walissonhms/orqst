@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## V6 Studio terminal cards — 2026-11-18
+
+The Studio card, dock and compact native geometry are implemented. Headless
+Chromium and a signed synthetic broker verify the interrupted-Open output path.
+An updated native package still needs macOS acceptance with Codex and OpenCode.
+See the [V6 visual comparison](docs/development/v6-visual-parity.md).
+
 ## Confirmed terminal close
 
 The V6 Studio separates Hide from native-confirmed Close terminal. The Node

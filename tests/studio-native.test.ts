@@ -242,13 +242,16 @@ test('native Studio sends PTY holes, hides overlays and follows the saved Featur
     )) as unknown as Frame[];
     const last = frames.at(-1)!;
     assert.equal(last.generation, 7);
-    // Full window like the preview: no Feature panel, 47px toolbar, 38px dock.
+    // Compact immersive Studio keeps the toolbar and dock in the native insets.
     assert.deepEqual((last as unknown as { chrome: unknown }).chrome, {
       sidebar: 0,
-      top: 47,
-      bottom: 38,
+      top: 36,
+      bottom: 34,
     });
-    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 85 });
+    assert.deepEqual(last.viewport, { width: 1440, height: 900 - 70 });
+    assert.equal((await page.locator('.ts-toolbar').boundingBox())?.height, 36);
+    assert.equal((await page.locator('.ts-dock').boundingBox())?.height, 34);
+    assert.equal((await page.locator('.ts-head').first().boundingBox())?.height, 31);
     assert.deepEqual(last.panes.map((pane) => pane.terminalId).sort(), [t1, t2]);
     for (const pane of last.panes) {
       assert.ok(pane.rect);

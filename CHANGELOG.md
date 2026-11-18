@@ -1,5 +1,12 @@
 # Changelog
 
+## V6 Studio terminal cards — 2026-11-18
+
+Running cards show the native PTY without pair setup controls. A reviewed opening
+that keeps its instance after a focus change can finish connecting its output at
+the first native read. Terminal exit feedback uses that instance's Core snapshot.
+The compact card, toolbar and dock geometry has Chromium coverage in both locales.
+
 ## Studio terminal opening — 2026-11-18
 
 Studio binds each catalog to its native generation and reviews the destination

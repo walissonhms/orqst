@@ -5,6 +5,7 @@ import {
   TerminalNativeBroker,
   type TerminalConfirmation,
   type TerminalNativeSupervisor,
+  type TerminalNativeHost,
 } from '../../packages/core/src/terminal/native-broker.js';
 import {
   TerminalSupervisor,
@@ -15,6 +16,7 @@ import {
 export function terminalBrokerFixture(
   transport: (supervisor: TerminalSupervisor) => TerminalNativeSupervisor = (supervisor) =>
     supervisor,
+  cliAuthorization?: TerminalNativeHost<object>['cliAuthorization'],
 ) {
   const keys = generateKeyPairSync('ed25519');
   let now = 1000;
@@ -72,6 +74,7 @@ export function terminalBrokerFixture(
     document,
     {
       current: (_document, focus) => current && (!focus || focused),
+      ...(cliAuthorization ? { cliAuthorization } : {}),
       confirm: async (_document, details) => {
         confirmations.push(details);
         return answer(details);

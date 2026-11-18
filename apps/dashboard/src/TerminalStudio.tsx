@@ -341,10 +341,6 @@ function StatusIcon({ status }: { status: TerminalStatus }) {
   );
 }
 
-function ProviderMark({ provider }: { provider: TerminalProvider }) {
-  return <span className={`ts-provider ts-provider-${provider}`} aria-hidden="true" />;
-}
-
 interface Drag {
   id: string;
   pointer: number;
@@ -665,8 +661,8 @@ export function TerminalStudio({
           const rect = pane.rect;
           const style =
             state.mode === 'columns'
-              ? { left: rect.x + rect.width, top: rect.y, width: 8, height: rect.height }
-              : { left: rect.x, top: rect.y + rect.height, width: rect.width, height: 8 };
+              ? { left: rect.x + rect.width, top: rect.y, width: GAP, height: rect.height }
+              : { left: rect.x, top: rect.y + rect.height, width: rect.width, height: GAP };
           return (
             <div
               key={`split-${pane.id}`}
@@ -923,22 +919,6 @@ export function TerminalStudio({
             );
           })}
         </div>
-        <span className="ts-summary">
-          {working > 0 && (
-            <span className="ts-sum-working">
-              <span className="ts-spinner" aria-hidden="true" />
-              {t('terminalStudio.summary.working', { count: working })}
-            </span>
-          )}
-          {needsYou > 0 && (
-            <span className="ts-sum-attention">
-              {t('terminalStudio.summary.needsYou', { count: needsYou })}
-            </span>
-          )}
-          <span className="ts-count">
-            {t('terminalStudio.count', { visible: visibleCount, total: scopedTotal })}
-          </span>
-        </span>
         {minimized.length > 0 && (
           <button
             type="button"
@@ -1076,13 +1056,16 @@ export function TerminalStudio({
                 title={t('terminalStudio.dragHint')}
               >
                 <StatusIcon status={terminal.status} />
-                <span className="ts-label">{terminal.label}</span>
-                <span className="ts-name">{terminal.name}</span>
+                <span className="ts-cli">{t(`terminalStudio.providers.${terminal.provider}`)}</span>
                 {state.orchestrator === pane.id && (
                   <span className="ts-role" title={t('terminalStudio.orchestratorHint')}>
                     <Crown size={11} strokeWidth={2.25} aria-hidden="true" />
                     {t('terminalStudio.orchestrator')}
                   </span>
+                )}
+                <span className="ts-label">{terminal.label}</span>
+                {terminal.name !== t(`terminalStudio.providers.${terminal.provider}`) && (
+                  <span className="ts-name">{terminal.name}</span>
                 )}
                 {workspaces.length > 1 && (
                   <span className="ts-ws" title={terminal.workspace.name}>
@@ -1092,17 +1075,14 @@ export function TerminalStudio({
                 )}
                 <FlowBadge {...flowFor(pane.id)} labelOf={(id) => byId.get(id)?.label ?? '?'} />
                 <span className="ts-meta">
-                  <ProviderMark provider={terminal.provider} />
-                  <span>
-                    {terminal.model === undefined
-                      ? '—'
-                      : terminal.model === null
-                        ? t('terminalStudio.defaultModel')
-                        : terminal.model}
-                  </span>
-                  <span className="ts-time" title={t('terminalStudio.processTime')}>
-                    {time ?? '—'}
-                  </span>
+                  {terminal.model !== undefined && (
+                    <span>{terminal.model ?? t('terminalStudio.defaultModel')}</span>
+                  )}
+                  {time !== undefined && (
+                    <span className="ts-time" title={t('terminalStudio.processTime')}>
+                      {time}
+                    </span>
+                  )}
                 </span>
                 {pane.compact && (
                   <span className="ts-compact-activity">
@@ -1426,18 +1406,7 @@ export function TerminalStudio({
       )}
 
       <footer className="ts-dock" aria-label={t('terminalStudio.dock')}>
-        {onMention && !composer && terminals.length > 0 && (
-          <button
-            type="button"
-            className="ts-mention-open"
-            onClick={() => setComposer({ from: null })}
-          >
-            <AtSign size={13} />
-            {t('terminalStudio.mention.open')}
-          </button>
-        )}
         <span className="ts-dock-title">{t('terminalStudio.minimized')}</span>
-        {minimized.length === 0 && <span className="ts-dock-empty">—</span>}
         {minimized.map((pane) => {
           const terminal = byId.get(pane.id);
           if (!terminal) return null;
@@ -1457,6 +1426,32 @@ export function TerminalStudio({
             </button>
           );
         })}
+        {onMention && !composer && terminals.length > 0 && (
+          <button
+            type="button"
+            className="ts-mention-open"
+            onClick={() => setComposer({ from: null })}
+          >
+            <AtSign size={13} />
+            {t('terminalStudio.mention.open')}
+          </button>
+        )}
+        <span className="ts-summary">
+          {working > 0 && (
+            <span className="ts-sum-working">
+              <span className="ts-spinner" aria-hidden="true" />
+              {t('terminalStudio.summary.working', { count: working })}
+            </span>
+          )}
+          {needsYou > 0 && (
+            <span className="ts-sum-attention">
+              {t('terminalStudio.summary.needsYou', { count: needsYou })}
+            </span>
+          )}
+          <span className="ts-count">
+            {t('terminalStudio.count', { visible: visibleCount, total: scopedTotal })}
+          </span>
+        </span>
         <div className="ts-toasts">
           {notices.map((notice) => {
             const terminal = byId.get(notice.terminalId);

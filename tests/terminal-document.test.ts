@@ -116,10 +116,12 @@ test('only explicitly selected terminal documents opt into operational Open; leg
   assert.ok(selected.includes(en.managedTerminal.guide_openingIncomplete));
 });
 
-test('Studio chrome opts in without removing process authorization controls or changing legacy documents', () => {
+test('Studio documents omit pair guidance and start with silent status', () => {
   assert.doesNotMatch(document(), /data-chrome="studio"/);
   const html = document({ studioChrome: true, operationalOpen: true });
   assert.match(html, /<main data-chrome="studio"/);
+  assert.doesNotMatch(html, /id="guidance"|fresh pair/);
+  assert.match(html, /id="status" hidden/);
   const end = html.indexOf('</header>');
   for (const id of ['start', 'attach', 'input']) {
     assert.ok(html.indexOf(`id="${id}"`) > end);

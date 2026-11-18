@@ -24,6 +24,7 @@ export function StudioWorkspace({
 }) {
   const { t } = useTranslation();
   const preparation = useRef<HTMLDialogElement>(null);
+  const preparationTrigger = useRef<HTMLElement>(null);
   const [visited, setVisited] = useState(false);
   const [context, setContext] = useState<{ workspaceId: string; featureId: string | null }>({
     workspaceId,
@@ -38,6 +39,8 @@ export function StudioWorkspace({
   } | null>(null);
   /** The guided dialog is the default; the previous form stays for advanced pairs. */
   function openPreparation(scope: { workspaceId: string; featureId: string | null }) {
+    const focused = document.activeElement;
+    preparationTrigger.current = focused instanceof HTMLElement ? focused : null;
     setContext(scope);
     if (native) {
       // A fresh dialog each time: a finished one must not reappear with old results.
@@ -106,6 +109,11 @@ export function StudioWorkspace({
         className="studio-preparation-dialog"
         ref={preparation}
         aria-labelledby="studio-preparation-title"
+        onClose={() => {
+          // The guided dialog's Advanced button disappears before this drawer closes.
+          const trigger = preparationTrigger.current;
+          if (trigger?.isConnected) trigger.focus();
+        }}
       >
         <div className="studio-preparation-heading">
           <h2 id="studio-preparation-title">{t('studio.tauri.openTitle')}</h2>
