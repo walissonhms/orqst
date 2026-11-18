@@ -2,12 +2,17 @@
 
 ## Managed CLI publisher continuity
 
-Tauri Studio can accept an updated native CLI at its exact reviewed canonical
-path after valid Developer ID and required notarization continuity. It records
-the version, SHA-256, predecessor and verification source. Missing or changed
-publisher evidence and moved paths require a fresh native review of the exact
-candidate. Existing authorization epochs, scope and signed launch challenges
-still apply. See the [security review](docs/development/cli-signed-updates.md#security-review).
+Tauri Studio can accept a native CLI update at its reviewed canonical path.
+When its target moves between version directories, the reviewed launcher must
+still resolve to a canonical target under the recorded install root. Each
+directory from that root to the target must be owned by the current user or
+root, with group and other write bits clear. Node and Rust require the same
+valid Apple Developer ID Team ID and signed identifier, plus Apple notarization
+when the preceding review required it. The private record includes the source,
+version, full SHA-256 and both canonical targets for a version-directory move.
+A failed continuity check requires a fresh native review of the exact candidate.
+Existing scope, authorization epochs and signed launch challenges still apply.
+See the [security review](docs/development/cli-signed-updates.md#security-review).
 
 ## Feature chrome dashboard navigation
 

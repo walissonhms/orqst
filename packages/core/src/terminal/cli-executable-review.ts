@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import {
   cachedTerminalExecutableSha256,
@@ -35,18 +35,27 @@ const publisher = z.strictObject({
     .regex(/^[a-zA-Z0-9._-]+$/),
   notarized: z.boolean(),
 });
+const absolutePath = z
+  .string()
+  .min(2)
+  .max(2048)
+  .startsWith('/')
+  .refine((path) => !path.includes('\0'));
 const review = z.strictObject({
-  path: z
-    .string()
-    .min(2)
-    .max(2048)
-    .startsWith('/')
-    .refine((path) => !path.includes('\0')),
+  path: absolutePath,
   sha256,
   version: cliExecutableVersion,
-  source: z.enum(['packaged_pin', 'signature_continuity', 'native_review']),
+  source: z.enum([
+    'packaged_pin',
+    'signature_continuity',
+    'signature_continuity_version_dir',
+    'native_review',
+  ]),
   signature: publisher.optional(),
   previousSha256: sha256.optional(),
+  launcher: absolutePath.optional(),
+  installRoot: absolutePath.optional(),
+  previousPath: absolutePath.optional(),
 });
 export type CliExecutableReview = z.infer<typeof review>;
 export type CliSignature = z.infer<typeof publisher>;
@@ -59,18 +68,129 @@ export const cliPublisherIdentities = {
   antigravity: { teamId: 'EQHXZ8M8AV', identifier: 'cli' },
 } as const;
 
+type Candidate = Binary & { launcher?: string };
+type AutomaticSource = Extract<CliExecutableReview['source'], `signature_continuity${string}`>;
+
+export interface CliVersionDirectoryUpdate {
+  provider: LocalCliProvider;
+  candidate: Binary & { launcher: string };
+}
+
+export function isAutomaticCliReview(source: CliExecutableReview['source'] | undefined) {
+  return source === 'signature_continuity' || source === 'signature_continuity_version_dir';
+}
+
+function versionDirectory(root: string, path: string) {
+  const child = relative(root, path);
+  const [directory, ...rest] = child.split(sep);
+  if (
+    root === sep ||
+    !absolutePath.safeParse(root).success ||
+    !absolutePath.safeParse(path).success ||
+    resolve(root) !== root ||
+    resolve(path) !== path ||
+    !path.startsWith(root + sep) ||
+    !rest.length ||
+    !cliExecutableVersion.safeParse(directory).success
+  )
+    return;
+  return directory;
+}
+
+function directoryMatchesVersion(directory: string | undefined, version: string) {
+  return directory === version || directory?.startsWith(version + '-') === true;
+}
+
+function trustedInstallPath(root: string, path: string, launcher: string) {
+  try {
+    if (
+      !absolutePath.safeParse(launcher).success ||
+      resolve(launcher) !== launcher ||
+      realpathSync.native(launcher) !== path ||
+      realpathSync.native(path) !== path
+    )
+      return false;
+    const uid = process.getuid?.();
+    for (let dir = dirname(path); ; dir = dirname(dir)) {
+      const info = lstatSync(dir);
+      if (!info.isDirectory() || (info.uid !== uid && info.uid !== 0) || info.mode & 0o022)
+        return false;
+      if (dir === root) return true;
+    }
+  } catch {
+    return false;
+  }
+}
+
+export function reviewedVersionInstallRoot(path: string, launcher: string, version: string) {
+  if (!absolutePath.safeParse(path).success || resolve(path) !== path) return;
+  for (let dir = dirname(path); dir !== sep; dir = dirname(dir)) {
+    const root = dirname(dir);
+    if (!directoryMatchesVersion(versionDirectory(root, path), version)) continue;
+    return trustedInstallPath(root, path, launcher) ? root : undefined;
+  }
+}
+
+function validVersionDirectoryMove(
+  root: string,
+  previousPath: string,
+  candidate: Candidate,
+  previousVersion?: string,
+  nextVersion?: string,
+) {
+  const from = versionDirectory(root, previousPath);
+  const to = versionDirectory(root, candidate.path);
+  return (
+    !!from &&
+    !!to &&
+    from !== to &&
+    (!previousVersion || directoryMatchesVersion(from, previousVersion)) &&
+    (!nextVersion || directoryMatchesVersion(to, nextVersion)) &&
+    !!candidate.launcher &&
+    trustedInstallPath(root, candidate.path, candidate.launcher)
+  );
+}
+
+export function cliUpdatePathSource(
+  previous: CliExecutableReview,
+  candidate: Candidate,
+): AutomaticSource | undefined {
+  if (previous.launcher && previous.launcher !== candidate.launcher) return;
+  if (previous.path === candidate.path)
+    return previous.sha256 === candidate.sha256 ? undefined : 'signature_continuity';
+  if (
+    previous.launcher &&
+    previous.installRoot &&
+    validVersionDirectoryMove(previous.installRoot, previous.path, candidate, previous.version)
+  )
+    return 'signature_continuity_version_dir';
+}
+
 export function signatureContinuity(
   previous: CliExecutableReview,
-  candidate: Binary,
+  candidate: Candidate,
   signature: CliSignature | undefined,
-): boolean {
-  return (
-    candidate.path === previous.path &&
-    candidate.sha256 !== previous.sha256 &&
-    !!signature &&
+): AutomaticSource | undefined {
+  if (
+    signature &&
     signature.teamId === previous.signature?.teamId &&
     signature.identifier === previous.signature.identifier &&
     (!previous.signature.notarized || signature.notarized)
+  )
+    return cliUpdatePathSource(previous, candidate);
+}
+
+function validRecordedVersionMove(current: CliExecutableReview) {
+  return (
+    !!current.installRoot &&
+    !!current.previousPath &&
+    validVersionDirectoryMove(
+      current.installRoot,
+      current.previousPath,
+      current,
+      undefined,
+      current.version,
+    )
   );
 }
 
@@ -144,7 +264,7 @@ export function readCliExecutableReview(preferences: string, provider: LocalCliP
     terminalDirectory(root, true);
     const metadata = lstatSync(file, { bigint: true });
     if (metadata.nlink !== 1n) throw new Error('Linked CLI review');
-    return review.parse(JSON.parse(terminalFile(file, true, 4096, metadata).toString('utf8')));
+    return review.parse(JSON.parse(terminalFile(file, true, 32 * 1024, metadata).toString('utf8')));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
@@ -176,7 +296,16 @@ export function publishCliExecutableReview(
   try {
     if (JSON.stringify(readCliExecutableReview(preferences, provider)) !== JSON.stringify(previous))
       throw new Error('CLI review changed');
-    if (cachedTerminalExecutableSha256(next.path) !== next.sha256)
+    if (
+      (next.source === 'signature_continuity_version_dir' &&
+        (!previous ||
+          next.previousPath !== previous.path ||
+          next.previousSha256 !== previous.sha256 ||
+          next.installRoot !== previous.installRoot ||
+          signatureContinuity(previous, next, next.signature) !== next.source ||
+          !validRecordedVersionMove(next))) ||
+      cachedTerminalExecutableSha256(next.path) !== next.sha256
+    )
       throw new Error('CLI changed during review');
     const out = openSync(
       temporary,
@@ -220,12 +349,19 @@ export function hasCliExecutableReview(
   )
     return false;
   if (current.source === 'native_review') return true;
-  if (current.source !== 'signature_continuity' || !current.signature || !current.previousSha256)
+  if (
+    !isAutomaticCliReview(current.source) ||
+    !current.signature ||
+    !current.previousSha256 ||
+    (current.source === 'signature_continuity' && current.previousSha256 === current.sha256) ||
+    (current.source === 'signature_continuity_version_dir' && !validRecordedVersionMove(current))
+  )
     return false;
   const signature = inspectCliSignature(provider, current, current.signature.notarized);
   return (
     signature?.teamId === current.signature.teamId &&
     signature.identifier === current.signature.identifier &&
-    (!current.signature.notarized || signature.notarized)
+    (!current.signature.notarized || signature.notarized) &&
+    (current.source !== 'signature_continuity_version_dir' || validRecordedVersionMove(current))
   );
 }

@@ -3,11 +3,17 @@
 ## Tauri Studio CLI update evidence
 
 Executable selection uses the packaged pin, a private exact native review, or
-a signed update at the same canonical path. Node and Rust verify the Apple
-Developer ID Application identity and apply the prior notarization requirement.
-The helper persists a current exact-hash review with its source. Provisioning,
-enrollment and launch continue to bind the existing native scope, identity,
-epoch and manifest bytes. See the [security review and verification limits](../development/cli-signed-updates.md#security-review).
+a signed update. A changed canonical target must use the same catalog launcher
+and move between version directories under the recorded install root. Node
+and the Tauri shell independently check the resolved target, every directory
+from the root through the executable's parent, the exact bytes, the Developer
+ID Application Team ID and signed identifier, and the prior notarization
+requirement. Each directory must be owned by the current user or root and
+have group and other write bits clear. The private review records both
+canonical targets, the new version and full SHA-256. The Rust terminal Core
+revalidates the receipt when it supplies executable approval. Provisioning,
+enrollment and launch continue to bind the native scope, identity, epoch and
+manifest bytes. See the [security review and verification limits](../development/cli-signed-updates.md#security-review).
 
 ## Studio terminal output continuation — 2026-11-18
 

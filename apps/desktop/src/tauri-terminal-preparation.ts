@@ -33,6 +33,7 @@ import {
   type TerminalCreationInput,
   type TerminalCreationOverview,
 } from './terminal-creation.js';
+import type { CliVersionDirectoryUpdate } from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { acceptCliCandidate } from './terminal-discovery.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTauriBatch } from './tauri-terminal-batch.js';
@@ -70,7 +71,7 @@ export interface TauriPreparationPorts {
   ): Promise<boolean>;
   /** Native latch precedes the first possible write, including an uncertain partial write. */
   commit(): Promise<boolean>;
-  check?(): Promise<boolean>;
+  check?(update?: CliVersionDirectoryUpdate): Promise<boolean>;
 }
 
 export class TauriPreparationError extends Error {
@@ -158,6 +159,7 @@ export async function prepareTauriTerminals(
       const detail = JSON.stringify({
         provider: candidate.provider,
         executable: candidate.path,
+        launcher: candidate.launcher,
         sha256: candidate.sha256,
         previous: candidate.previous && {
           path: candidate.previous.path,
@@ -281,8 +283,9 @@ export async function prepareTauriTerminals(
               candidate,
               trusted.preferencesDirectory,
               current,
-              async () =>
-                ((await ports.check?.()) ?? true) && inspect().catalogId === request.catalogId,
+              async (update) =>
+                ((await ports.check?.(update)) ?? !update) &&
+                inspect().catalogId === request.catalogId,
             );
       }
       const plan = prepareTerminalCreation({

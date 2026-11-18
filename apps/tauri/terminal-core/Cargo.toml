@@ -12,10 +12,17 @@ path = "src/lib.rs"
 [[bin]]
 name = "orqst-terminal-core"
 path = "src/main.rs"
+required-features = ["node-compatible-json"]
+
+[features]
+default = ["node-compatible-json"]
+# The standalone Core mirrors Node's insertion order for its private wire formats.
+# Consumers of the CLI review policy do not need to enable it on their own serde_json.
+node-compatible-json = ["serde_json/preserve_order"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = "1"
 sha2 = "0.10.9"
 ed25519-dalek = "2"
 base64 = "0.22"

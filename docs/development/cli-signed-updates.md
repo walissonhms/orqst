@@ -1,8 +1,10 @@
 # Managed CLI updates in Tauri Studio
 
 Studio keeps the exact SHA-256 in every launch manifest. After a verified
-same-path update, the native helper records the new version, SHA-256, verified
-publisher and previous SHA-256 in the private CLI review ledger. The ledger
+update, the native helper records the new version, full SHA-256, verified
+publisher and previous SHA-256 in the private CLI review ledger. A move between
+version directories records source `signature_continuity_version_dir`, the
+previous and new canonical targets, the reviewed launcher and install root. The ledger
 keeps the latest review separately for each provider. The next catalog read and
 a successful Studio batch show the verified update. Settings › Agents and the
 Studio picker can review an exact candidate when automatic continuity fails.
@@ -11,14 +13,26 @@ Approving that review leaves terminal creation as a separate action.
 
 ## Security review
 
-- Discovery resolves each executable to a canonical file. A versioned symlink
-  target change requires review even when the launcher symlink and Team ID stay
-  the same. A reviewed regular native binary with no qualifying signature
-  continues to use an exact hash and native approval for any change.
+- Discovery retains the launcher path selected by the catalog and resolves it to
+  a canonical file. A signed exact review can record the canonical parent of
+  the matching version directory as the install root. The directory name must
+  match the reviewed version or append a suffix, such as
+  `0.162.1-aarch64-apple-darwin` under standalone Codex's `releases` root. A move
+  requires the same launcher and a different version directory under that
+  recorded root. The launcher must resolve to the proposed canonical target.
+  Every directory from the root to the target's parent must be owned by the
+  current user or root, with group and other write bits clear. Reviews without a
+  recorded launcher and root retain same-path continuity. A subsequent move
+  requires a new native review to establish those fields. An unsigned binary
+  continues to require native approval for a digest change.
 - Node uses absolute `/usr/bin/codesign` with argv, exact TeamIdentifier and
   Identifier fields, strict all-architecture verification, and an explicit
   Apple Developer ID Application certificate requirement. Rust independently
-  evaluates that requirement with Security.framework. A positive notarization
+  evaluates that requirement with Security.framework. For a version-directory
+  update, the Tauri shell reads the prior private record and independently
+  verifies the launcher, install path, SHA-256 and publisher during the focused
+  Open. The Node and Rust terminal profiles also revalidate a recorded move
+  when it supplies executable approval. A positive notarization
   requirement uses Apple's `notarized` code requirement. Apple issues tickets
   for standalone executables and supports stapling tickets to distributable
   containers such as packages and disk images. The standalone file carries no
@@ -32,6 +46,8 @@ Approving that review leaves terminal creation as a separate action.
   [Antigravity installation audit](../research/antigravity-integration.md#11-inspected-local-binary)
 - The focused native Open or Review action authorizes the bounded
   `--version` probe only after publisher continuity or explicit user consent.
+  A matching packaged digest already supplies the version. A recorded
+  version-directory update must match the verified version to the directory.
   The probe uses a temporary HOME, minimal environment, capped output and a
   three-second deadline. Its child runs as the local user. This is version
   evidence, and the vendor program can independently perform I/O.
@@ -65,12 +81,20 @@ did not start the providers.
 | Claude      | `~/.local/share/claude/versions/2.1.318`                                       | `Q6L2SF6YDW`   | `com.anthropic.claude-code` | `677a2ea7bf57` |
 
 All four inspected candidates are native Mach-O. OpenCode and agy have stable
-canonical paths in this installation. Standalone Codex and Claude resolve
-through versioned directories. A Node signature gives no evidence about a
-Codex or OpenCode npm launcher script or its package payload. On macOS the
+canonical paths in this installation. Codex standalone resolves through a
+version directory. Claude's inspected launcher resolves to a version-named
+file, so it cannot use the directory-move path. A Node signature gives no
+evidence about a Codex or OpenCode npm launcher script or its package payload. On macOS the
 existing native-only launch contract refuses those shims. Select the native
 binary directly where available. The one-review path applies to supported
 executable formats with exact hashes. No interpreter-wide exception is made.
+
+A read-only catalog check used the installed Codex launcher
+`~/.local/bin/codex` and a temporary baseline seeded from the installed,
+signature-verified 0.162.1 pin. The classifier accepted the move to 0.169.0
+as `signature_continuity_version_dir`. Both binaries passed the Developer ID
+and notarization checks. The classification left the baseline unchanged and
+did not run the CLI.
 
 The live provider launch, login and post-update behavior of each CLI and the
 native sheet and localized notice still need acceptance in a packaged Desktop.

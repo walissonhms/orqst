@@ -128,7 +128,7 @@ async function main() {
             cancel: translate('terminalNative.cancel'),
             approve: translate(`tauriPreparation.${key}Approve`),
           })) === true,
-        check: async () => (await ask({ kind: 'check' })) === true,
+        check: async (cliUpdate) => (await ask({ kind: 'check', cliUpdate })) === true,
         commit: async () => (await ask({ kind: 'commit' })) === true,
       },
       Date.now,

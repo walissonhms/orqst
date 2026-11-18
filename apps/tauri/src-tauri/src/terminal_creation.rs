@@ -163,6 +163,17 @@ fn exact(value: &Value, keys: &[&str]) -> bool {
 }
 /// The two pair members, source first. Without workerProvider (the original shape) the pair
 /// is Codex/OpenCode in either direction; Claude needs an explicit worker.
+fn requests_cli_version_update(request: &Value, provider: &str) -> bool {
+    match request["action"].as_str() {
+        Some("create-selected") => request["provider"] == provider,
+        Some("create-mcp-pair") => mcp_pair_members(request)
+            .is_some_and(|(source, worker)| source == provider || worker == provider),
+        Some("create-batch") => request["requests"].as_array()
+            .is_some_and(|items| items.iter().any(|item| item["provider"] == provider)),
+        _ => false,
+    }
+}
+
 fn mcp_pair_members(value: &Value) -> Option<(&'static str, &'static str)> {
     let provider = |key: &str| match value[key].as_str() {
         Some("codex") => Some("codex"),
@@ -1206,7 +1217,8 @@ fn run(
         .join("core/tauri-terminal-preparation-host.cjs");
     let parent = app.path().app_data_dir()?;
     // Both paths come from the owned bootstrap, never from a renderer-provided cwd.
-    let trusted = json!({"observerDatabase":parent.join("core/orqst.db"), "preferencesDirectory":preferences_directory(&parent)?}).to_string();
+    let preferences = preferences_directory(&parent)?;
+    let trusted = json!({"observerDatabase":parent.join("core/orqst.db"), "preferencesDirectory":preferences}).to_string();
     let admission_context = admission
         .as_ref()
         .map(|value| value.context())
@@ -1430,9 +1442,24 @@ fn run(
                         );
                         json!(accepted)
                     }
-                    Some("check") if exact(&value, &["kind", "id"]) => {
-                        let focused = tauri::async_runtime::block_on(crate::features::focused(window));
-                        json!(focused && current() && app.state::<Preparation>().0.lock().unwrap().committed)
+                    Some("check")
+                        if exact(&value, &["kind", "id"])
+                            || exact(&value, &["kind", "id", "cliUpdate"]) =>
+                    {
+                        let authorized = || {
+                            tauri::async_runtime::block_on(crate::features::focused(window))
+                                && current()
+                                && app.state::<Preparation>().0.lock().unwrap().committed
+                        };
+                        json!(authorized()
+                            && value.get("cliUpdate").is_none_or(|update| {
+                                update["provider"].as_str().is_some_and(|provider| {
+                                    requests_cli_version_update(&request, provider)
+                                }) && orqst_terminal_core::profiles::verify_cli_version_directory_update(
+                                        &preferences, update.clone(),
+                                    )
+                                    && authorized()
+                            }))
                     }
                     Some("commit")
                         if matches!(
@@ -2114,6 +2141,18 @@ mod catalog_tests {
         assert!(super::matches_studio_document("main", "main", &settings, origin, true));
         assert!(!super::matches_studio_document("main", "main", &settings, origin, false));
         assert!(!super::matches_studio_document("terminal-a", "main", &settings, origin, true));
+    }
+
+    #[test]
+    fn cli_version_update_is_scoped_to_the_providers_the_open_requests() {
+        let selected = json!({"action":"create-selected", "provider":"codex"});
+        assert!(super::requests_cli_version_update(&selected, "codex"));
+        assert!(!super::requests_cli_version_update(&selected, "claude"));
+        let batch = json!({"action":"create-batch", "requests":[{"provider":"opencode"}]});
+        assert!(super::requests_cli_version_update(&batch, "opencode"));
+        assert!(!super::requests_cli_version_update(&batch, "codex"));
+        let catalog = json!({"action":"catalog", "provider":"codex"});
+        assert!(!super::requests_cli_version_update(&catalog, "codex"));
     }
 
     #[test]

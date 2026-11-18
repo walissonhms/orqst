@@ -1,5 +1,6 @@
 import { terminalPreparationCatalogSchema, terminalCatalogRequestSchema } from '@orqst/protocol';
 import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
+import { isAutomaticCliReview } from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
 import {
   resolveTerminalPreparationContext,
@@ -55,6 +56,7 @@ export function inspectTerminalPreparationCatalog(
     const identity = JSON.stringify([
       provider,
       executable,
+      candidate?.launcher ?? null,
       executable ? cachedTerminalExecutableSha256(executable) : null,
       context.home,
       context.environment.PATH ?? '',
@@ -142,7 +144,8 @@ export function terminalPreparationCatalog(
         ? { reviewId: cliReviewId(candidate) }
         : models &&
             candidate?.decision === 'exact' &&
-            candidate.previous?.source === 'signature_continuity'
+            candidate.previous &&
+            isAutomaticCliReview(candidate.previous.source)
           ? { verifiedUpdate: candidate.previous.version }
           : {}),
       models:

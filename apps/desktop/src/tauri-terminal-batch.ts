@@ -13,6 +13,7 @@ import {
   validateTerminalModelSelection,
   type TerminalModelSelection,
 } from '../../../packages/core/src/terminal/model-selection.js';
+import { isAutomaticCliReview } from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal/managed-files.js';
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import {
@@ -218,15 +219,15 @@ export async function prepareTauriBatch(
             candidate,
             trusted.preferencesDirectory,
             reviewed,
-            async () => {
-              if (!((await ports.check?.()) ?? true)) return false;
+            async (update) => {
+              if (!((await ports.check?.(update)) ?? !update)) return false;
               revalidateScope();
               return true;
             },
           );
           reviewedCandidates.set(
             candidate.path,
-            accepted?.source === 'signature_continuity' ? accepted.version : undefined,
+            isAutomaticCliReview(accepted?.source) ? accepted?.version : undefined,
           );
         }
       }

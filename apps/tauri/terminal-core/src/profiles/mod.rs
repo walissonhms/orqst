@@ -15,6 +15,7 @@ pub mod antigravity;
 pub mod backend;
 pub mod claude;
 mod cli_review;
+pub use cli_review::verify_cli_version_directory_update;
 pub mod codex;
 pub mod config;
 pub mod fsx;
