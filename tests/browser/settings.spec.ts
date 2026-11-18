@@ -399,7 +399,7 @@ for (const [locale, width, height] of [
     };
 
     const portuguese = locale === 'pt-BR';
-    const unknown = portuguese ? 'Nenhum limite informado ainda' : 'No limits reported yet';
+    const unknown = portuguese ? '— sem dados da CLI' : '— no CLI data';
     const page = await browser.newPage({
       locale,
       colorScheme: 'dark',
@@ -492,10 +492,11 @@ for (const [locale, width, height] of [
       await expect(close).toBeFocused();
       await expect(dialog).toContainText(unknown);
       await expect(dialog.locator('.al-bar, .al-percent, .al-reset')).toHaveCount(0);
-      await expect(accounts).toBeDisabled();
+      await expect(accounts).toHaveCount(0);
+      await expect(caps).toHaveCount(0);
       await capture('24-limits-unavailable');
       await page.keyboard.press('Shift+Tab');
-      await expect(caps).toBeFocused();
+      await expect(close).toBeFocused();
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
 
@@ -504,7 +505,10 @@ for (const [locale, width, height] of [
       await page.setContent('<div id="root"></div>');
       await mount(true);
       await trigger.click();
-      await expect(dialog.locator('.al-percent')).toHaveText(['45%', '0%']);
+      await expect(dialog.locator('.al-percent')).toHaveText([
+        '45%',
+        portuguese ? 'Sem uso' : 'Unused',
+      ]);
       await expect(
         dialog.locator('.al-window').filter({ has: page.getByText('1h', { exact: true }) }),
       ).toContainText(unknown);
@@ -512,38 +516,8 @@ for (const [locale, width, height] of [
         dialog.locator('.al-window').filter({ has: page.getByText('5h', { exact: true }) }),
       ).toContainText(portuguese ? 'janela encerrada' : 'window ended');
       await capture('19-limits');
-      await accounts.click();
-      const accountList = dialog.getByRole('region', {
-        name: portuguese ? 'Escolher contas' : 'Choose accounts',
-      });
-      const codex = accountList.getByRole('checkbox', { name: /Codex/ });
-      await expect(codex).toBeChecked();
-      await capture('20-limit-accounts');
-      await codex.uncheck();
-      await expect(trigger.locator('.al-bar')).toHaveCount(0);
-      await codex.check();
-      await expect(trigger.locator('.al-bar')).toHaveCount(1);
-      await caps.click();
-      const form = dialog.getByRole('form');
-      const warning = form.getByRole('spinbutton', {
-        name: portuguese ? 'Atenção a partir de' : 'Attention from',
-      });
-      const critical = form.getByRole('spinbutton', {
-        name: portuguese ? 'Crítico a partir de' : 'Critical from',
-      });
-      const save = form.getByRole('button', { name: portuguese ? 'Salvar' : 'Save' });
-      await expect(warning).toBeFocused();
-      await capture('21-limit-caps');
-      await warning.fill('40');
-      await critical.fill('39');
-      await expect(save).toBeDisabled();
-      await critical.fill('80');
-      await save.click();
-      await expect(caps).toBeFocused();
-      await expect(dialog.locator('.al-percent').first()).toHaveClass(/al-warn/);
-      await caps.click();
-      await expect(warning).toHaveValue('40');
-      await expect(critical).toHaveValue('80');
+      await expect(accounts).toHaveCount(0);
+      await expect(caps).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(trigger).toBeFocused();
     } finally {

@@ -157,6 +157,7 @@ export interface StudioLayoutControls {
   toggleGrid(): void;
   restore(): void;
   placeTerminal(id: string, slot: number): void;
+  focusTerminal(terminalId: string): void;
 }
 
 export interface StudioDuplicateConfig {
@@ -491,9 +492,29 @@ export function FeatureStudioStage({
   const [activePane, setActivePane] = useState<string | undefined>(
     () => loadState(storageKey)?.active ?? undefined,
   );
+  const [focusRequest, setFocusRequest] = useState<{ terminalId: string }>();
+  useEffect(() => {
+    if (!focusRequest) return;
+    const card = stageRef.current?.querySelector<HTMLElement>(
+      `[data-pane-id="${CSS.escape(focusRequest.terminalId)}"]`,
+    );
+    if (card) {
+      card.tabIndex = -1;
+      card.focus({ preventScroll: true });
+    }
+    setFocusRequest(undefined);
+  }, [focusRequest]);
   useImperativeHandle(
     v6?.layoutControlsRef,
     () => ({
+      focusTerminal: (terminalId) => {
+        setState((current) => ({
+          ...updatePane(current, terminalId, { minimized: false }),
+          maximized: terminalId,
+        }));
+        setActivePane(terminalId);
+        setFocusRequest({ terminalId });
+      },
       toggleGrid: () =>
         setState((current) => ({
           ...current,

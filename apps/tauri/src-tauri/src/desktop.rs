@@ -89,14 +89,20 @@ pub(crate) struct OwnedRoute {
 pub(crate) struct OwnedAlert {
     route: OwnedRoute,
     turn_id: String,
+    observed_at: u64,
     category: &'static str,
     silent: bool,
+}
+
+fn owned_alert_fresh(observed_at: u64, now_ms: u64) -> bool {
+    now_ms
+        .checked_sub(observed_at)
+        .is_some_and(|age| u128::from(age) <= FRESHNESS.as_millis())
 }
 
 pub(crate) fn parse_owned_alert(value: &Value, epoch: &str, now_ms: u64) -> Option<OwnedAlert> {
     let fields = value.as_object()?;
     let observed_at = value["observedAt"].as_u64()?;
-    let age = now_ms.checked_sub(observed_at)?;
     let slot = value["slot"].as_u64()?;
     if fields.len() != 9
         || value["kind"] != "owned-turn-alert"
@@ -106,7 +112,7 @@ pub(crate) fn parse_owned_alert(value: &Value, epoch: &str, now_ms: u64) -> Opti
         || !crate::features::uuid(&value["terminalId"])
         || !crate::features::uuid(&value["turnId"])
         || slot > 7
-        || age > 10_000
+        || !owned_alert_fresh(observed_at, now_ms)
     {
         return None;
     }
@@ -123,6 +129,7 @@ pub(crate) fn parse_owned_alert(value: &Value, epoch: &str, now_ms: u64) -> Opti
             slot: slot as usize,
         },
         turn_id: value["turnId"].as_str()?.to_owned(),
+        observed_at,
         category,
         silent: value["silent"].as_bool()?,
     })
@@ -265,7 +272,12 @@ impl State {
             .then_some((session, self.generation))
     }
 
-    fn register_owned(&mut self, alert: &OwnedAlert, now: Instant) -> Option<i32> {
+    fn register_owned(
+        &mut self,
+        alert: &OwnedAlert,
+        now: Instant,
+        window_unfocused: bool,
+    ) -> Option<i32> {
         let key = (
             alert.route.terminal_id.clone(),
             alert.turn_id.clone(),
@@ -274,7 +286,13 @@ impl State {
         if self.owned_seen.len() >= 128 || !self.owned_seen.insert(key) {
             return None;
         }
-        if !self.enabled || self.failed || !self.connected(now) || self.attempts >= MAX_ATTEMPTS {
+        if !window_unfocused
+            || !matches!(alert.category, "failed" | "intervention")
+            || !self.enabled
+            || self.failed
+            || !self.connected(now)
+            || self.attempts >= MAX_ATTEMPTS
+        {
             return None;
         }
         self.attempts += 1;
@@ -329,8 +347,13 @@ fn notification_action(
                     && !state.failed
                     && state.connected(Instant::now())
             };
-            if valid {
+            if valid && crate::terminal::owned_notification_current(&app, &route) {
                 crate::terminal::focus_owned_notification(&app, &route);
+                publish_to_studio(
+                    &app,
+                    "orqst-owned-notification-click",
+                    serde_json::json!({ "terminalId": route.terminal_id }),
+                );
             }
         });
         return;
@@ -694,8 +717,38 @@ fn apply_frame(app: &tauri::AppHandle, frame: Option<Frame>) {
     refresh(app);
 }
 
+// The retained Studio is a private custom-protocol webview. Main is restricted to
+// the authorized Core origin (including the browser-based Studio fallback).
+fn publish_to_studio(app: &tauri::AppHandle, event: &'static str, detail: Value) {
+    let origin = app.state::<Desktop>().0.lock().unwrap().origin.clone();
+    for label in ["feature-workspace", "main"] {
+        let Some(view) = app.get_webview(label) else {
+            continue;
+        };
+        let allowed = view.url().is_ok_and(|url| {
+            if label == "feature-workspace" {
+                view.window().label() == "main" && url.as_str() == "orqst-features://local/index.html"
+            } else {
+                origin.as_ref().is_some_and(|origin| route_url_valid(&url, origin))
+                    && matches!(url.path(), "/" | "/studio")
+                    && url.fragment().is_none()
+            }
+        });
+        if allowed {
+            let _ = view.eval(format!(
+                "window.dispatchEvent(new CustomEvent('{event}',{{detail:{detail}}}));"
+            ));
+        }
+    }
+}
+
 /// Private owned-terminal pipe only; no renderer command can reach this boundary.
 pub(crate) fn notify_owned(app: &tauri::AppHandle, alert: OwnedAlert) {
+    let category = match alert.category {
+        "failed" => "failed",
+        "intervention" => "waiting_for_user",
+        _ => return,
+    };
     let received = Instant::now();
     let generation = {
         let desktop = app.state::<Desktop>();
@@ -715,30 +768,50 @@ pub(crate) fn notify_owned(app: &tauri::AppHandle, alert: OwnedAlert) {
                 state.owned_frames_queued -= 1;
                 state.generation == generation
             };
+            let fresh = std::time::UNIX_EPOCH
+                .elapsed()
+                .ok()
+                .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+                .is_some_and(|now| owned_alert_fresh(alert.observed_at, now));
             if !current
+                || !fresh
                 || received.elapsed() > FRESHNESS
                 || !crate::terminal::owned_notification_current(&native, &alert.route)
             {
                 return;
             }
+            publish_to_studio(
+                &native,
+                "orqst-owned-turn-alert",
+                serde_json::json!({
+                    "kind": "owned-turn-alert",
+                    "contractVersion": 1,
+                    "epoch": alert.route.epoch,
+                    "slot": alert.route.slot,
+                    "terminalId": alert.route.terminal_id,
+                    "turnId": alert.turn_id,
+                    "category": category,
+                    "silent": alert.silent,
+                    "observedAt": alert.observed_at
+                }),
+            );
+            let window_unfocused = cfg!(target_os = "macos")
+                && native
+                    .get_window("main")
+                    .is_some_and(|window| matches!(window.is_focused(), Ok(false)));
             let id = native
                 .state::<Desktop>()
                 .0
                 .lock()
                 .unwrap()
-                .register_owned(&alert, Instant::now());
+                .register_owned(&alert, Instant::now(), window_unfocused);
             let Some(id) = id else { return };
-            let category = if alert.category == "completed" {
-                "responseCompleted"
-            } else {
-                alert.category
-            };
             let mut notification = native
                 .notification()
                 .builder()
                 .id(id)
                 .title("ORQST")
-                .body(translate(&format!("desktopShell.alert.{}", category)));
+                .body(translate(&format!("studioNotifications.events.{category}")));
             if !alert.silent {
                 notification = notification.sound(if cfg!(target_os = "macos") {
                     "NSUserNotificationDefaultSoundName"
@@ -1004,23 +1077,24 @@ mod tests {
         let now = Instant::now();
         let value = owned_alert();
         let mut alert = parse_owned_alert(&value, value["epoch"].as_str().unwrap(), 1000).unwrap();
+        alert.category = "failed";
         let mut state = State {
             last_frame: Some(now),
             ..State::default()
         };
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
         state.enabled = true;
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
         alert.turn_id = "00000000-0000-4000-8000-000000000004".into();
-        let id = state.register_owned(&alert, now).unwrap();
+        let id = state.register_owned(&alert, now, true).unwrap();
         assert_eq!(state.owned_routes[&id], alert.route);
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
         state.revoke_routes();
         assert!(state.owned_routes.is_empty());
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
         alert.turn_id = "00000000-0000-4000-8000-000000000005".into();
         state.attempts = MAX_ATTEMPTS;
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
     }
 
     #[test]
@@ -1034,15 +1108,30 @@ mod tests {
             ..State::default()
         };
         alert.category = "intervention";
-        let waiting = state.register_owned(&alert, now).unwrap();
-        assert!(state.register_owned(&alert, now).is_none());
+        let waiting = state.register_owned(&alert, now, true).unwrap();
+        assert!(state.register_owned(&alert, now, true).is_none());
         alert.category = "completed";
-        let completed = state.register_owned(&alert, now).unwrap();
-        assert_ne!(waiting, completed);
-        assert!(state.register_owned(&alert, now).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
         alert.category = "failed";
-        assert!(state.register_owned(&alert, now).is_some());
-        assert!(state.register_owned(&alert, now).is_none());
+        let failed = state.register_owned(&alert, now, true).unwrap();
+        assert_ne!(waiting, failed);
+        assert!(state.register_owned(&alert, now, true).is_none());
+    }
+
+    #[test]
+    fn foreground_owned_alerts_cannot_be_replayed_as_background_banners() {
+        let now = Instant::now();
+        let value = owned_alert();
+        let mut alert = parse_owned_alert(&value, value["epoch"].as_str().unwrap(), 1000).unwrap();
+        alert.category = "intervention";
+        let mut state = State {
+            enabled: true,
+            last_frame: Some(now),
+            ..State::default()
+        };
+        assert!(state.register_owned(&alert, now, false).is_none());
+        assert!(state.register_owned(&alert, now, true).is_none());
+        assert_eq!(state.attempts, 0);
     }
 
     fn frame() -> Option<Frame> {

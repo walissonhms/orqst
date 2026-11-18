@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Activity, Bell, Folder, Search, Settings2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 import {
   defaultFeatureId,
   featureDisplayName,
@@ -27,7 +28,16 @@ import { TauriStudioPreparation } from './TauriStudioPreparation.js';
 import { NativeTerminalCreator } from './NativeTerminalCreator.js';
 import { Modal } from './Modal.js';
 import { LegacyStudioPreparation } from './feature-workspace-preparation.js';
-import { AccountLimits } from './AccountLimits.js';
+import { LimitsChip } from './AccountLimits.js';
+import { NotificationsDrawer } from './NotificationsDrawer.js';
+import { useStudioNotifications } from './use-studio-notifications.js';
+import {
+  confirmedResults,
+  focusTarget,
+  limitThresholds,
+  liveAlertMs,
+  ownedTurnNotification,
+} from './studio-notifications-model.js';
 import { FeatureDelegate, type FeatureDelegateProps, type MentionSend } from './MentionComposer.js';
 import { parseAccountLimits, type AccountLimit, type LimitCaps } from './account-limits-model.js';
 import {
@@ -65,6 +75,8 @@ export function FeatureStudio({
   toolbarUtilities,
   preparationRequest,
   onPreparationHandled,
+  notificationPreferences,
+  onObservedNotifications,
   workspaces = [],
   workspaceId = '',
 }: {
@@ -73,6 +85,8 @@ export function FeatureStudio({
   toolbarUtilities?: ReactNode;
   preparationRequest?: FeaturePreparationRequest;
   onPreparationHandled?: () => void;
+  notificationPreferences?: ReactNode;
+  onObservedNotifications?: () => void;
   workspaces?: ReadonlyArray<{ id: string; name: string }>;
   workspaceId?: string;
   onWorkspace?: (id: string) => void;
@@ -122,9 +136,18 @@ export function FeatureStudio({
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const [evidence, setEvidence] = useState<FeatureCanvasEvidence>();
-  // Provider-reported limits only; the panel stays hidden until the host reports some.
+  // Provider-reported limits only.
   const [limits, setLimits] = useState<AccountLimit[]>([]);
-  const [, setLimitsOpen] = useState(false);
+  const priorLimits = useRef<FeatureNativeReply['accountLimits']>(undefined);
+  const liveSince = useRef<number | undefined>(undefined);
+  const [studioNotificationsOpen, setStudioNotificationsOpen] = useState(false);
+  const [focusAlertTarget, setFocusAlertTarget] = useState<{
+    terminalId: string;
+    at: number;
+    nativeTap?: boolean;
+  }>();
+  const studioNotifications = useStudioNotifications();
+  const addNotifications = studioNotifications.add;
   /** Last refused native frame, shown so a hidden terminal is never silent. */
   const [arrangeIssue, setArrangeIssue] = useState('');
   const [closeIssue, setCloseIssue] = useState(false);
@@ -138,7 +161,7 @@ export function FeatureStudio({
       at: number;
     }[]
   >([]);
-  const [limitPrefs, setLimitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
+  const [limitPrefs] = useState<{ shown?: string[]; caps: LimitCaps }>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem('orqst.accountLimits') ?? 'null') as {
         shown?: unknown;
@@ -159,14 +182,8 @@ export function FeatureStudio({
       return { caps: { warn: 60, critical: 85 } };
     }
   });
-  const saveLimitPrefs = (next: { shown?: string[]; caps: LimitCaps }) => {
-    setLimitPrefs(next);
-    try {
-      localStorage.setItem('orqst.accountLimits', JSON.stringify(next));
-    } catch {
-      // The choice still applies to this window.
-    }
-  };
+  const capsForAlerts = useRef(limitPrefs.caps);
+  capsForAlerts.current = limitPrefs.caps;
   const [now, setNow] = useState(Date.now);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -292,6 +309,37 @@ export function FeatureStudio({
     if (arrivals.length === 1) layoutControls.current?.placeTerminal(arrivals[0]!.id, pending.slot);
   }, [scopeKey, terminals]);
   const focusedTerminals = useRef(new Map<string, string>());
+  useEffect(() => {
+    if (!native) return;
+    const tap = (event: Event) => {
+      const result = z
+        .strictObject({ terminalId: z.uuid() })
+        .safeParse((event as CustomEvent<unknown>).detail);
+      if (result.success) {
+        setStudioNotificationsOpen(false);
+        setFocusAlertTarget({
+          terminalId: result.data.terminalId,
+          at: Date.now(),
+          nativeTap: true,
+        });
+      }
+    };
+    window.addEventListener('orqst-owned-notification-click', tap);
+    return () => window.removeEventListener('orqst-owned-notification-click', tap);
+  }, [native]);
+  useEffect(() => {
+    if (!focusAlertTarget || !layoutControls.current || busy || studioNotificationsOpen) return;
+    const { terminalId, at, nativeTap } = focusAlertTarget;
+    if (Date.now() - at > liveAlertMs) {
+      setFocusAlertTarget(undefined);
+      return;
+    }
+    const slot = focusTarget(snapshot, snapshot?.activeFeatureId ?? null, terminalId);
+    if (!slot || (nativeTap && !panes.some((pane) => pane.slot === slot.slot && pane.active)))
+      return;
+    layoutControls.current.focusTerminal(terminalId);
+    setFocusAlertTarget(undefined);
+  }, [focusAlertTarget, studioNotificationsOpen, busy, snapshot, panes]);
   const arranging = useRef<{
     layout: NativePaneLayout[];
     mode: ArrangementMode;
@@ -471,15 +519,34 @@ export function FeatureStudio({
           setEvidence(undefined);
         }
         if (accepted && reply.canvas) setEvidence(reply.canvas);
-        if (
-          reply.accountLimits ||
-          action.action === 'accountLimits' ||
-          ((action.action === 'snapshot' || action.action === 'canvas') && reply.status === 'ok')
-        )
-          setLimits(parseAccountLimits(reply.accountLimits?.accounts));
         if (accepted && reply.communication) setCommunication(reply.communication.events);
-        if (action.action === 'snapshot' && reply.status === 'unavailable')
-          setCoreState('unavailable');
+        const observedAt = Date.now();
+        if (reply.status === 'ok' && accepted && reply.snapshot) {
+          if (readsLimits) {
+            const prior = priorLimits.current;
+            const next = reply.accountLimits;
+            if (prior && next) {
+              addNotifications(
+                limitThresholds(prior, next, capsForAlerts.current, observedAt),
+                observedAt,
+              );
+            }
+            priorLimits.current = next;
+            setLimits(parseAccountLimits(next?.accounts));
+          }
+          if (reply.communication && liveSince.current !== undefined) {
+            addNotifications(
+              confirmedResults(reply.communication, reply.snapshot, liveSince.current, observedAt),
+              observedAt,
+            );
+          }
+          liveSince.current ??= observedAt;
+        } else if (readsLimits && reply.status === 'unavailable') {
+          priorLimits.current = undefined;
+          liveSince.current = undefined;
+          setLimits([]);
+          if (action.action === 'snapshot') setCoreState('unavailable');
+        }
         if (reply.status === 'ok' && accepted) onAccepted?.(reply);
         if (
           reply.status !== 'ok' &&
@@ -496,7 +563,11 @@ export function FeatureStudio({
         return reply.status;
       } catch {
         if (live.current) {
-          if (readsLimits) setLimits([]);
+          if (readsLimits) {
+            priorLimits.current = undefined;
+            liveSince.current = undefined;
+            setLimits([]);
+          }
           if (action.action === 'snapshot') setCoreState('unavailable');
           else setNotice('unavailable');
         }
@@ -508,8 +579,21 @@ export function FeatureStudio({
         }
       }
     },
-    [native, acceptSnapshot],
+    [native, acceptSnapshot, addNotifications],
   );
+
+  useEffect(() => {
+    if (!native) return;
+    const receive = (event: Event) => {
+      const snapshot = current.current;
+      if (!snapshot || liveSince.current === undefined) return;
+      const now = Date.now();
+      const alert = ownedTurnNotification((event as CustomEvent<unknown>).detail, snapshot, now);
+      if (alert && alert.at >= liveSince.current) addNotifications([alert], now);
+    };
+    window.addEventListener('orqst-owned-turn-alert', receive);
+    return () => window.removeEventListener('orqst-owned-turn-alert', receive);
+  }, [native, addNotifications]);
 
   // The main document receives the creator's cancel event after native suspended the
   // sibling webviews. Keep that presentation recovery separate from scope switches.
@@ -681,6 +765,27 @@ export function FeatureStudio({
     return true;
   }
 
+  /** View-only L2 integration point. The ID is immutable and the owning Feature is checked. */
+  async function focusTerminal(featureId: string | null, terminalId: string) {
+    if (quitFence || editor || renamePane || structuredOpen) return false;
+    if ((await request({ action: 'snapshot' })) !== 'ok') return false;
+    const latest = current.current;
+    if (!latest || !focusTarget(latest, featureId, terminalId)) return false;
+    if (latest.activeFeatureId !== featureId) {
+      if (
+        (await request({ action: 'select', featureId, expectedRevision: latest.view.revision })) !==
+        'ok'
+      )
+        return false;
+    }
+    const slot = focusTarget(current.current, featureId, terminalId);
+    if (!slot || current.current?.activeFeatureId !== featureId) return false;
+    const status = await request({ action: 'pane', command: 'focus', slot: slot.slot, terminalId });
+    if (status !== 'ok') return false;
+    setFocusAlertTarget({ terminalId, at: Date.now() });
+    return true;
+  }
+
   function openEditor(feature: WorkspaceFeature | 'new') {
     editorVersion.current++;
     setEditor(feature);
@@ -830,7 +935,6 @@ export function FeatureStudio({
     ['workspaces', 'shell.views.workspaces', Folder],
     ['settings', 'shell.views.settings', Settings2],
     ['search', 'shell.palette.title', Search],
-    ['notifications', 'notifications', Bell],
   ] as const;
   const nativeNavigation = nativeWorkspace && native?.showDashboard && (
     <nav aria-label={t('analytics.navigation')} className="studio-route-links">
@@ -848,6 +952,29 @@ export function FeatureStudio({
         </button>
       ))}
     </nav>
+  );
+  const notificationsBell = native && (
+    <button
+      type="button"
+      className="icon-button feature-nav-control studio-notifications-trigger"
+      aria-label={t('notifications')}
+      aria-haspopup="dialog"
+      aria-expanded={studioNotificationsOpen}
+      title={`${t('notifications')} · ${t('notificationCounts', { count: studioNotifications.unreadCount })}`}
+      onClick={() => setStudioNotificationsOpen(true)}
+    >
+      <Bell size={16} aria-hidden="true" />
+      {studioNotifications.unreadCount > 0 && (
+        <>
+          <span className="studio-notifications-count" aria-hidden="true">
+            {studioNotifications.unreadCount > 99 ? '99+' : studioNotifications.unreadCount}
+          </span>
+          <span className="al-sr-only" role="status">
+            {t('notificationCounts', { count: studioNotifications.unreadCount })}
+          </span>
+        </>
+      )}
+    </button>
   );
   const gridReason = t('feature.noLayout');
   const mentionScope =
@@ -978,6 +1105,46 @@ export function FeatureStudio({
       className={`feature-workspace${nativeWorkspace ? ' feature-native' : ''}`}
       aria-label={t('features.workspace')}
     >
+      <NotificationsDrawer
+        items={studioNotifications.items}
+        unreadCount={studioNotifications.unreadCount}
+        open={studioNotificationsOpen}
+        onClose={() => setStudioNotificationsOpen(false)}
+        onMarkRead={studioNotifications.markRead}
+        onClearAll={studioNotifications.clearAll}
+        canFocus={(featureId, terminalId) =>
+          coreState === 'online' && !!focusTarget(snapshot, featureId, terminalId)
+        }
+        focusTerminal={focusTerminal}
+        preferences={
+          <>
+            {notificationPreferences}
+            {(onObservedNotifications || (nativeWorkspace && native?.showDashboard)) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStudioNotificationsOpen(false);
+                  if (onObservedNotifications) onObservedNotifications();
+                  else void openDashboard('notifications');
+                }}
+              >
+                {t('studioNotifications.observedHistory')}
+              </button>
+            )}
+            {nativeWorkspace && native?.showDashboard && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStudioNotificationsOpen(false);
+                  void openDashboard('settings');
+                }}
+              >
+                {t('studioNotifications.settings')}
+              </button>
+            )}
+          </>
+        }
+      />
       <aside className="feature-sidebar" ref={scopeTree}>
         <div className="feature-brand">
           <img
@@ -1247,8 +1414,11 @@ export function FeatureStudio({
             </details>
           )}
         </div>
-        {(navigation || nativeNavigation) && (
-          <div className="feature-navigation">{navigation ?? nativeNavigation}</div>
+        {(navigation || nativeNavigation || notificationsBell) && (
+          <div className="feature-navigation">
+            {navigation ?? nativeNavigation}
+            {notificationsBell}
+          </div>
         )}
         <footer className="feature-core" role="status" data-state={coreState}>
           <span aria-hidden="true">●</span> {t(`feature.core.${coreState}`)}
@@ -1332,30 +1502,20 @@ export function FeatureStudio({
                 () => layoutControls.current?.restore(),
               )}
               {actions}
-              {nativeWorkspace ? (
-                <AccountLimits
-                  accounts={limits}
-                  shown={limitPrefs.shown ?? limits.slice(0, 4).map((entry) => entry.id)}
-                  caps={limitPrefs.caps}
-                  now={now}
-                  source={t('accountLimits.sourceApp')}
-                  onOpenChange={setLimitsOpen}
-                  onShownChange={(shown) => saveLimitPrefs({ ...limitPrefs, shown })}
-                  onCapsChange={(caps) => saveLimitPrefs({ ...limitPrefs, caps })}
-                  onRefresh={(accountId) =>
-                    void request({ action: 'accountLimits', command: 'refresh', accountId })
-                  }
-                  onToggleLock={(accountId) =>
-                    void request({
-                      action: 'accountLimits',
-                      command: limits.find((entry) => entry.id === accountId)?.locked
-                        ? 'unlock'
-                        : 'lock',
-                      accountId,
-                    })
-                  }
-                />
-              ) : null}
+              {native && (
+                <span className="studio-limits-control">
+                  <LimitsChip
+                    accounts={limits}
+                    shown={limitPrefs.shown ?? limits.map((entry) => entry.id)}
+                    caps={limitPrefs.caps}
+                    now={now}
+                    onRefresh={(accountId) =>
+                      void request({ action: 'accountLimits', command: 'refresh', accountId })
+                    }
+                    canRefresh={(accountId) => accountId === 'codex-default'}
+                  />
+                </span>
+              )}
               {toolbarUtilities}
             </>
           }
@@ -1404,7 +1564,12 @@ export function FeatureStudio({
                   onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) =>
                     arrange(layout, mode, scopeKey),
                   // The limits panel hides only the views under it (data-native-overlay).
-                  overlayOpen: !!editor || !!renamePane || structuredOpen || quitFence,
+                  overlayOpen:
+                    !!editor ||
+                    !!renamePane ||
+                    structuredOpen ||
+                    quitFence ||
+                    studioNotificationsOpen,
                 },
               }
             : {})}

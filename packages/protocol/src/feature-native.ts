@@ -23,6 +23,12 @@ const featureId = z.uuid();
 const logical = z.number().finite().min(0).max(32768);
 const accountLimitId = z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,63}$/);
 const accountLimitTime = z.number().int().nonnegative().safe();
+/** Optional display alias supplied by the provider, without email or account IDs. */
+export const accountLimitDisplayLabelSchema = z
+  .string()
+  .max(48)
+  .regex(/^[\p{Alphabetic}\p{N}][\p{Alphabetic}\p{N} _.-]*$/u)
+  .refine((value) => value === value.trimEnd());
 export const accountLimitsSchema = z
   .strictObject({
     readAt: accountLimitTime,
@@ -32,6 +38,7 @@ export const accountLimitsSchema = z
           id: accountLimitId,
           provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']),
           index: z.number().int().min(1).max(99),
+          label: accountLimitDisplayLabelSchema.optional(),
           plan: z
             .string()
             .min(1)

@@ -230,3 +230,12 @@ test('default account facade joins only the configured observer root and persist
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('the native reply accepts only a bounded, email-free account display label', () => {
+  const account = { id: 'codex-default', provider: 'codex', index: 1, locked: false, windows: [] };
+  const report = (label: string) => ({ readAt: 5, accounts: [{ ...account, label }] });
+  assert.equal(accountLimitsSchema.safeParse(report('Equipe de revisão')).success, true);
+  for (const label of ['a'.repeat(49), 'user@example.invalid', ' Team', 'Team ']) {
+    assert.equal(accountLimitsSchema.safeParse(report(label)).success, false, label);
+  }
+});

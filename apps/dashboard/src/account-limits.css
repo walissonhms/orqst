@@ -233,6 +233,17 @@
   margin-bottom: 6px;
 }
 
+.studio-limits-control {
+  display: inline-flex;
+  min-width: 0;
+  padding-inline-start: 6px;
+  border-inline-start: 1px solid #262334;
+}
+.studio-limits-control > .al-trigger {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
 .al-trigger {
   display: inline-flex;
   align-items: center;
@@ -260,15 +271,6 @@
 .al-trigger-group + .al-trigger-group {
   padding-left: 12px;
   border-left: 1px solid var(--v6-line);
-}
-.al-trigger-account {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.al-trigger .al-bar {
-  width: 16px;
-  height: 3px;
 }
 .al-reset {
   color: var(--v6-muted);
@@ -355,7 +357,8 @@
   font-weight: 600;
   margin-right: auto;
 }
-.al-head span {
+.al-head span,
+.al-head time {
   color: var(--v6-muted);
   font-size: 11px;
 }
@@ -385,8 +388,10 @@
   gap: 8px;
   margin-bottom: 6px;
 }
-.al-index {
-  font-weight: 700;
+.al-account-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 .al-plan {
   padding: 1px 6px;
@@ -397,11 +402,11 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.al-updated {
-  margin-left: auto;
-  color: var(--v6-muted);
+.al-account-head .al-icon:first-of-type {
+  margin-inline-start: auto;
 }
 .al-icon {
+  flex: none;
   display: grid;
   place-items: center;
   width: 28px;
