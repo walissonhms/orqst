@@ -25,6 +25,11 @@ existing login from the user's HOME and XDG roots, and pilot sessions persist in
 normal OpenCode history. See the updated controls and smoke in the
 [pilot record](docs/design/structured-opencode-pilot.md).
 
+Structured delegation accepts a Feature-local worker `@handle` through the
+existing one-use native review. PTY MCP hubs report relay connectivity and
+distinguish queued tasks, inbox reads and worker-submitted results.
+[Communication details](docs/development/feature-mention-routing.md).
+
 ## Batch diagnostics and native Retire-before-Quit — 2026-11-06 (source)
 
 Batch refusals retain exact admission reasons. Native owned terminal Quit now

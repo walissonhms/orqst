@@ -35,11 +35,16 @@ const handleOf = (terminal: StudioTerminal) => `@${terminal.label}`;
 /** Find `@…` mentions in the text and resolve them to terminals by exact label. */
 export function resolveMentions(text: string, terminals: StudioTerminal[]): StudioTerminal[] {
   const found = new Map<string, StudioTerminal>();
-  for (const match of text.matchAll(/@([A-Za-z]-\d{3})\b/g)) {
-    const terminal = terminals.find(
-      (candidate) => candidate.label.toLowerCase() === match[1]!.toLowerCase(),
-    );
-    if (terminal) found.set(terminal.id, terminal);
+  for (const match of text.matchAll(
+    /(`{3,}|~{3,})[\s\S]*?(?:\1|$)|`[^`\n]*`|(?<![\p{L}\p{N}_@.+%-])@([a-z]-\d{3})(?![\p{L}\p{N}_@/-])/giu,
+  )) {
+    const handle = match[2]?.toLowerCase();
+    if (!handle) continue;
+    const matches = terminals.filter((candidate) => candidate.label.toLowerCase() === handle);
+    if (matches.length === 1) {
+      const terminal = matches[0]!;
+      found.set(terminal.id, terminal);
+    }
   }
   return [...found.values()];
 }
@@ -131,6 +136,7 @@ export function MentionComposer({
           <span>{t('terminalStudio.mention.from')}</span>
           <select
             value={from ?? ''}
+            disabled={state === 'sending'}
             onChange={(event) => onFromChange(event.target.value || null)}
             aria-label={t('terminalStudio.mention.from')}
           >
@@ -148,6 +154,7 @@ export function MentionComposer({
             ref={input}
             rows={1}
             value={text}
+            disabled={state === 'sending'}
             placeholder={t('terminalStudio.mention.placeholder')}
             aria-label={t('terminalStudio.mention.label')}
             aria-autocomplete="list"

@@ -14,6 +14,9 @@ See the [disposable host benchmark](../development/native-opening-performance.md
 - [x] Synthetic OpenCode stream, permission, recovery, cleanup and mixed-provider delegation.
 - [x] OpenCode 2.2.5 inherited HOME/XDG launch and persistent session history.
 - [x] Optional pinned startup, EOF and history smoke without sending a model turn.
+- [x] Feature-local worker `@handle` resolution through the existing structured grant review.
+- [x] Node and Rust hub source uses relay connectivity, inbox reads and explicit result submissions.
+- [ ] Native structured mention review and real-provider hub peer, task and result acceptance.
 - [ ] Native packaging, approval review, real model turns and mixed-provider acceptance.
 
 See the [implementation and verification record](../design/structured-opencode-pilot.md).

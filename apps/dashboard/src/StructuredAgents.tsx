@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   structuredAgentsLimits as limits,
+  resolveStructuredHandle,
   type DesktopStructuredAgents,
+  type DesktopStructuredAgentsRequest,
   type StructuredAgentsReply,
-  type StructuredAgentsRequest,
   type StructuredAgentsScope,
   type StructuredAgentsSnapshot,
   type StructuredAgentsUnavailableReason,
@@ -45,7 +46,8 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState<StructuredAgentsSnapshot>();
   const [sessionId, setSessionId] = useState('');
-  const [workerId, setWorkerId] = useState('');
+  const [workerHandle, setWorkerHandle] = useState('');
+  const workerSuggestions = useId();
   const [label, setLabel] = useState('');
   const [provider, setProvider] = useState<StructuredProvider>('codex');
   const [text, setText] = useState('');
@@ -81,7 +83,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
     };
   }, [client, featureId, workspaceId]);
 
-  async function submit(request: StructuredAgentsRequest) {
+  async function submit(request: DesktopStructuredAgentsRequest) {
     if (busy) return;
     setBusy(true);
     setNotice(undefined);
@@ -90,7 +92,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
       setNotice(feedback(response));
       if (response.status === 'ok' && request.action === 'start') setLabel('');
       if (response.status === 'ok' && request.action === 'turn') setText('');
-      if (response.status === 'ok' && request.action === 'grant') {
+      if (response.status === 'ok' && request.action === 'mention') {
         setText(
           t(
             session?.provider === 'opencode'
@@ -113,6 +115,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
   }
 
   const session = snapshot?.sessions.find((entry) => entry.sessionId === sessionId);
+  const workerId = resolveStructuredHandle(scope, snapshot?.sessions ?? [], workerHandle);
   const workers =
     snapshot?.sessions.filter(
       (entry) => entry.sessionId !== sessionId && entry.lifecycle === 'ready' && !entry.busy,
@@ -186,7 +189,7 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
                 value={sessionId}
                 onChange={(event) => {
                   setSessionId(event.target.value);
-                  setWorkerId('');
+                  setWorkerHandle('');
                   setText('');
                   setTask('');
                 }}
@@ -280,27 +283,43 @@ export function StructuredAgents({ client, scope, featureName, onClose }: Props)
                   <form
                     onSubmit={(event) => {
                       event.preventDefault();
+                      if (!workerId || !workerReady) return;
                       void submit({
-                        action: 'grant',
+                        action: 'mention',
                         sourceSessionId: sessionId,
                         targetSessionId: workerId,
+                        handle: workerHandle,
                         task: task.trim(),
                       });
                     }}
                   >
                     <label>
                       {t('structuredAgents.worker')}
-                      <select
-                        value={workerId}
-                        onChange={(event) => setWorkerId(event.target.value)}
-                      >
-                        <option value="">{t('features.choose')}</option>
-                        {workers.map((entry) => (
-                          <option key={entry.sessionId} value={entry.sessionId}>
-                            {entry.label} · {t(`structuredAgents.provider_${entry.provider}`)}
-                          </option>
-                        ))}
-                      </select>
+                      <input
+                        value={workerHandle}
+                        placeholder={t('structuredAgents.workerHandle')}
+                        list={workerSuggestions}
+                        maxLength={65}
+                        onChange={(event) => setWorkerHandle(event.target.value)}
+                        required
+                      />
+                      <datalist id={workerSuggestions}>
+                        {workers.map((entry) => {
+                          const handle = `@${entry.label}`;
+                          const matches = resolveStructuredHandle(
+                            scope,
+                            snapshot?.sessions ?? [],
+                            handle,
+                          );
+                          return (
+                            <option
+                              key={entry.sessionId}
+                              value={matches === entry.sessionId ? handle : `@${entry.sessionId}`}
+                              label={entry.label}
+                            />
+                          );
+                        })}
+                      </datalist>
                     </label>
                     <label>
                       {t('structuredAgents.task')}

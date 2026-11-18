@@ -1,7 +1,7 @@
 import './features-client.js';
 import { invoke } from '@tauri-apps/api/core';
 import {
-  structuredAgentsRequestSchema,
+  desktopStructuredAgentsRequestSchema,
   structuredAgentsScopeSchema,
   type DesktopStructuredAgents,
 } from '@orqst/protocol';
@@ -14,7 +14,7 @@ if (
   const client: DesktopStructuredAgents = {
     async request(scope, request) {
       const scoped = structuredAgentsScopeSchema.safeParse(scope, { jitless: true });
-      const parsed = structuredAgentsRequestSchema.safeParse(request, { jitless: true });
+      const parsed = desktopStructuredAgentsRequestSchema.safeParse(request, { jitless: true });
       if (!scoped.success || !parsed.success) return { status: 'denied' };
       if (parsed.data.action !== 'snapshot' && !navigator.userActivation.isActive)
         return { status: 'denied' };

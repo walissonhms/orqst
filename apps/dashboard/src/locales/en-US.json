@@ -877,6 +877,7 @@
     "historyLimit": "Older conversation items were removed to keep this session within its display limit.",
     "delegate": "Delegate a task",
     "worker": "Worker session",
+    "workerHandle": "@name or @session ID",
     "task": "Exact task",
     "grant": "Review one-time grant",
     "delegatePrompt": "Use orqst_delegate_task with targetPaneId {{target}} and this exact task: {{task}}",

@@ -98,6 +98,7 @@ type Message = {
   kind: 'message' | 'task' | 'result';
   from: string;
   fromAlias: string;
+  featureId: string;
   at: number;
   text: string;
   truncated: boolean;
@@ -109,7 +110,8 @@ type Task = {
   id: string;
   from: string;
   to: string;
-  state: 'delivered' | 'done' | 'failed' | 'blocked';
+  featureId: string;
+  state: 'queued' | 'dequeued' | 'done' | 'failed' | 'blocked';
   summary?: string;
   updatedAt: number;
 };
@@ -136,6 +138,7 @@ export class TerminalMessageHub {
   // Depth of what each terminal last read, and when; a stale chain counts as a new one.
   private chain = new Map<string, { depth: number; at: number }>();
   private tasks = new Map<string, Task>();
+  private relays = new Set<string>();
   private closed = false;
 
   constructor(
@@ -149,6 +152,7 @@ export class TerminalMessageHub {
     for (const resolvers of this.waiters.values()) for (const resolve of resolvers) resolve();
     this.waiters.clear();
     this.inboxes.clear();
+    this.relays.clear();
   }
 
   /** Forget a terminal's queue and waits (closed, reloaded or left its Feature). */
@@ -159,32 +163,52 @@ export class TerminalMessageHub {
     this.chain.delete(terminalId);
   }
 
-  private member(terminalId: string) {
-    return this.members().find((member) => member.terminalId === terminalId);
+  relayConnected(terminalId: string, connected: boolean) {
+    if (connected && !this.closed) this.relays.add(terminalId);
+    else this.relays.delete(terminalId);
   }
 
-  private peers(sender: HubMember) {
+  private peers(sender: HubMember, members: HubMember[]) {
     if (!sender.featureId) return [];
-    return this.members().filter(
+    return members.filter(
       (member) => member.featureId === sender.featureId && member.terminalId !== sender.terminalId,
     );
   }
 
-  private resolveTarget(sender: HubMember, raw: string) {
+  private resolveTarget(sender: HubMember, members: HubMember[], raw: string) {
     const wanted = raw.replace(/^@/, '').toLowerCase();
-    const target = this.peers(sender).find(
+    const targets = this.peers(sender, members).filter(
       (member) =>
         member.alias.toLowerCase() === wanted || member.terminalId.toLowerCase() === wanted,
     );
     // Self, other Features/workspaces and unknown handles are all refused the same way.
-    if (!target) throw new HubRefusal('unknown_terminal');
-    return target;
+    if (targets.length !== 1) throw new HubRefusal('unknown_terminal');
+    return targets[0]!;
   }
 
-  private admit(senderId: string, targets: HubMember[]) {
+  private inbox(target: HubMember, members: HubMember[]) {
+    const queue = (this.inboxes.get(target.terminalId) ?? []).filter(
+      (item) =>
+        item.featureId === target.featureId &&
+        (item.from === OWNER_SENDER ||
+          members.some(
+            (sender) => sender.terminalId === item.from && sender.featureId === item.featureId,
+          )),
+    );
+    this.inboxes.set(target.terminalId, queue);
+    return queue;
+  }
+
+  private taskScope(task: Task, members: HubMember[]) {
+    const hasMember = (id: string) =>
+      members.some((member) => member.terminalId === id && member.featureId === task.featureId);
+    return hasMember(task.from) && hasMember(task.to);
+  }
+
+  private admit(senderId: string, targets: HubMember[], members: HubMember[]) {
     // A refused send never spends the sender's budget.
     for (const target of targets)
-      if ((this.inboxes.get(target.terminalId)?.length ?? 0) >= HUB_LIMITS.inbox)
+      if (this.inbox(target, members).length >= HUB_LIMITS.inbox)
         throw new HubRefusal('inbox_full');
     const now = this.now();
     const recent = (this.sends.get(senderId) ?? []).filter((at) => now - at < 60_000);
@@ -196,12 +220,18 @@ export class TerminalMessageHub {
   private deliver(
     sender: { terminalId: string; alias: string },
     target: HubMember,
-    message: Omit<Message, 'from' | 'fromAlias' | 'at'>,
+    message: Omit<Message, 'from' | 'fromAlias' | 'at' | 'featureId'>,
   ) {
     const inbox = this.inboxes.get(target.terminalId) ?? [];
     if (inbox.length >= HUB_LIMITS.inbox) throw new HubRefusal('inbox_full');
     const at = this.now();
-    inbox.push({ ...message, from: sender.terminalId, fromAlias: sender.alias, at });
+    inbox.push({
+      ...message,
+      from: sender.terminalId,
+      fromAlias: sender.alias,
+      featureId: target.featureId!,
+      at,
+    });
     this.inboxes.set(target.terminalId, inbox);
     this.evidence({
       messageId: message.id,
@@ -231,13 +261,16 @@ export class TerminalMessageHub {
   /** Owner messages start a new chain (depth 0) and need only a Feature member target. */
   ownerSend(featureId: string, to: string, text: string) {
     if (this.closed) throw new HubRefusal('unavailable');
-    const target = this.members().find(
+    const members = this.members();
+    const targets = members.filter(
       (member) =>
         member.featureId === featureId &&
         (member.alias.toLowerCase() === to.replace(/^@/, '').toLowerCase() ||
           member.terminalId === to),
     );
-    if (!target) throw new HubRefusal('unknown_terminal');
+    if (targets.length !== 1) throw new HubRefusal('unknown_terminal');
+    const target = targets[0]!;
+    this.inbox(target, members);
     const cut = truncateText(text, HUB_LIMITS.textBytes);
     const id = randomUUID();
     this.deliver({ terminalId: OWNER_SENDER, alias: 'owner' }, target, {
@@ -252,27 +285,39 @@ export class TerminalMessageHub {
 
   async call(senderId: string, raw: unknown): Promise<unknown> {
     if (this.closed) throw new HubRefusal('unavailable');
-    const sender = this.member(senderId);
+    const members = this.members();
+    const sender = members.find((member) => member.terminalId === senderId);
     if (!sender || !sender.running) throw new HubRefusal('not_member');
     const call = hubToolCallSchema.parse(raw);
     switch (call.name) {
       case 'list_terminals':
         return {
-          terminals: this.peers(sender).map((member) => ({
+          terminals: this.peers(sender, members).map((member) => ({
             handle: member.alias,
             name: member.name,
             cli: member.provider,
-            state: member.running ? 'running' : 'stopped',
-            queued: this.inboxes.get(member.terminalId)?.length ?? 0,
+            state: !member.running
+              ? 'stopped'
+              : this.relays.has(member.terminalId)
+                ? 'mcp_connected'
+                : 'unconfirmed',
+            queued: this.inbox(member, members).length,
           })),
         };
       case 'send_message': {
-        const recipients = [
-          ...new Set(Array.isArray(call.arguments.to) ? call.arguments.to : [call.arguments.to]),
+        const recipients = Array.isArray(call.arguments.to)
+          ? call.arguments.to
+          : [call.arguments.to];
+        const targets = [
+          ...new Map(
+            recipients.map((to) => {
+              const target = this.resolveTarget(sender, members, to);
+              return [target.terminalId, target];
+            }),
+          ).values(),
         ];
-        const targets = recipients.map((to) => this.resolveTarget(sender, to));
         const depth = this.nextDepth(senderId);
-        this.admit(senderId, targets);
+        this.admit(senderId, targets, members);
         const cut = truncateText(call.arguments.text, HUB_LIMITS.textBytes);
         const ids = targets.map((target) => {
           const id = randomUUID();
@@ -290,25 +335,28 @@ export class TerminalMessageHub {
         return { sent: ids, state: 'queued', truncated: cut.truncated };
       }
       case 'delegate_task': {
-        const target = this.resolveTarget(sender, call.arguments.to);
+        const target = this.resolveTarget(sender, members, call.arguments.to);
         const depth = this.nextDepth(senderId);
-        const open = [...this.tasks.values()].filter((task) => task.state === 'delivered');
+        const pending = (task: Task) =>
+          (task.state === 'queued' || task.state === 'dequeued') && this.taskScope(task, members);
+        const open = [...this.tasks.values()].filter(pending);
         if (open.length >= HUB_LIMITS.tasks) throw new HubRefusal('too_many_tasks');
         // Finished tasks stay queryable for a while; the oldest are dropped past 256.
         if (this.tasks.size >= 256)
           for (const [id, task] of this.tasks)
-            if (task.state !== 'delivered') {
+            if (!pending(task)) {
               this.tasks.delete(id);
               if (this.tasks.size < 256) break;
             }
-        this.admit(senderId, [target]);
+        this.admit(senderId, [target], members);
         const cut = truncateText(call.arguments.task, HUB_LIMITS.textBytes);
         const taskId = randomUUID();
         this.tasks.set(taskId, {
           id: taskId,
           from: senderId,
           to: target.terminalId,
-          state: 'delivered',
+          featureId: target.featureId!,
+          state: 'queued',
           updatedAt: this.now(),
         });
         this.deliver(sender, target, {
@@ -320,19 +368,22 @@ export class TerminalMessageHub {
           taskId,
         });
         this.chain.delete(senderId);
-        return { taskId, to: target.alias, state: 'delivered' };
+        return { taskId, to: target.alias, state: 'queued' };
       }
       case 'submit_result': {
         const task = this.tasks.get(call.arguments.taskId);
-        if (!task || task.to !== senderId) throw new HubRefusal('unknown_task');
-        if (task.state !== 'delivered') throw new HubRefusal('already_submitted');
-        const delegator = this.member(task.from);
+        if (!task || task.to !== senderId || !this.taskScope(task, members))
+          throw new HubRefusal('unknown_task');
+        if (task.state === 'queued') throw new HubRefusal('task_unread');
+        if (task.state !== 'dequeued') throw new HubRefusal('already_submitted');
+        const delegator = members.find((member) => member.terminalId === task.from)!;
         task.state = call.arguments.status;
         task.updatedAt = this.now();
         const cut = truncateText(call.arguments.summary, HUB_LIMITS.summaryBytes);
         task.summary = cut.text;
-        // The result returns to the delegator only while both stay in one Feature.
-        if (delegator?.running && delegator.featureId && delegator.featureId === sender.featureId)
+        const resultQueued =
+          delegator.running && this.inbox(delegator, members).length < HUB_LIMITS.inbox;
+        if (resultQueued)
           this.deliver(sender, delegator, {
             id: randomUUID(),
             kind: 'result',
@@ -344,11 +395,15 @@ export class TerminalMessageHub {
             taskId: task.id,
             status: call.arguments.status,
           });
-        return { taskId: task.id, state: task.state };
+        return { taskId: task.id, state: task.state, resultQueued };
       }
       case 'task_status': {
         const task = this.tasks.get(call.arguments.taskId);
-        if (!task || (task.from !== senderId && task.to !== senderId))
+        if (
+          !task ||
+          (task.from !== senderId && task.to !== senderId) ||
+          !this.taskScope(task, members)
+        )
           throw new HubRefusal('unknown_task');
         return {
           taskId: task.id,
@@ -358,9 +413,9 @@ export class TerminalMessageHub {
         };
       }
       case 'read_messages':
-        return this.take(senderId, call.arguments.limit);
+        return this.take(sender, members, call.arguments.limit);
       case 'wait_messages': {
-        if (!this.inboxes.get(senderId)?.length) {
+        if (!this.inbox(sender, members).length) {
           const timeout = call.arguments.timeout_ms ?? 30_000;
           await new Promise<void>((resolve) => {
             const waiters = this.waiters;
@@ -381,17 +436,28 @@ export class TerminalMessageHub {
             waiters.set(senderId, list);
           });
         }
-        return this.take(senderId);
+        const current = this.members();
+        const member = current.find((entry) => entry.terminalId === senderId);
+        if (!member?.running || member.featureId !== sender.featureId)
+          throw new HubRefusal('not_member');
+        return this.take(member, current);
       }
     }
   }
 
-  private take(terminalId: string, limit: number = HUB_LIMITS.readBatch) {
-    const inbox = this.inboxes.get(terminalId) ?? [];
+  private take(sender: HubMember, members: HubMember[], limit: number = HUB_LIMITS.readBatch) {
+    const inbox = this.inbox(sender, members);
     const items = inbox.splice(0, limit);
+    for (const item of items) {
+      const task = item.kind === 'task' && item.taskId ? this.tasks.get(item.taskId) : undefined;
+      if (task?.state === 'queued') {
+        task.state = 'dequeued';
+        task.updatedAt = this.now();
+      }
+    }
     // What a terminal reads sets the depth of what it sends next.
     if (items.length)
-      this.chain.set(terminalId, {
+      this.chain.set(sender.terminalId, {
         depth: Math.max(...items.map((item) => item.depth)),
         at: this.now(),
       });

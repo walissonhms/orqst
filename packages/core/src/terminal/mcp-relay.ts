@@ -31,7 +31,7 @@ const tools = {
     {
       name: 'list_terminals',
       description:
-        'List the other terminals in your ORQST Feature you can message: handle (T-00x), name, CLI and state.',
+        'List other terminals in your ORQST Feature: handle (T-00x), name, CLI, unread count and relay state. A connected relay does not establish what a terminal is doing.',
       inputSchema: object({}),
     },
     {
@@ -66,7 +66,7 @@ const tools = {
     {
       name: 'delegate_task',
       description:
-        'Give a task to another terminal of your Feature. Answers at once with a taskId; the result comes later as a result message.',
+        'Queue a task for another terminal of your Feature. Returns a taskId immediately. Dequeued means that the worker relay requested the inbox. Use task_status for the result.',
       inputSchema: object({ to: handleSchema, task: { type: 'string', minLength: 1 } }, [
         'to',
         'task',
@@ -75,7 +75,7 @@ const tools = {
     {
       name: 'submit_result',
       description:
-        'Report the result of a task you received: done, failed or blocked, with a summary.',
+        'Report done, failed or blocked for a task you read. If resultQueued is false the delegator can still use task_status.',
       inputSchema: object(
         {
           taskId: { type: 'string', format: 'uuid' },

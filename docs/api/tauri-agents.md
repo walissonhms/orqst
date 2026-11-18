@@ -1,5 +1,12 @@
 # Tauri structured agent client
 
+The opt-in Studio pilot has a separate private request surface. Its
+`mention` action takes `sourceSessionId`, `targetSessionId`, `handle` and
+`task`. The Node host resolves the handle in the active Feature and requires
+the same target on both native review and apply. The resulting one-time grant
+uses the existing structured delegation service.
+[Pilot workflow and limits](../development/feature-mention-routing.md).
+
 The opt-in `managed-agents` native window reuses `managedAgentsRequestSchema`,
 `managedAgentsReplySchema` and the existing `DesktopManagedAgents` composition.
 This is a private native command, not an observer HTTP/WebSocket endpoint.

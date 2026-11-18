@@ -877,6 +877,7 @@
     "historyLimit": "Itens antigos da conversa foram removidos para manter a sessão dentro do limite de exibição.",
     "delegate": "Delegar uma tarefa",
     "worker": "Sessão de destino",
+    "workerHandle": "@nome ou @ID da sessão",
     "task": "Tarefa exata",
     "grant": "Revisar autorização de uso único",
     "delegatePrompt": "Use orqst_delegate_task com targetPaneId {{target}} e esta tarefa exata: {{task}}",

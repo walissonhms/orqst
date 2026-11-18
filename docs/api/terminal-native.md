@@ -922,6 +922,14 @@ messages placed in a Feature member's inbox, and `denied` reasons `inbox_full` /
 `unavailable`; native validation accepts exactly these. `communicationProjection` returns
 recent hub events (metadata only, owner sends excluded). The pair MCP flow is unchanged.
 
+Hub listing reports `mcp_connected` after socket authentication and
+`unconfirmed` when a configured slot has no linked relay. `delegate_task`
+returns `queued`. The worker inbox request drives `dequeued`.
+`submit_result` returns the worker-reported state and the boolean
+`resultQueued`. When that boolean is false the source may retrieve the summary
+through `task_status`. Both endpoints must remain in the original Feature for
+task access. See [the provider evidence and native matrix](../development/feature-mention-routing.md).
+
 ## Second terminal, dialog lifetime and keyboard resume — 2026-11-06
 
 - `feature_prepare` accepts an owned PTY of `main` as gesture focus (AppKit keeps it first

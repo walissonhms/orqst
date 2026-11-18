@@ -205,7 +205,7 @@ fn node_relay_transport_talks_to_the_rust_endpoint() {
     let results = node["results"].as_array().unwrap();
     assert_eq!(
         results[0],
-        json!({"ok": {"terminals": [{"handle": "T-002", "name": "Claude Code", "cli": "claude", "state": "running", "queued": 0}]}})
+        json!({"ok": {"terminals": [{"handle": "T-002", "name": "Claude Code", "cli": "claude", "state": "unconfirmed", "queued": 0}]}})
     );
     assert_eq!(results[1]["ok"]["state"], "queued");
     assert_eq!(results[1]["ok"]["sent"][0]["to"], "T-002");

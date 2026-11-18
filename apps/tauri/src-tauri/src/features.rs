@@ -1962,7 +1962,7 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
         return if current() { result } else { denied() };
     }
     let Some(action) = request["action"].as_str().filter(|action| {
-        matches!(*action, "start" | "turn" | "grant" | "approval" | "interrupt" | "stop")
+        matches!(*action, "start" | "turn" | "grant" | "mention" | "approval" | "interrupt" | "stop")
     }) else {
         return denied();
     };
@@ -1998,7 +1998,7 @@ pub async fn feature_structured_agents(window: Webview, scope: Value, request: V
         }
         let approved = terminal::confirm_permission_sheet(app, window.clone(), [
             translate("structuredAgents.title"),
-            translate(&format!("structuredAgents.confirm_{action}")),
+            translate(&format!("structuredAgents.confirm_{}", if action == "mention" { "grant" } else { action })),
             detail.into(),
             translate("terminalNative.cancel"),
             translate("terminalNative.confirm"),

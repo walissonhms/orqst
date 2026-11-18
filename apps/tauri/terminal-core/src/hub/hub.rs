@@ -66,7 +66,8 @@ pub enum HubError {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TaskState {
-    Delivered,
+    Queued,
+    Dequeued,
     Done,
     Failed,
     Blocked,
@@ -77,6 +78,8 @@ struct Message {
     id: String,
     kind: MessageKind,
     from_alias: String,
+    from: String,
+    feature_id: String,
     at: u64,
     text: String,
     truncated: bool,
@@ -90,6 +93,7 @@ struct Task {
     id: String,
     from: String,
     to: String,
+    feature_id: String,
     state: TaskState,
     summary: Option<String>,
     updated_at: u64,
@@ -103,6 +107,7 @@ struct State {
     chain: HashMap<String, (u32, u64)>,
     // Insertion ordered like a JS Map.
     tasks: Vec<Task>,
+    relays: HashSet<String>,
     // Wake counters for `wait_messages` (deliver, forget).
     wakes: HashMap<String, u64>,
     closed: bool,
@@ -172,6 +177,8 @@ pub enum HubReply {
         #[serde(rename = "taskId")]
         task_id: String,
         state: TaskState,
+        #[serde(rename = "resultQueued")]
+        result_queued: bool,
     },
     Status {
         #[serde(rename = "taskId")]
@@ -384,6 +391,7 @@ impl TerminalMessageHub {
         let mut state = self.lock();
         state.closed = true;
         state.inboxes.clear();
+        state.relays.clear();
         drop(state);
         self.wake.notify_all();
     }
@@ -396,6 +404,15 @@ impl TerminalMessageHub {
         *state.wakes.entry(terminal_id.to_owned()).or_default() += 1;
         drop(state);
         self.wake.notify_all();
+    }
+
+    pub fn relay_connected(&self, terminal_id: &str, connected: bool) {
+        let mut state = self.lock();
+        if connected && !state.closed {
+            state.relays.insert(terminal_id.to_owned());
+        } else {
+            state.relays.remove(terminal_id);
+        }
     }
 
     fn peers<'m>(members: &'m [HubMember], sender: &HubMember) -> Vec<&'m HubMember> {
@@ -417,10 +434,38 @@ impl TerminalMessageHub {
     ) -> Result<&'m HubMember, HubError> {
         let wanted = raw.strip_prefix('@').unwrap_or(raw).to_lowercase();
         // Self, other Features/workspaces and unknown handles are all refused the same way.
-        Self::peers(members, sender)
+        let mut targets = Self::peers(members, sender)
             .into_iter()
-            .find(|m| alias_matches(m, &wanted))
-            .ok_or(HubError::Refused("unknown_terminal"))
+            .filter(|m| alias_matches(m, &wanted));
+        let target = targets.next().ok_or(HubError::Refused("unknown_terminal"))?;
+        if targets.next().is_some() {
+            return Err(HubError::Refused("unknown_terminal"));
+        }
+        Ok(target)
+    }
+
+    fn inbox<'s>(
+        state: &'s mut State,
+        target: &HubMember,
+        members: &[HubMember],
+    ) -> &'s mut VecDeque<Message> {
+        let inbox = state.inboxes.entry(target.terminal_id.clone()).or_default();
+        inbox.retain(|item| {
+            target.feature_id.as_deref() == Some(&item.feature_id)
+                && (item.from == OWNER_SENDER
+                    || members.iter().any(|sender| {
+                        sender.terminal_id == item.from
+                            && sender.feature_id.as_deref() == Some(&item.feature_id)
+                    }))
+        });
+        inbox
+    }
+
+    fn task_scope(task: &Task, members: &[HubMember]) -> bool {
+        let has_member = |id: &str| members.iter().any(|member| {
+            member.terminal_id == id && member.feature_id.as_deref() == Some(&task.feature_id)
+        });
+        has_member(&task.from) && has_member(&task.to)
     }
 
     fn admit(
@@ -428,11 +473,12 @@ impl TerminalMessageHub {
         state: &mut State,
         sender: &str,
         targets: &[&HubMember],
+        members: &[HubMember],
     ) -> Result<(), HubError> {
         // A refused send never spends the sender's budget.
         if targets
             .iter()
-            .any(|t| state.inboxes.get(&t.terminal_id).map_or(0, VecDeque::len) >= INBOX)
+            .any(|t| Self::inbox(state, t, members).len() >= INBOX)
         {
             return Err(HubError::Refused("inbox_full"));
         }
@@ -477,6 +523,8 @@ impl TerminalMessageHub {
             id: id.clone(),
             kind,
             from_alias: from.1.to_owned(),
+            from: from.0.to_owned(),
+            feature_id: target.feature_id.clone().unwrap_or_default(),
             at,
             text,
             truncated,
@@ -525,17 +573,21 @@ impl TerminalMessageHub {
         }
         let members = (self.members)().map_err(|()| HubError::Failed)?;
         let wanted = to.strip_prefix('@').unwrap_or(to).to_lowercase();
-        let target = members
+        let mut targets = members
             .iter()
-            .find(|m| {
+            .filter(|m| {
                 m.feature_id.as_deref() == Some(feature_id)
                     && (m.alias.to_lowercase() == wanted || m.terminal_id == to)
-            })
-            .ok_or(HubError::Refused("unknown_terminal"))?;
+            });
+        let target = targets.next().ok_or(HubError::Refused("unknown_terminal"))?;
+        if targets.next().is_some() {
+            return Err(HubError::Refused("unknown_terminal"));
+        }
         let mut state = self.lock();
         if state.closed {
             return Err(HubError::Refused("unavailable"));
         }
+        Self::inbox(&mut state, target, &members);
         let id = (self.new_id)();
         let cut = truncate_text(text, TEXT_BYTES);
         self.deliver(
@@ -579,21 +631,26 @@ impl TerminalMessageHub {
                         handle: m.alias.clone(),
                         name: m.name.clone(),
                         cli: m.provider.clone(),
-                        state: if m.running { "running" } else { "stopped" },
-                        queued: state.inboxes.get(&m.terminal_id).map_or(0, VecDeque::len),
+                        state: if !m.running {
+                            "stopped"
+                        } else if state.relays.contains(&m.terminal_id) {
+                            "mcp_connected"
+                        } else {
+                            "unconfirmed"
+                        },
+                        queued: Self::inbox(&mut state, m, &members).len(),
                     })
                     .collect(),
             }),
             Call::Send { to, text } => {
                 let mut seen = HashSet::new();
-                let recipients: Vec<String> =
-                    to.into_iter().filter(|r| seen.insert(r.clone())).collect();
-                let targets = recipients
+                let mut targets = to
                     .iter()
                     .map(|r| Self::resolve_target(&members, sender, r))
                     .collect::<Result<Vec<_>, _>>()?;
+                targets.retain(|target| seen.insert(target.terminal_id.clone()));
                 let depth = self.next_depth(&state, sender_id)?;
-                self.admit(&mut state, sender_id, &targets)?;
+                self.admit(&mut state, sender_id, &targets, &members)?;
                 let (cut, truncated) = truncate_text(&text, TEXT_BYTES);
                 let mut sent = Vec::new();
                 for target in targets {
@@ -625,10 +682,14 @@ impl TerminalMessageHub {
             Call::Delegate { to, task } => {
                 let target = Self::resolve_target(&members, sender, &to)?;
                 let depth = self.next_depth(&state, sender_id)?;
+                let pending = |task: &Task| {
+                    matches!(task.state, TaskState::Queued | TaskState::Dequeued)
+                        && Self::task_scope(task, &members)
+                };
                 if state
                     .tasks
                     .iter()
-                    .filter(|t| t.state == TaskState::Delivered)
+                    .filter(|t| pending(t))
                     .count()
                     >= TASKS
                 {
@@ -639,20 +700,21 @@ impl TerminalMessageHub {
                     let Some(index) = state
                         .tasks
                         .iter()
-                        .position(|t| t.state != TaskState::Delivered)
+                        .position(|t| !pending(t))
                     else {
                         break;
                     };
                     state.tasks.remove(index);
                 }
-                self.admit(&mut state, sender_id, &[target])?;
+                self.admit(&mut state, sender_id, &[target], &members)?;
                 let cut = truncate_text(&task, TEXT_BYTES);
                 let task_id = (self.new_id)();
                 state.tasks.push(Task {
                     id: task_id.clone(),
                     from: sender_id.to_owned(),
                     to: target.terminal_id.clone(),
-                    state: TaskState::Delivered,
+                    feature_id: target.feature_id.clone().unwrap_or_default(),
+                    state: TaskState::Queued,
                     summary: None,
                     updated_at: (self.now)(),
                 });
@@ -672,7 +734,7 @@ impl TerminalMessageHub {
                 Ok(HubReply::Delegated {
                     task_id,
                     to: target.alias.clone(),
-                    state: "delivered",
+                    state: "queued",
                 })
             }
             Call::Submit {
@@ -685,9 +747,12 @@ impl TerminalMessageHub {
                     .tasks
                     .iter_mut()
                     .find(|t| t.id == task_id)
-                    .filter(|t| t.to == sender_id)
+                    .filter(|t| t.to == sender_id && Self::task_scope(t, &members))
                     .ok_or(HubError::Refused("unknown_task"))?;
-                if task.state != TaskState::Delivered {
+                if task.state == TaskState::Queued {
+                    return Err(HubError::Refused("task_unread"));
+                }
+                if task.state != TaskState::Dequeued {
                     return Err(HubError::Refused("already_submitted"));
                 }
                 task.state = status;
@@ -696,12 +761,9 @@ impl TerminalMessageHub {
                 task.summary = Some(cut.0.clone());
                 let from = task.from.clone();
                 let delegator = members.iter().find(|m| m.terminal_id == from);
-                // The result returns to the delegator only while both stay in one Feature.
-                if let Some(delegator) = delegator {
-                    if delegator.running
-                        && delegator.feature_id.is_some()
-                        && delegator.feature_id == sender.feature_id
-                    {
+                let mut result_queued = false;
+                if let Some(delegator) = delegator.filter(|m| m.running) {
+                    if Self::inbox(&mut state, delegator, &members).len() < INBOX {
                         let id = (self.new_id)();
                         // A result closes its task: it does not deepen the chain.
                         self.deliver(
@@ -715,11 +777,13 @@ impl TerminalMessageHub {
                             Some(task_id.clone()),
                             Some(status),
                         )?;
+                        result_queued = true;
                     }
                 }
                 Ok(HubReply::Submitted {
                     task_id,
                     state: status,
+                    result_queued,
                 })
             }
             Call::Status { task_id } => {
@@ -728,6 +792,7 @@ impl TerminalMessageHub {
                     .iter()
                     .find(|t| t.id == task_id)
                     .filter(|t| t.from == sender_id || t.to == sender_id)
+                    .filter(|t| Self::task_scope(t, &members))
                     .ok_or(HubError::Refused("unknown_task"))?;
                 Ok(HubReply::Status {
                     task_id: task.id.clone(),
@@ -737,10 +802,10 @@ impl TerminalMessageHub {
                 })
             }
             Call::Read { limit } => {
-                Ok(self.take(&mut state, sender_id, limit.unwrap_or(READ_BATCH)))
+                Ok(self.take(&mut state, sender, &members, limit.unwrap_or(READ_BATCH)))
             }
             Call::Wait { timeout_ms } => {
-                if state.inboxes.get(sender_id).is_none_or(VecDeque::is_empty) {
+                if Self::inbox(&mut state, sender, &members).is_empty() {
                     let start = state.wakes.get(sender_id).copied().unwrap_or(0);
                     let deadline =
                         Instant::now() + Duration::from_millis(timeout_ms.unwrap_or(30_000));
@@ -760,24 +825,34 @@ impl TerminalMessageHub {
                             .0;
                     }
                 }
-                Ok(self.take(&mut state, sender_id, READ_BATCH))
+                drop(state);
+                let current = (self.members)().map_err(|()| HubError::Failed)?;
+                let member = current.iter().find(|m| m.terminal_id == sender_id
+                    && m.running && m.feature_id == sender.feature_id)
+                    .ok_or(HubError::Refused("not_member"))?;
+                Ok(self.take(&mut self.lock(), member, &current, READ_BATCH))
             }
         }
     }
 
-    fn take(&self, state: &mut State, terminal_id: &str, limit: usize) -> HubReply {
-        let (items, remaining) = match state.inboxes.get_mut(terminal_id) {
-            Some(inbox) => {
-                let count = limit.min(inbox.len());
-                (inbox.drain(..count).collect::<Vec<_>>(), inbox.len())
+    fn take(&self, state: &mut State, sender: &HubMember, members: &[HubMember], limit: usize) -> HubReply {
+        let inbox = Self::inbox(state, sender, members);
+        let count = limit.min(inbox.len());
+        let items = inbox.drain(..count).collect::<Vec<_>>();
+        let remaining = inbox.len();
+        for item in items.iter().filter(|item| item.kind == MessageKind::Task) {
+            if let Some(task) = state.tasks.iter_mut().find(|task| {
+                item.task_id.as_ref() == Some(&task.id) && task.state == TaskState::Queued
+            }) {
+                task.state = TaskState::Dequeued;
+                task.updated_at = (self.now)();
             }
-            None => (Vec::new(), 0),
-        };
+        }
         // What a terminal reads sets the depth of what it sends next.
         if let Some(depth) = items.iter().map(|m| m.depth).max() {
             state
                 .chain
-                .insert(terminal_id.to_owned(), (depth, (self.now)()));
+                .insert(sender.terminal_id.clone(), (depth, (self.now)()));
         }
         HubReply::Messages {
             messages: items

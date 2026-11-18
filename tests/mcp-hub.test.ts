@@ -66,6 +66,11 @@ const send = (to: string | string[], text: string) => ({
   arguments: { to, text },
 });
 const read = { name: 'read_messages', arguments: {} };
+const statusCall = (taskId: string) => ({ name: 'task_status', arguments: { taskId } });
+const resultCall = (taskId: string, summary: string) => ({
+  name: 'submit_result',
+  arguments: { taskId, status: 'done', summary },
+});
 const refused = async (promise: Promise<unknown>, code: string) =>
   assert.rejects(promise, (error: unknown) => error instanceof HubRefusal && error.code === code);
 
@@ -142,9 +147,18 @@ test('delegation answers at once and the result returns to the delegator', async
     name: 'delegate_task',
     arguments: { to: '@T-002', task: 'write tests' },
   })) as { taskId: string; state: string };
-  assert.equal(delegated.state, 'delivered');
+  assert.equal(delegated.state, 'queued');
+  assert.equal(
+    ((await f.hub.call(ids.a, statusCall(delegated.taskId))) as { state: string }).state,
+    'queued',
+  );
+  await refused(f.hub.call(ids.b, resultCall(delegated.taskId, 'early')), 'task_unread');
   const task = (await f.hub.call(ids.b, read)) as { messages: { kind: string; taskId: string }[] };
   assert.equal(task.messages[0]!.kind, 'task');
+  assert.equal(
+    ((await f.hub.call(ids.a, statusCall(delegated.taskId))) as { state: string }).state,
+    'dequeued',
+  );
   await refused(
     f.hub.call(ids.c, {
       name: 'submit_result',
@@ -179,6 +193,50 @@ test('delegation answers at once and the result returns to the delegator', async
     }),
     'already_submitted',
   );
+});
+
+test('an inbox at capacity does not lose the submitted result or return a false refusal', async () => {
+  const f = fixture();
+  const { taskId } = (await f.hub.call(ids.a, {
+    name: 'delegate_task',
+    arguments: { to: '@T-002', task: 'SYNTHETIC' },
+  })) as { taskId: string };
+  await f.hub.call(ids.b, read);
+  for (let index = 0; index < HUB_LIMITS.inbox; index++) f.hub.ownerSend('f1', ids.a, 'SYNTHETIC');
+  assert.deepEqual(await f.hub.call(ids.b, resultCall(taskId, 'SYNTHETIC result')), {
+    taskId,
+    state: 'done',
+    resultQueued: false,
+  });
+  assert.match(JSON.stringify(await f.hub.call(ids.a, statusCall(taskId))), /SYNTHETIC result/);
+  assert.equal(
+    f.evidence.some((event) => event.kind === 'result'),
+    false,
+  );
+});
+
+test('queued content and task results stay in their admission Feature after a move', async () => {
+  const f = fixture();
+  const { taskId } = (await f.hub.call(ids.a, {
+    name: 'delegate_task',
+    arguments: { to: '@T-002', task: 'SYNTHETIC' },
+  })) as { taskId: string };
+  await f.hub.call(ids.b, read);
+  await f.hub.call(ids.b, resultCall(taskId, 'SYNTHETIC result'));
+  f.hub.ownerSend('f1', ids.a, 'SYNTHETIC owner message');
+  f.members[0]!.featureId = 'f2';
+  f.members[1]!.featureId = 'f2';
+  await refused(f.hub.call(ids.a, statusCall(taskId)), 'unknown_task');
+  await refused(f.hub.call(ids.b, resultCall(taskId, 'SYNTHETIC retry')), 'unknown_task');
+  assert.deepEqual(await f.hub.call(ids.a, read), { messages: [], remaining: 0 });
+});
+
+test('aliases and IDs for one terminal count once and ambiguous aliases fail closed', async () => {
+  const f = fixture();
+  const reply = await f.hub.call(ids.a, send(['T-002', '@t-002', ids.b], 'SYNTHETIC'));
+  assert.equal((reply as { sent: unknown[] }).sent.length, 1);
+  f.members[2]!.alias = 'T-002';
+  await refused(f.hub.call(ids.a, send('T-002', 'SYNTHETIC')), 'unknown_terminal');
 });
 
 test('wait_messages returns when a message arrives and empty on timeout, never an error', async () => {
@@ -228,6 +286,11 @@ test('a hub endpoint serves one terminal over its private socket, refusals inclu
     assert.equal(statSync(endpoint.capabilityFile).mode & 0o777, 0o600);
     const client = await connectMcpInstance(endpoint.socketPath, endpoint.capabilityFile);
     assert.equal(client.role, 'terminal');
+    const peers = await f.hub.call(ids.b, { name: 'list_terminals', arguments: {} });
+    assert.deepEqual(
+      (peers as { terminals: { state: string }[] }).terminals.map(({ state }) => state),
+      ['mcp_connected', 'unconfirmed'],
+    );
     const listed = (await client.call(crypto.randomUUID(), {
       name: 'list_terminals',
       arguments: {},
