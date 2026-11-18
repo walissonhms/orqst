@@ -1,27 +1,23 @@
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
-import { featureNativeSnapshotSchema, type Snapshot } from '@orqst/protocol';
+import { defaultFeatureId, featureNativeSnapshotSchema, type Snapshot } from '@orqst/protocol';
 
 const sourceId = 'synthetic-browser-session';
-const captureRoot = 'docs/development/v6-parity/lane1';
+const captureRoot = 'docs/development/spec-l1';
 const screenSizes = [
   { width: 1440, height: 900 },
   { width: 1280, height: 800 },
 ] as const;
+const approvedHtml = pathToFileURL(
+  resolve('docs/design/v6/source/ORQST_workspace_v6_features.html'),
+).href;
 
-async function capture(page: Page, surface: string, name: string) {
-  if (process.env.ORQST_LANE1_CAPTURES !== '1') return;
-  const size = page.viewportSize()!;
-  await page.screenshot({
-    path: `${captureRoot}/${size.width}x${size.height}/${surface}/${name}.png`,
-    animations: 'disabled',
-  });
-}
-
-async function captureIntegrated(page: Page, name: string) {
-  if (process.env.ORQST_V6_INTEGRATED_CAPTURES !== '1') return;
+async function capture(page: Page, name: string) {
+  if (process.env.ORQST_SPEC_L1_CAPTURES !== '1') return;
   const { width, height } = page.viewportSize()!;
   await page.screenshot({
-    path: `docs/development/v6-parity/integrated/${width}x${height}/${name}.png`,
+    path: `${captureRoot}/${width}x${height}/${name}.png`,
     animations: 'disabled',
   });
 }
@@ -33,8 +29,9 @@ async function studioFixture(page: Page) {
     provider,
     terminalId: `00000000-0000-4000-8000-00000000001${slot}`,
   }));
-  const features = ['Planejamento de teste', 'Revisão de teste'].map((name, index) => ({
-    featureId: `00000000-0000-4000-8000-00000000000${index + 2}`,
+  const features = ['General', 'Revisão de teste'].map((name, index) => ({
+    featureId:
+      index === 0 ? defaultFeatureId(workspace.id) : '00000000-0000-4000-8000-000000000003',
     workspaceId: workspace.id,
     name,
     description: '',
@@ -70,6 +67,7 @@ async function studioFixture(page: Page) {
         contractVersion: 1,
         async request({ action, featureId }: { action: string; featureId?: string }) {
           calls.push(action);
+          if (action === 'pane') return { status: 'ok', snapshot: structuredClone(snapshot) };
           if (action === 'snapshot') return { status: 'ok', snapshot: structuredClone(snapshot) };
           if (
             action !== 'select' ||
@@ -92,7 +90,8 @@ async function studioFixture(page: Page) {
 test('observer Studio shows the Desktop requirement and keeps the shared navigation', async ({
   page,
 }) => {
-  await page.goto('/studio');
+  await page.goto('/');
+  await expect(page).toHaveURL('/studio');
   await expect(
     page.getByText('Terminals run in the ORQST Desktop app.', { exact: false }),
   ).toBeVisible();
@@ -100,7 +99,7 @@ test('observer Studio shows the Desktop requirement and keeps the shared navigat
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await page.goBack();
   await expect(page).toHaveURL('/studio');
-  await expect(page.getByRole('link', { name: 'Terminals / Studio' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Studio', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
@@ -113,10 +112,7 @@ test('managed Studio route shares the unsaved draft guard on click and history t
 }) => {
   await studioFixture(page);
   await page.goto('/studio');
-  await page
-    .locator('.feature-navigation')
-    .getByRole('link', { name: 'Overview', exact: true })
-    .click();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await page
     .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
     .click();
@@ -128,7 +124,7 @@ test('managed Studio route shares the unsaved draft guard on click and history t
   await editor.getByRole('button', { name: 'Edit draft', exact: true }).click();
   await editor.getByRole('textbox').fill('Synthetic Studio route draft');
   const review = page.getByRole('dialog', { name: 'Discard artifact draft?' });
-  const studio = page.locator('.topbar').getByRole('link', { name: 'Terminals / Studio' });
+  const studio = page.getByRole('link', { name: 'Studio', exact: true });
   await studio.click();
   await expect(review).toBeVisible();
   await page.keyboard.press('Escape');
@@ -141,129 +137,172 @@ test('managed Studio route shares the unsaved draft guard on click and history t
   await expect(page.locator('.feature-workspace')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator('.studio-workspace .feature-sidebar')).toHaveCSS('width', '46px');
+  await expect(page.locator('#app-sidebar')).toHaveCSS('width', '46px');
   await expect(page.getByRole('link', { name: 'Overview', exact: true })).toBeInViewport({
     ratio: 1,
   });
   await expect(page.getByRole('button', { name: 'Notifications', exact: true })).toBeInViewport({
     ratio: 1,
   });
-  await expect(page.getByLabel('Language', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('.topbar').getByLabel('Language', { exact: true })).toHaveCount(0);
 });
 
 for (const size of screenSizes) {
-  test(`managed Studio shares routes and retains the exact native selection at ${size.width}×${size.height}`, async ({
+  test(`shared frame and approved geometry at ${size.width}×${size.height}`, async ({
     page,
+    context,
   }) => {
     await page.setViewportSize(size);
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await studioFixture(page);
     await fixture(page);
-    await page.goto('/studio');
+    await page.goto('/configuracoes');
+    await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
+    const sidebar = page.locator('#app-sidebar');
     const topbar = page.locator('.topbar');
-    const sidebar = page.locator('.studio-workspace .feature-sidebar');
-    const row = page.locator('.feature-topbar, .ts-toolbar');
-    const breadcrumb = row.locator('.feature-crumb');
+    const crumb = topbar.locator('.breadcrumbs');
     await expect(sidebar).toHaveCSS('width', '155px');
-    await expect(topbar).toHaveCount(0);
-    await expect(row).toHaveCount(1);
-    await expect(row).toHaveCSS('height', '45px');
-    await expect(row.locator('.ts-modes, .ts-features')).toHaveCount(0);
-    await expect(breadcrumb).toContainText('Planejamento de teste');
+    await expect(sidebar.locator('.shell-brand')).toHaveCSS('height', '44px');
+    await expect(topbar).toHaveCSS('height', '45px');
+    await expect(sidebar.locator('.shell-feature-row').first()).toHaveCSS('height', '31px');
+    await expect(topbar.getByLabel('Idioma')).toHaveCount(0);
+    await expect(sidebar.getByRole('button', { name: 'Geral', exact: true })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
 
-    await page.getByRole('link', { name: 'Overview', exact: true }).click();
-    await page
-      .locator('.sidebar')
-      .getByRole('button', { name: 'browser-test', exact: true })
-      .click();
-    await page.getByRole('link', { name: 'Terminals / Studio' }).click();
-    await page.getByRole('button', { name: /Revisão de teste/ }).click();
-    await expect(breadcrumb).toContainText('Revisão de teste');
-    await expect(breadcrumb).toContainText('Workspace de teste');
-    await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-    await sidebar.getByRole('link', { name: 'Visão geral', exact: true }).click();
-    await expect(topbar.locator('.breadcrumbs')).toContainText('browser-test');
-    await capture(page, 'tauri-studio', '20-overview-return');
-    await captureIntegrated(page, '02-overview');
-
-    await topbar.getByRole('link', { name: 'Diretório de workspaces', exact: true }).click();
-    await expect(page).toHaveURL('/workspaces');
-    await capture(page, 'tauri-studio', '20a-workspaces');
-
-    const settings = topbar.getByRole('link', { name: 'Configurações', exact: true });
-    await settings.focus();
-    await page.keyboard.press('Enter');
-    await expect(settings).toHaveAttribute('aria-current', 'page');
-    await capture(page, 'tauri-studio', '21-settings');
-    await captureIntegrated(page, '03-settings');
-    await page.goBack();
-    await expect(page).toHaveURL('/workspaces');
-    await page.goForward();
-    await expect(page).toHaveURL('/settings');
-
-    await page.getByRole('button', { name: 'Terminais / Studio', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'Revisão de teste', exact: true }).click();
     await expect(page).toHaveURL('/studio');
-    await expect(breadcrumb).toContainText('Workspace de teste / Revisão de teste');
-    await capture(page, 'tauri-studio', '22-studio-return');
-    await captureIntegrated(page, '01a-studio-dashboard');
+    await expect(crumb).toContainText('Workspace de teste / Revisão de teste');
+    await expect(topbar).toContainText(/ativa/i);
+    await expect(page.locator('.feature-sidebar, .ts-toolbar, .feature-topbar')).toHaveCount(0);
+    await expect(topbar.locator('.studio-header-actions button')).toHaveText([
+      /Grade/,
+      /Restaurar/,
+      /Delegar/,
+      /Terminal/,
+      /Limites/,
+    ]);
+    await expect(topbar.locator('.shell-account-limits')).toHaveCSS('border-left-width', '1px');
+    await expect(topbar.locator('.shell-account-limits')).toHaveAttribute('data-empty', 'true');
+    await expect(sidebar.getByRole('button', { name: 'browser-test' }).locator('small')).toHaveText(
+      '0',
+    );
+    await expect(
+      sidebar.getByRole('button', { name: 'Workspace de teste' }).locator('small'),
+    ).toHaveText('2');
+    await expect(sidebar.locator('.feature-permissions-disclosure')).toHaveCount(0);
+    await sidebar
+      .getByRole('button', { name: 'Revisão de teste', exact: true })
+      .click({ button: 'right' });
+    const featureMenu = page.getByRole('dialog', { name: 'Opções de Revisão de teste' });
+    await expect(featureMenu.getByRole('button')).toHaveText([
+      'Renomear',
+      'Duplicar configuração',
+      'Arquivar',
+      'Remover',
+    ]);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.ts-pane')).toHaveCount(4);
+    await expect(page.locator('.ts-stage')).toHaveCSS('margin-top', '4px');
+    await capture(page, 'dashboard-studio');
+
+    const reference = await context.newPage();
+    await reference.setViewportSize(size);
+    await reference.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+    await reference.goto(approvedHtml);
+    await expect(reference.locator('.sidebar')).toHaveCSS('width', '155px');
+    await expect(reference.locator('.top')).toHaveCSS('height', '45px');
+    await expect(reference.locator('.brand')).toHaveCSS('height', '44px');
+    await capture(reference, 'approved-v6');
+    await reference.close();
+
+    for (const [label, path, name] of [
+      ['Visão geral', '/visao-geral', 'overview'],
+      ['Comunicação', '/comunicacao', 'communication'],
+      ['Métricas', '/metricas', 'metrics'],
+      ['Artefatos', '/artefatos', 'artifacts'],
+      ['Configurações', '/configuracoes', 'settings'],
+    ] as const) {
+      await sidebar.getByRole('link', { name: label, exact: true }).click();
+      await expect(page).toHaveURL(path);
+      await expect(crumb).toContainText('Workspace de teste / Revisão de teste');
+      await expect(crumb).toContainText(label);
+      await expect(topbar).toHaveCSS('height', '45px');
+      await expect(sidebar).toHaveCSS('width', '155px');
+      await expect(page.locator('.app-shell')).toHaveCount(1);
+      await expect(
+        page.locator('.status-bar, .app-footer, .side-section, .side-actions, .studio-route-links'),
+      ).toHaveCount(0);
+      await expect(sidebar.getByText('Sem Feature', { exact: true })).toHaveCount(0);
+      await expect(topbar.getByText('PT-BR', { exact: true })).toHaveCount(0);
+      if (name === 'overview')
+        await expect(page.getByRole('heading', { name: /^Sessões observadas/ })).toBeVisible();
+      if (name === 'metrics') {
+        await expect(topbar.getByRole('button', { name: 'Atualizar', exact: true })).toBeVisible();
+        await expect(page.locator('.analytics-stats')).toBeVisible();
+      }
+      if (size.width === 1440) await capture(page, `dashboard-${name}`);
+    }
+    await expect(
+      sidebar.getByRole('link', { name: /Agentes|Kanban|Planned|Planejado/i }),
+    ).toHaveCount(0);
+    await page.getByRole('link', { name: 'Agentes', exact: true }).click();
+    await expect(page).toHaveURL('/configuracoes/agentes');
+    await expect(sidebar.getByRole('link', { name: 'Configurações', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    const bell = sidebar.getByRole('button', { name: 'Notificações', exact: true });
+    await expect(bell.locator('.shell-unread')).toHaveText('1');
+    await bell.click();
+    await expect(page.getByRole('dialog', { name: 'Notificações' })).toBeVisible();
+    await expect(page).toHaveURL('/configuracoes/agentes');
+    await page.keyboard.press('Escape');
+    await expect(bell).toBeFocused();
 
     const search = sidebar.getByRole('button', { name: 'Busca e comandos', exact: true });
     await search.focus();
     await page.keyboard.press('Control+k');
     const palette = page.getByRole('dialog');
-    await expect(
-      palette.locator('.palette-result').filter({ hasText: 'Terminais / Studio' }),
-    ).toContainText('Workspace de teste / Revisão de teste');
-    await page.keyboard.press('Escape');
-    await expect(search).toBeFocused();
-
-    const bell = sidebar.getByRole('button', { name: 'Notificações', exact: true });
-    await bell.click();
-    const notifications = page.getByRole('dialog', { name: 'Notificações' });
-    const item = notifications.locator('.notification-item');
-    await expect(item).toBeVisible();
-    await captureIntegrated(page, '04-notifications');
-    await item.click();
-    await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
-    await page.goBack();
+    await palette.getByRole('textbox').fill('@T-001 Codex');
+    await expect(palette.locator('.palette-result')).toHaveCount(1);
+    await page.keyboard.press('Enter');
     await expect(page).toHaveURL('/studio');
-    await expect(breadcrumb).toContainText('Revisão de teste');
-    expect(
-      await page.evaluate(() =>
-        (Reflect.get(window, 'syntheticFeatureCalls') as string[]).filter(
-          (action) => action !== 'snapshot',
+    await expect(crumb).toContainText('Revisão de teste');
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          (Reflect.get(window, 'syntheticFeatureCalls') as string[]).filter(
+            (action) => action !== 'snapshot',
+          ),
         ),
-      ),
-    ).toEqual(['select']);
-  });
+      )
+      .toEqual(['select', 'pane']);
 
-  test(`observer shell visual comparison at ${size.width}×${size.height}`, async ({ page }) => {
-    await page.setViewportSize(size);
-    await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-    await page.goto('/overview');
-    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
-    await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-    await capture(page, 'observer', '01-overview');
-    await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
-    await page.getByRole('link', { name: 'Visão geral', exact: true }).click();
-    await expect(page).toHaveURL('/overview');
-    await capture(page, 'observer', '02-overview-return');
-    await page.locator('.sidebar-collapse').click();
-    await expect(page.locator('#app-sidebar')).toHaveCSS('width', '68px');
-    await capture(page, 'observer', '03-sidebar-collapsed');
-    await page.locator('.sidebar-collapse').click();
-    await page.getByRole('button', { name: 'Notificações', exact: true }).click();
-    const drawer = page.getByRole('dialog', { name: 'Notificações' });
-    await expect(drawer.getByText('Nenhuma notificação ao vivo.', { exact: false })).toBeVisible();
-    await capture(page, 'observer', '04-notifications-empty');
-    await drawer.locator('select').selectOption('unread');
-    await capture(page, 'observer', '05-notifications-unread-empty');
+    await sidebar.getByRole('link', { name: 'Visão geral', exact: true }).click();
+    await search.click();
+    await palette.getByRole('textbox').fill('Delegar');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL('/studio');
+    await expect(page.getByRole('dialog', { name: 'Delegar', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
-    await page.keyboard.press('Control+k');
-    await expect(page.getByRole('dialog').getByRole('textbox')).toBeFocused();
-    await capture(page, 'observer', '06-search-menu');
   });
 }
+
+test('Core offline shows one 28px banner and Try now reconnects', async ({ page }) => {
+  let refused = true;
+  await page.route('**/api/bootstrap', (route) => (refused ? route.abort() : route.continue()));
+  await page.goto('/visao-geral');
+  const banner = page.locator('.shell-offline');
+  await expect(banner).toBeVisible();
+  await expect(banner).toHaveCSS('height', '28px');
+  refused = false;
+  await banner.getByRole('button', { name: 'Try now' }).click();
+  await expect(page.locator('.shell-core')).toContainText('CORE ONLINE');
+  await expect(banner).toHaveCount(0);
+});
 
 async function fixture(page: Page) {
   await page.route('**/api/snapshot', async (route) => {
@@ -294,14 +333,14 @@ test('workspace directory, layout, sidebar and scope restore without claiming pr
   await expect(card).toContainText('Observed sessions');
   await page.getByRole('button', { name: 'List view', exact: true }).click();
   await page.getByRole('combobox', { name: 'Sort by' }).selectOption('name');
-  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await page.reload();
   await expect(page.locator('.workspace-list')).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveValue('name');
-  await expect(page.getByRole('button', { name: 'Expand sidebar' })).toBeVisible();
-  await page.getByRole('link', { name: 'Agents & integrations' }).click();
-  await expect(page.getByRole('heading', { name: 'Agents & integrations' })).toBeVisible();
-  await page.goBack();
+  await expect(page.locator('#app-sidebar')).toHaveCSS('width', '155px');
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('link', { name: 'Agents', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
+  await page.evaluate(() => history.go(-2));
   await expect(page.getByRole('heading', { name: 'Workspace directory' })).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Search workspace names or paths' })
@@ -328,7 +367,7 @@ test('command palette searches observed models and sessions, navigates and resto
 }) => {
   await fixture(page);
   await page.goto('/#models');
-  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'CORE ONLINE' })).toBeVisible();
   const trigger = page.getByRole('button', { name: 'Search & commands', exact: true });
   await trigger.focus();
   await page.keyboard.press('Control+k');
@@ -349,7 +388,7 @@ test('command palette searches observed models and sessions, navigates and resto
   await expect(trigger).toBeFocused();
   await trigger.click();
   await dialog.getByRole('textbox').fill('No matching synthetic session');
-  await expect(dialog.getByText('No matching views, workspaces or sessions.')).toBeVisible();
+  await expect(dialog.getByText('No matches')).toBeVisible();
   await page.keyboard.press('Escape');
 });
 
@@ -357,7 +396,7 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
   page,
 }) => {
   await page.goto('/#agents');
-  await expect(page.getByRole('heading', { name: 'Agents & integrations' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
   const matrix = page.getByRole('region', { name: 'Observation capability matrix' });
   await expect(
     matrix.getByRole('row', {
@@ -381,8 +420,10 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
   await expect(
     page.getByRole('button', { name: /Start|Resume|Stop|Install|Authenticate/ }),
   ).toHaveCount(0);
-  await page.getByLabel('Language').selectOption('pt-BR');
-  await expect(page.getByRole('heading', { name: 'Agentes e integrações' })).toBeVisible();
+  await page.getByRole('link', { name: 'General', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
+  await page.getByRole('link', { name: 'Agentes', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Agentes', exact: true })).toBeVisible();
   await expect(
     page.getByRole('row', {
       name: 'Controle de sessão Indisponível Indisponível Indisponível Indisponível',
@@ -396,9 +437,9 @@ test('workspace and notification dialogs contain focus, close with Escape and li
 }) => {
   await fixture(page);
   await page.goto('/#models');
-  const add = page.getByRole('button', { name: 'Add workspace', exact: true });
+  const add = page.getByRole('button', { name: 'New Workspace', exact: true });
   await add.click();
-  const form = page.getByRole('dialog', { name: 'Add workspace' });
+  const form = page.getByRole('dialog', { name: 'New Workspace' });
   await expect(form.getByLabel('Workspace name')).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(form.getByRole('button', { name: 'Close' })).toBeFocused();
@@ -473,7 +514,7 @@ test('compact token disclosure reuses confirmed readings, remains visible on scr
   await badge.locator('summary').click();
   await expect(badge.locator('dd')).toHaveText(values.slice(0, 3));
   await expect(badge).toContainText('Cached input is included in input');
-  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await page.locator('#main-content').evaluate((main) => main.scrollTo(0, main.scrollHeight));
   await expect(badge.locator('summary')).toBeInViewport();
   await page.screenshot({ path: test.info().outputPath('orqst-session-sticky-context.png') });
   failed = true;

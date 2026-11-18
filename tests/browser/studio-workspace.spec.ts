@@ -38,9 +38,9 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.goto('/studio');
   const workspace = page.locator('.studio-workspace > .feature-workspace');
   await expect(workspace).toBeVisible();
-  await expect(workspace.locator('.feature-core')).toHaveAttribute('data-state', 'unavailable');
-  await expect(page.locator('#app-sidebar')).toBeHidden();
-  await expect(page.locator('.main-shell > .topbar')).toBeHidden();
+  await expect(workspace.locator('.ts-loading')).toHaveText('CORE UNAVAILABLE');
+  await expect(page.locator('#app-sidebar')).toBeVisible();
+  await expect(page.locator('.main-shell > .topbar')).toHaveCSS('height', '45px');
   await expect(page.locator('.app-footer')).toBeHidden();
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
   for (const [width, height] of [
@@ -50,7 +50,15 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
     [320, 600],
   ]) {
     await page.setViewportSize({ width: width!, height: height! });
-    await expect.poll(() => workspace.boundingBox()).toEqual({ x: 0, y: 0, width, height });
+    const sidebarWidth = width! < 720 ? 46 : 155;
+    await expect
+      .poll(() => workspace.boundingBox())
+      .toEqual({
+        x: sidebarWidth,
+        y: 45,
+        width: width! - sidebarWidth,
+        height: height! - 45,
+      });
     expect(
       await page.evaluate(() => ({
         width: document.documentElement.scrollWidth,
@@ -78,10 +86,11 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-en.png') });
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
   await expect(page.locator('#app-sidebar')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
-  await page.getByRole('link', { name: 'Terminais / Studio', exact: true }).click();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
+  await page.getByRole('link', { name: 'Studio', exact: true }).click();
   await expect(workspace).toBeVisible();
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Novos terminais', exact: true })).toBeVisible();
@@ -111,19 +120,19 @@ test('Studio has one Overview action and a compact Feature sidebar at narrow wid
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/studio');
   const overview = page.getByRole('link', { name: 'Overview', exact: true });
-  const sidebar = page.locator('.feature-sidebar');
+  const sidebar = page.locator('#app-sidebar');
   await expect(overview).toHaveCount(1);
   await expect(page.locator('.ts-features')).toHaveCount(0);
-  await expect(page.locator('.feature-topbar, .ts-toolbar')).toHaveCount(1);
+  await expect(page.locator('.topbar, .feature-topbar, .ts-toolbar')).toHaveCount(1);
   await expect(sidebar).toHaveCSS('width', '155px');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(sidebar).toHaveCSS('width', '46px');
   await expect(overview).toBeInViewport({ ratio: 1 });
-  await expect(
-    page.locator('.ts-toolbar').getByRole('button', { name: '＋ Terminal' }),
-  ).toBeInViewport({ ratio: 1 });
+  await expect(page.locator('.topbar').getByRole('button', { name: '＋ Terminal' })).toBeInViewport(
+    { ratio: 1 },
+  );
   await overview.click();
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/visao-geral');
 });
 
 const workspace = { id: 'lane2-synthetic', name: 'Workspace sintético' };
