@@ -48,7 +48,7 @@ function view(workspaceId: string, featureId: string | null) {
 
 async function installFixture(
   page: Page,
-  mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity' | 'diag28',
+  mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity' | 'diag28' | 'reserved',
   embedPtys = false,
   transientAdmission = false,
 ) {
@@ -63,7 +63,13 @@ async function installFixture(
     ],
     terminalDisplays: [
       { terminalId, displayId: diag28 ? 'T-004' : 'T-001' },
-      { terminalId: uncertainId, displayId: 'T-002' },
+      {
+        terminalId: uncertainId,
+        displayId: 'T-002',
+        ...(mode === 'reserved'
+          ? { name: 'Codex 1', provider: 'codex' as const, activeReservation: true as const }
+          : {}),
+      },
       { terminalId: releasedId, displayId: 'T-003', released: true as const },
       ...(mode === 'antigravity' ? [{ terminalId: antigravityId, displayId: 'T-004' }] : []),
     ],
@@ -312,7 +318,7 @@ async function installFixture(
                   items: request.requests.map(({ id }) => ({
                     id,
                     status: 'refused',
-                    reason: 'catalog_changed',
+                    reason: mode === 'reserved' ? 'capacity_reserved' : 'catalog_changed',
                     effects: 'not_started',
                   })),
                 }),
@@ -799,4 +805,34 @@ test('diag28 approved V6 browser references', async ({ page }) => {
   await captureDiag28(page, 'v6-menu');
   await page.locator('#add').click();
   await captureDiag28(page, 'v6-new-terminal');
+});
+
+test('a previous reservation links the failed opening to its named saved terminal', async ({
+  page,
+}) => {
+  await installFixture(page, 'reserved');
+  await page.goto('/studio');
+  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Abrir terminal', exact: true })
+    .click();
+  await page.evaluate(() => Reflect.get(window, 'refuseOpen')());
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'Um terminal anterior bloqueia novas aberturas' });
+  await expect(failure).toBeVisible();
+  await expect(failure.getByText('capacity_reserved')).toHaveCount(0);
+  await expect(failure.getByRole('button', { name: 'Tentar novamente' })).toHaveCount(0);
+  await failure.getByRole('button', { name: 'Ver reserva' }).click();
+  const entry = page.locator('.pane-lifecycle-ended li').filter({ hasText: 'T-002' });
+  await expect(entry).toContainText('Codex 1');
+  await expect(
+    entry.getByText('Codex', { exact: false }).filter({ hasText: /^· Codex$/ }),
+  ).toBeVisible();
+  await expect(entry).toContainText('Estado incerto');
+  await expect(entry).toContainText('As evidências de kernel exigidas');
+  await expect(entry.getByText('Ver detalhes')).toBeFocused();
+  await expect(entry.getByRole('button', { name: 'Reabrir' })).toHaveCount(0);
+  await expect(entry.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
 });

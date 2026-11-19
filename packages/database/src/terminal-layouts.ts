@@ -10,25 +10,27 @@ export function openTerminalLayouts(
   db: DatabaseSync,
   transaction: <T>(action: () => T) => T,
   featureId?: string,
+  readOnly = false,
 ) {
   if (featureId !== undefined) z.uuid().parse(featureId);
-  transaction(() => {
-    db.exec(`
+  if (!readOnly)
+    transaction(() => {
+      db.exec(`
       CREATE TABLE IF NOT EXISTS terminal_layout_schema (
         singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL
       );
       INSERT OR IGNORE INTO terminal_layout_schema VALUES (1,1);
     `);
-    if (
-      db.prepare('SELECT version FROM terminal_layout_schema WHERE singleton=1').get()?.version !==
-      1
-    )
-      throw new Error('Unsupported terminal layout schema');
-    db.exec(`CREATE TABLE IF NOT EXISTS terminal_layouts (
+      if (
+        db.prepare('SELECT version FROM terminal_layout_schema WHERE singleton=1').get()
+          ?.version !== 1
+      )
+        throw new Error('Unsupported terminal layout schema');
+      db.exec(`CREATE TABLE IF NOT EXISTS terminal_layouts (
       selection_id TEXT PRIMARY KEY,
       metadata TEXT NOT NULL CHECK(length(metadata)<=16384 AND json_valid(metadata))
     )`);
-  });
+    });
   const selection = (ids: string[]) => {
     // Validate membership without granting any runtime authority.
     terminalLayoutRecordSchema.parse({

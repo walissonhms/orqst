@@ -1553,6 +1553,7 @@
       "catalog_changed": "Catálogo mudou",
       "native_authority_refused": "Ação recusada",
       "process_crashed": "Processo terminou (código {{exitCode}})",
+      "capacity_reserved": "Um terminal anterior bloqueia novas aberturas",
       "open_refused": "Falha ao abrir terminal",
       "opening_uncertain": "Abertura não confirmada",
       "cli_review_required": "CLI atualizado · revisão necessária"
@@ -1567,9 +1568,8 @@
     "inspect": "Ver detalhes",
     "reopen": "Reabrir",
     "recoveryIntro": "A propriedade desta sessão ainda não foi verificada.",
-    "recoveryQuit": "Encerre o ORQST normalmente para que a recuperação inicie sem o Core normal.",
-    "recoveryStart": "Execute o binário do ORQST com --offline-recovery para abrir a janela nativa de recuperação.",
-    "recoveryVerify": "Use as revisões nativas para capturar a reserva, verificar as evidências exigidas do kernel e da sessão e autorizar a liberação. Siga a orientação da recuperação caso seja necessário reiniciar o computador.",
+    "locateReservation": "Ver reserva",
+    "reservationProofUnavailable": "As evidências de kernel exigidas para liberar esta reserva estão indisponíveis. A reserva continua ativa.",
     "reopenBlocked": "A sessão anterior está preservada. A CLI e o modelo revisados precisam estar disponíveis para reabri-la.",
     "removalUnconfirmed": "Remoção não confirmada. Atualize antes de tentar novamente.",
     "remove": "Remover da Feature"

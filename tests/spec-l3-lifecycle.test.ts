@@ -62,6 +62,16 @@ test('an enrollment ACK is not a PTY frame and uncertainty remains fenced on the
   });
   assert.equal(stale.failure?.reason, 'catalog_changed');
   assert.equal(stale.failure?.retryable, true);
+  const refused = { id: card.id, status: 'refused', reason: 'capacity_reserved' } as const;
+  assert.deepEqual(projectBatchOutcome(card, { ...refused, effects: 'not_started' }).failure, {
+    reason: 'capacity_reserved',
+    evidence: 'capacity_reserved',
+    retryable: false,
+  });
+  assert.equal(
+    projectBatchOutcome(card, { ...refused, effects: 'possible' }).failure?.reason,
+    'opening_uncertain',
+  );
 });
 
 test('saved missing ownership stays uncertain and a connected terminal stays out of history', () => {

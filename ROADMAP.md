@@ -1,5 +1,12 @@
 # ORQST roadmap
 
+## Terminal recovery after an unclean exit
+
+Studio identifies the blocking legacy reservation. Cross-launch release of
+that reservation remains blocked by missing kernel identity evidence, and the
+attached 30-minute timer remains a separate blocker. See the
+[recovery findings](docs/development/in-app-recovery.md).
+
 ## Studio terminal availability
 
 The scoped picker and saved-member view cover cold Feature recovery. Synthetic

@@ -1,5 +1,11 @@
 # ORQST
 
+## Legacy terminal reservations
+
+Studio explains when a previous reservation blocks a new Core and links to its
+saved terminal when the marker can be matched. See the
+[legacy recovery blocker and Preview checks](docs/development/in-app-recovery.md).
+
 Saved Studio terminals remain visible when their managed Core is disconnected.
 Open the same Feature's terminal picker to create a fresh terminal, or dismiss
 a saved entry from the current view. See the

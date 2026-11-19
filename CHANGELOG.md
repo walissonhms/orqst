@@ -1,5 +1,10 @@
 # Changelog
 
+## Legacy terminal reservation diagnostics
+
+The failed opening card explains a retained admission claim. Encerrados shows
+saved terminal names and providers when supported by native metadata.
+
 ## Feature Studio pane controls — 2026-11-18
 
 Consolidated the Studio and Canvas routes into one Feature Studio. React owns
