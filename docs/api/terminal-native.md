@@ -1088,19 +1088,29 @@ See [source diagnosis, research and limits](../research/studio-arrangement-focus
 The Feature Chrome accepts `action: "pane", command: "close"` with a current
 metadata generation, native slot and stable terminal UUID. The owning native
 Studio document and exact Feature membership must match before and after the
-native confirmation. The command accepts no PID, path, signal or proof from
-the renderer and is unavailable through the observer API.
+native confirmation. The current AppShell document starts the review as the
+native first responder. After approval, the same document and review must
+still belong to the key parent or its exact sheet. App deactivation and
+unrelated key windows invalidate the review. The command accepts no PID,
+path, signal or proof from the renderer and is unavailable through the
+observer API.
 
 The inherited Core pipe admits `ownedSlotInventory` and `releaseOwnedSlot` for
 the exact slot. Release verifies journal ownership and confirms prior attempts
 are undispatched or have owned exit evidence. The process stop uses the
-existing signed `SIGTERM` operation. Close can return `cancelled`, `busy`,
+existing signed `SIGTERM` operation. After two seconds, a still-running
+attempt with an acknowledged graceful stop may receive one fresh signed
+`SIGKILL` under the same pane-close approval. The complete transaction is
+bounded to five seconds. Close can return `cancelled`, `busy`,
 `denied` or `unknown`. Successful close marks that epoch's terminal snapshot
 slot with `closed: true`. Closed entries retain their historical UUID and
 cannot be restored through native view actions.
 
 The private Tauri host acknowledges a confirmed whole-cohort retirement or
-durable pending OpenCode exit after the Core has stopped. See the
+durable pending OpenCode exit after the Core has stopped. On that reply the
+native and renderer metadata caches clear the closed pool and read the saved
+Feature. Reopen binds the released member UUID to its existing display ordinal
+while assigning a new UUID to the new terminal. See the
 [operator workflow and acceptance checks](../development/terminal-close.md).
 
 ## Studio lifecycle and saved membership

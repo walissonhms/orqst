@@ -40,6 +40,7 @@ vocabulary!(Stage {
     Opening => "opening", CliOpening => "cli_opening", FirstPtyOutput => "first_pty_output", AdmissionPreflight => "admission_preflight", CoreAdmission => "core_admission", CoreStartup => "core_startup",
     HostSpawn => "host_spawn", HostStream => "host_stream", Enrollment => "enrollment",
     Presentation => "presentation", Unconfirmed => "unconfirmed",
+    TerminalClose => "terminal_close", FeatureSelect => "feature_select", NativeQuit => "native_quit",
 });
 vocabulary!(Outcome {
     Started => "started", Requested => "requested", Ready => "ready", Succeeded => "succeeded",

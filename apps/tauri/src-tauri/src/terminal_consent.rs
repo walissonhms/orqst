@@ -228,6 +228,7 @@ pub async fn confirm(
 /// Run both the first-responder check and the final fence on the AppKit thread.
 pub async fn confirm_webview(
     view: tauri::Webview,
+    source: String,
     labels: [String; 5],
     current: impl FnOnce() -> bool + Send + 'static,
     sheet_ready: impl FnOnce(usize) -> bool + Send + 'static,
@@ -243,7 +244,7 @@ pub async fn confirm_webview(
                     &window,
                     &labels,
                     sender,
-                    || super::native_focus::chrome_first_responder(webview) && current(),
+                    || super::native_focus::document_first_responder(webview, &source) && current(),
                     sheet_ready,
                 )
             };

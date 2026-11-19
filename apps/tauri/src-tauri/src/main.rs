@@ -116,6 +116,10 @@ fn main() {
             }
             let diagnostic = local_diagnostics::Attempt::begin();
             diagnostic.record(local_diagnostics::Stage::NativeSetup, local_diagnostics::Outcome::Started, local_diagnostics::Effects::Unconfirmed);
+            #[cfg(target_os = "macos")]
+            if !quit_native::install_appkit_quit(app.handle()) {
+                return Err("ORQST native Quit hook unavailable".into());
+            }
             desktop::install(app.handle())?;
             let origin = tauri::async_runtime::block_on(sidecar::start(app.handle(), diagnostic.clone())).ok();
             diagnostic.record(local_diagnostics::Stage::ObserverStartup, if origin.is_some() { local_diagnostics::Outcome::Ready } else { local_diagnostics::Outcome::Failed }, local_diagnostics::Effects::Unconfirmed);

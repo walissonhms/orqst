@@ -1936,3 +1936,15 @@ and admission checks. The dashboard receives the same scope payload plus the
 destination. It keeps its draft guard for route changes. The command's
 authority is limited to navigating the retained dashboard or opening its
 existing dialogs.
+
+## Native terminal lifecycle on macOS
+
+Apple Events and AppKit termination enter the same approved shutdown circuit
+as the ORQST Quit menu. The Studio close sheet binds a current dashboard
+document and a specific owned terminal. Any escalation is restricted to an
+acknowledged graceful stop and the same still-running owned attempt, with a
+fresh Core proof. Feature navigation can keep the PTY as first responder
+because the operation only changes view metadata. The native focus and
+document checks for process launch, write and approvals retain their own
+scope. See the [private shutdown contract](../api/owned-terminal-shutdown.md)
+and [terminal close contract](../api/terminal-native.md#confirmed-close-terminal).

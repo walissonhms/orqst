@@ -42,6 +42,15 @@ checks; native global Quit is separate release authority, never a grant to execu
 `transport` or `retirement_unavailable`. With no trustworthy inventory, there may be
 no safe instance ID to list; top-level `reason` reports transport/timeout.
 
+## macOS application Quit
+
+The native application delegate routes macOS termination through the signed
+Quit circuit, including Apple Events such as an AppleScript `quit`. AppKit
+cancels the synchronous termination request. The application exits through
+Tauri after the owner confirms and the Core completes the authorized
+retirement or preserved-exit transaction. An AppleScript sender can receive
+`-128` from the initial cancellation while the native review is pending.
+
 ## Mechanism and fences
 
 The first native request quiesces new Core starts, enrollment, metadata mutations and

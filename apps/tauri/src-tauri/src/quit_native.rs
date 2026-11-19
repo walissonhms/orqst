@@ -110,3 +110,60 @@ pub fn exit_requested(app: &tauri::AppHandle) -> bool {
 pub fn agents_approved(app: &tauri::AppHandle) {
     QUIT.agents_approved(&NativePorts(app.clone()));
 }
+
+#[cfg(target_os = "macos")]
+mod appkit_quit {
+    use super::*;
+    use crate::local_diagnostics::{Attempt, Effects, Outcome, Stage};
+    use objc2::runtime::{AnyClass, AnyObject, Sel};
+    use objc2::{ffi, msg_send, sel};
+    use std::sync::OnceLock;
+
+    static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+    extern "C-unwind" fn should_terminate(_: &AnyObject, _: Sel, _: &AnyObject) -> usize {
+        if let Some(app) = APP.get() {
+            Attempt::begin().record(Stage::NativeQuit, Outcome::Requested, Effects::Unconfirmed);
+            // Leave AppKit's synchronous termination first. The native gate can
+            // then present its sheet and Tauri can exit after consuming evidence.
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                let owner = app.clone();
+                let _ = app.run_on_main_thread(move || request_quit(&owner));
+            });
+        }
+        0 // NSTerminateCancel
+    }
+
+    pub(super) fn install(app: &tauri::AppHandle) -> bool {
+        // SAFETY: called during Ready on the AppKit thread. The pinned Tao delegate
+        // has no termination decision method. Add one without replacing an IMP.
+        unsafe {
+            let Some(application_class) = AnyClass::get(c"NSApplication") else {
+                return false;
+            };
+            let application: *mut AnyObject = msg_send![application_class, sharedApplication];
+            let delegate: *mut AnyObject = msg_send![application, delegate];
+            if delegate.is_null() {
+                return false;
+            }
+            let class = ffi::object_getClass(delegate);
+            let selector = sel!(applicationShouldTerminate:);
+            if class.is_null() || !ffi::class_getInstanceMethod(class, selector).is_null() {
+                return false;
+            }
+            let imp = std::mem::transmute::<extern "C-unwind" fn(&AnyObject, Sel, &AnyObject) -> usize, objc2::runtime::Imp>(
+                should_terminate,
+            );
+            if !ffi::class_addMethod(class.cast_mut(), selector, imp, c"Q@:@".as_ptr()).as_bool() {
+                return false;
+            }
+        }
+        APP.set(app.clone()).is_ok()
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn install_appkit_quit(app: &tauri::AppHandle) -> bool {
+    appkit_quit::install(app)
+}

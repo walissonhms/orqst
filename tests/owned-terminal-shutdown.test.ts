@@ -983,3 +983,50 @@ test('Studio close signs SIGTERM for the owned slot and waits for its journal be
     f.cleanup();
   }
 });
+
+test('a reviewed pane close escalates once for the still-owned attempt after its grace period', async () => {
+  const f = fixture();
+  const clock = { at: 0 };
+  let forced = 0;
+  const shutdown = new OwnedTerminalShutdown({
+    ...f.ports,
+    now: () => clock.at,
+    wait: async (ms) => {
+      clock.at += ms;
+    },
+    forceStop: async (attempt, current) => {
+      assert.equal(current(), true);
+      assert.equal(attempt.state, 'running');
+      assert.equal(clock.at, 2000);
+      forced++;
+      f.complete();
+    },
+  });
+  assert.equal((await shutdown.run()).status, 'ready');
+  assert.equal(f.signals(), 1);
+  assert.equal(forced, 1);
+  assert.equal((await shutdown.run()).status, 'ready');
+  assert.equal(forced, 1);
+});
+
+test('an unconfirmed graceful stop never authorizes a force signal', async () => {
+  const f = fixture();
+  const clock = { at: 0 };
+  const shutdown = new OwnedTerminalShutdown({
+    ...f.ports,
+    now: () => clock.at,
+    wait: async (ms) => {
+      clock.at += ms;
+    },
+    stop: async () => {
+      await f.ports.stop();
+      throw new Error('Synthetic lost stop acknowledgement');
+    },
+    forceStop: async () => {
+      assert.fail('Force requires the acknowledged graceful signal');
+    },
+  });
+  assert.equal((await shutdown.run()).status, 'uncertain');
+  assert.equal((await shutdown.run()).status, 'uncertain');
+  assert.equal(f.signals(), 1);
+});

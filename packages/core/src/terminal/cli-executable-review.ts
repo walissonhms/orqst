@@ -242,8 +242,9 @@ export function inspectCliSignature(
     `and certificate leaf[subject.OU] = "${teamId}" and identifier "${identifier}"`;
   const verify = (requirement: string) =>
     run(['--verify', '--strict', '--all-architectures', '-R=' + requirement]).status === 0;
-  if (!verify(requirement)) return;
+  // A valid notarized signature already proves the narrower publisher requirement.
   const notarized = checkNotarization && verify(requirement + ' and notarized');
+  if (!notarized && !verify(requirement)) return;
   if (
     before !== identity(binary.path) ||
     cachedTerminalExecutableSha256(binary.path) !== binary.sha256

@@ -125,8 +125,17 @@ export interface EndedTerminal {
   name?: string;
   provider?: TerminalProvider;
   exitedAt?: number;
-  disposition: 'exit_confirmed' | 'kernel_absent' | 'uncertain';
+  disposition: 'exit_confirmed' | 'released' | 'uncertain';
   released?: boolean;
+}
+
+/** Durable release enables reopening. It supplies neither signal nor exit time. */
+export function savedTerminalDisposition(
+  exitConfirmed: boolean,
+  released: boolean,
+): EndedTerminal['disposition'] {
+  if (exitConfirmed) return 'exit_confirmed';
+  return released ? 'released' : 'uncertain';
 }
 
 /** A closed UI, absent slot or persisted member ID has no process-authority implications. */

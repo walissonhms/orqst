@@ -1285,3 +1285,47 @@ test('native Feature push advances once per metadata change, never per poll or a
     f.close();
   }
 });
+
+test('a Feature round trip restores the owned slots and saved layout after a stale selection', async () => {
+  const f = fixture();
+  try {
+    let general = f.db.create({ name: 'SYNTHETIC General' });
+    const empty = f.db.create({ name: 'SYNTHETIC Other' });
+    general = f.db.assignTerminal(general.featureId, f.ids[0]!, general.revision);
+    general = f.db.assignTerminal(general.featureId, f.ids[1]!, general.revision);
+    f.db.saveView({ featureId: general.featureId, expectedRevision: 0 });
+    await f.service.initialize();
+    await f.request({ action: 'snapshot' });
+    const before = f.layout.snapshot();
+    const stale = await f.service.request({
+      contractVersion: 1,
+      generation: 0,
+      action: 'select',
+      featureId: empty.featureId,
+      expectedRevision: 0,
+    });
+    assert.equal(stale.status, 'stale');
+    assert.deepEqual(f.layout.snapshot(), before);
+    for (const target of [empty, general]) {
+      const reply = await f.service.request({
+        contractVersion: 1,
+        generation: f.changes.at(-1)!.generation,
+        action: 'select',
+        featureId: target.featureId,
+        expectedRevision: f.db.readView().revision,
+      });
+      assert.equal(reply.status, 'ok');
+      assert.equal(reply.snapshot?.activeFeatureId, target.featureId);
+      assert.deepEqual(
+        reply.snapshot?.slots.map(({ terminalId }) => terminalId),
+        f.ids,
+      );
+    }
+    const restored = f.layout.snapshot();
+    assert.deepEqual(restored.order, before.order);
+    assert.deepEqual(restored.shown, before.shown);
+    assert.equal(restored.active, before.active);
+  } finally {
+    f.close();
+  }
+});

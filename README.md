@@ -77,6 +77,9 @@ The V6 Studio separates Hide from native-confirmed Close terminal. The Node
 and Rust terminal Cores retain journal evidence and fence each confirmed closed
 slot. See [workflow, capacity limits and native acceptance](docs/development/terminal-close.md).
 
+The macOS Quit route and Studio re-open workflow use the native stop and
+retirement evidence described in the [diag28 lifecycle report](docs/development/diag28-lifecycle.md).
+
 ## Workspace and Agentic Mode — 2026-11-17
 
 Studio manages Features within the current reviewed project. A Feature's saved
