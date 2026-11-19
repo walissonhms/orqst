@@ -1,21 +1,19 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EndedTerminal } from './terminal-lifecycle.js';
 import './pane-lifecycle.css';
 
 interface Props {
   terminals: readonly EndedTerminal[];
-  target?: { terminalId: string };
   now?: number;
   onReopen?: (terminal: EndedTerminal) => void;
   onRemove?: (terminal: EndedTerminal) => void;
   onHide?: (terminal: EndedTerminal) => void;
 }
 
-/** The caller supplies Core-backed recovery actions. The list grants no authority itself. */
+/** The caller supplies saved-terminal actions. The list grants no authority itself. */
 export function EndedTerminalList({
   terminals,
-  target,
   now = Date.now(),
   onReopen,
   onRemove,
@@ -24,19 +22,6 @@ export function EndedTerminalList({
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
-  const targetDetails = useRef<HTMLDetailsElement>(null);
-  const targetPresent = terminals.some(({ terminalId }) => terminalId === target?.terminalId);
-  useEffect(() => {
-    if (!target || !targetPresent) return;
-    const details = targetDetails.current;
-    if (!details) return;
-    setExpanded(true);
-    details.open = true;
-  }, [target, targetPresent]);
-  useEffect(() => {
-    if (expanded && targetDetails.current?.open)
-      targetDetails.current.querySelector('summary')?.focus();
-  }, [expanded, target]);
   if (!terminals.length) return null;
   const relative = new Intl.RelativeTimeFormat(i18n.resolvedLanguage, {
     numeric: 'auto',
@@ -75,10 +60,7 @@ export function EndedTerminalList({
             terminal.name === terminal.displayId
               ? undefined
               : terminal.name;
-          const status =
-            terminal.disposition === 'uncertain'
-              ? t('paneLifecycle.ownershipUncertain')
-              : endedAt(terminal.exitedAt);
+          const status = endedAt(terminal.exitedAt);
           return (
             <li key={terminal.terminalId}>
               <span>
@@ -98,34 +80,15 @@ export function EndedTerminalList({
                 </span>
               </span>
               <div className="pane-lifecycle-ended-actions">
-                {!terminal.released ? (
-                  <details
-                    className="pane-lifecycle-recovery"
-                    ref={target?.terminalId === terminal.terminalId ? targetDetails : undefined}
-                  >
-                    <summary>{t('paneLifecycle.inspect')}</summary>
-                    <p>
-                      {t(
-                        terminal.activeReservation
-                          ? 'paneLifecycle.reservationProofUnavailable'
-                          : 'paneLifecycle.recoveryIntro',
-                      )}
-                    </p>
-                    <code>{terminal.terminalId}</code>
-                  </details>
-                ) : (
-                  <>
-                    {onReopen && terminal.released && (
-                      <button className="button" type="button" onClick={() => onReopen(terminal)}>
-                        {t('paneLifecycle.reopen')}
-                      </button>
-                    )}
-                    {onRemove && terminal.released && (
-                      <button className="button" type="button" onClick={() => onRemove(terminal)}>
-                        {t('paneLifecycle.remove')}
-                      </button>
-                    )}
-                  </>
+                {onReopen && (
+                  <button className="button" type="button" onClick={() => onReopen(terminal)}>
+                    {t('paneLifecycle.reopen')}
+                  </button>
+                )}
+                {onRemove && (
+                  <button className="button" type="button" onClick={() => onRemove(terminal)}>
+                    {t('paneLifecycle.remove')}
+                  </button>
                 )}
                 {onHide && (
                   <button className="button" type="button" onClick={() => onHide(terminal)}>

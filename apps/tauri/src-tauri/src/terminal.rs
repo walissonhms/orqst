@@ -46,6 +46,7 @@ struct Running {
     documents: Vec<String>,
     labels: Vec<String>,
     providers: Vec<String>,
+    terminal_ids: Vec<String>,
     layout: Value,
     feature_members: Option<Vec<usize>>,
     generations: Vec<u64>,
@@ -2995,6 +2996,7 @@ pub(crate) struct PreparationAdmission {
     revision: u64,
     count: usize,
     capacity: usize,
+    owned_terminal_ids: Vec<String>,
 }
 impl PreparationAdmission {
     pub(crate) fn available_slots(&self) -> usize {
@@ -3004,7 +3006,8 @@ impl PreparationAdmission {
         self.count
     }
     pub(crate) fn context(&self) -> Value {
-        json!({"owner":self.owner, "epoch":self.epoch, "initialFiles":self.initial_files})
+        json!({"owner":self.owner, "epoch":self.epoch, "initialFiles":self.initial_files,
+            "ownedTerminalIds": self.owned_terminal_ids})
     }
     fn snapshot(&self) -> PreparationSnapshot<'_> {
         PreparationSnapshot {
@@ -3040,6 +3043,10 @@ fn admission_snapshot(r: &Running) -> PreparationAdmission {
         revision: r.layout_revision,
         count: r.documents.len(),
         capacity: r.capacity,
+        owned_terminal_ids: r.terminal_ids.iter().enumerate()
+            .filter(|(slot, _)| !r.released_slots.contains(slot))
+            .map(|(_, id)| id.clone())
+            .collect(),
     }
 }
 /// A catalog binds to the current owned pool lattice without taking an enrollment latch.
@@ -3376,6 +3383,7 @@ async fn enroll_selected_inner(
             &mut r.providers,
             &value["pane"],
         )?;
+        r.terminal_ids.push(value["receipt"]["member"]["terminalId"].as_str().unwrap().into());
         r.generations.push(0);
         r.loaded.push(false);
         r.revoked.push(false);
@@ -3650,7 +3658,7 @@ async fn start_selected_inner(
                 && v["initialFiles"] == json!(paths)
                 && v["panes"]
                     .as_array()
-                    .is_some_and(|p| p.len() == paths.len()) =>
+                    .is_some_and(|p| p.len() == paths.len() && p.iter().all(|pane| crate::features::uuid(&pane["terminalId"]))) =>
         {
             v
         }
@@ -3714,6 +3722,7 @@ async fn start_selected_inner(
         enrollment_request: None,
         enrollment_fenced: false,
         documents,
+        terminal_ids: panes.iter().map(|pane| pane["terminalId"].as_str().unwrap().into()).collect(),
         labels: panes
             .iter()
             .map(|pane| pane["title"].as_str().unwrap_or("").to_owned())

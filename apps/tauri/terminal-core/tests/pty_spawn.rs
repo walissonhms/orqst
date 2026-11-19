@@ -96,3 +96,62 @@ fn an_invalid_cwd_fails_without_falling_back_to_home() {
     assert!(!text.contains("ran"), "{text}");
     assert_eq!(code, 1);
 }
+
+#[test]
+fn pty_crash_fixture() {
+    if std::env::var_os("ORQST_TEST_PTY_OWNER").is_none() {
+        return;
+    }
+    let (_pty, events) = run(
+        &["-c", "trap '' HUP TERM; sleep 30 & echo SYNTHETIC_PIDS=$$,$!; wait"],
+        "/tmp",
+        80,
+        24,
+    );
+    for event in events {
+        if let Event::Data(text) = event {
+            print!("{}", String::from_utf8_lossy(&text));
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+        }
+    }
+}
+
+#[test]
+fn sigkill_of_the_pty_owner_ends_the_cli_and_its_descendants() {
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+    use std::time::Instant;
+
+    let mut host = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "pty_crash_fixture", "--nocapture"])
+        .env("ORQST_TEST_PTY_OWNER", "1")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdout = host.stdout.take().unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if let Some((_, pids)) = line.trim().split_once("SYNTHETIC_PIDS=") {
+                let ids: Option<Vec<i32>> = pids.split(',').map(|pid| pid.parse().ok()).collect();
+                let _ = sender.send(ids.unwrap_or_default());
+                break;
+            }
+        }
+    });
+    let reported = receiver.recv_timeout(Duration::from_secs(5));
+    let start = Instant::now();
+    host.kill().unwrap();
+    host.wait().unwrap();
+    let pids = reported.unwrap();
+    assert_eq!(pids.len(), 2);
+    assert!(pids.iter().all(|pid| *pid > 1));
+    loop {
+        let survivors: Vec<_> = pids.iter().filter(|pid| unsafe { libc::kill(**pid, 0) == 0 }).collect();
+        if survivors.is_empty() {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(2), "surviving PIDs: {survivors:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}

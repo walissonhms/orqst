@@ -1,4 +1,3 @@
-import { inspectPendingOwnedExits } from '../../../packages/core/src/terminal/exit-pending.js';
 import {
   DEFAULT_FEATURE_NAME,
   terminalPreparationFailureSchema,
@@ -39,12 +38,7 @@ import type { CliVersionDirectoryUpdate } from '../../../packages/core/src/termi
 import { acceptCliCandidate } from './terminal-discovery.js';
 import { TerminalSelection } from './terminal-selection.js';
 import { prepareTauriBatch } from './tauri-terminal-batch.js';
-import { join } from 'node:path';
-import {
-  inspectDesktopAdmission,
-  DesktopAdmissionRefused,
-  type DesktopAdmissionContext,
-} from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
+import type { DesktopAdmissionContext } from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
 
 export const tauriPreparationSchema = z.discriminatedUnion('action', [
   terminalCatalogRequestSchema,
@@ -99,7 +93,7 @@ export async function prepareTauriTerminals(
   ports: TauriPreparationPorts,
   now: () => number = Date.now,
   trusted?: TerminalPreparationContext,
-  currentCore?: DesktopAdmissionContext,
+  currentCore?: DesktopAdmissionContext & { ownedTerminalIds?: string[] },
   availableSlots = 8,
   unsupportedOpenCode = false,
 ): Promise<
@@ -121,21 +115,10 @@ export async function prepareTauriTerminals(
     const request = tauriPreparationSchema.parse(raw);
     const expires = now() + 300_000;
     const current = () => now() < expires && ports.current();
-    let admissionFence: string | undefined;
     const preflight = () => {
-      stage = 'admission_preflight';
-      try {
-        const fence = inspectDesktopAdmission(
-          trusted?.preferencesDirectory ?? join(context.parent, 'managed-agents'),
-          currentCore,
-        );
-        if (admissionFence !== undefined && fence !== admissionFence) fail('admission_invalid');
-        admissionFence = fence;
-      } catch (error) {
-        if (error instanceof DesktopAdmissionRefused) fail(error.code);
-        throw error;
-      }
+      if (!current()) fail('context_changed');
     };
+    const ownedTerminalIds = new Set(currentCore?.ownedTerminalIds);
     let files: string[];
     if (!current()) return { status: 'cancelled', files: [] };
     if (request.action !== 'catalog') preflight();
@@ -148,9 +131,8 @@ export async function prepareTauriTerminals(
       if (terminalCatalogId(trusted, workspace) !== request.catalogId)
         return fail('catalog_changed');
       if (
-        !workspace.feature?.terminalDisplays?.some(
-          ({ terminalId, released }) => terminalId === request.terminalId && released,
-        )
+        !workspace.feature?.terminalIds.includes(request.terminalId) ||
+        ownedTerminalIds.has(request.terminalId)
       )
         return fail('selection_unavailable');
       const expectedRevision = workspace.feature.revision;
@@ -161,11 +143,7 @@ export async function prepareTauriTerminals(
       if (terminalCatalogId(trusted, fresh) !== request.catalogId) return fail('catalog_changed');
       stage = 'feature_assignment';
       effects = 'possible';
-      fresh.features.removeReleasedTerminal(
-        request.featureId,
-        request.terminalId,
-        expectedRevision,
-      );
+      fresh.features.removeEndedTerminal(request.featureId, request.terminalId, expectedRevision);
       return { status: 'removed', terminalId: request.terminalId };
     }
     if (request.action === 'review-cli') {
@@ -243,6 +221,7 @@ export async function prepareTauriTerminals(
         preflight,
         now,
         unsupportedOpenCode,
+        ownedTerminalIds,
       );
     }
     if (
@@ -261,8 +240,7 @@ export async function prepareTauriTerminals(
         return {
           status: 'catalog',
           catalog: {
-            ...terminalPreparationCatalog(scope, trusted, context, !currentCore),
-            pendingOwnedExits: inspectPendingOwnedExits(trusted.preferencesDirectory),
+            ...terminalPreparationCatalog(scope, trusted, context, !currentCore, ownedTerminalIds),
           },
         };
       const pair = request.action === 'create-mcp-pair';

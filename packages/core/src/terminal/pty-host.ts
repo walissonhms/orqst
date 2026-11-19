@@ -2,6 +2,7 @@
 import type { IPty, spawn as spawnPty } from 'node-pty';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { lstatSync } from 'node:fs';
 import { constants } from 'node:os';
 import { armLifecycleReceipt } from '../managed-codex/lifecycle-receipt.js';
 import { terminalDigest } from './authority.js';
@@ -34,13 +35,21 @@ async function start(): Promise<void> {
   };
   let child: IPty;
   try {
-    child = spawn(profile.executable, [...profile.argv], {
-      cwd: profile.cwd,
-      env: interactiveTerminalEnvironment(config, mcp),
-      name: 'xterm-256color',
-      cols: 80,
-      rows: 24,
-    });
+    const helper = join(__dirname, 'orqst-terminal-core');
+    const info = lstatSync(helper);
+    if (!info.isFile() || info.uid !== process.getuid?.() || info.mode & 0o022)
+      throw new Error('Owned PTY lifetime helper unavailable');
+    child = spawn(
+      helper,
+      ['--orqst-owned-pty-exec', String(process.pid), profile.executable, ...profile.argv],
+      {
+        cwd: profile.cwd,
+        env: interactiveTerminalEnvironment(config, mcp),
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 24,
+      },
+    );
   } catch (error) {
     await receipt.record({ type: 'spawn_failed' });
     throw error;
@@ -72,8 +81,6 @@ async function start(): Promise<void> {
   });
   child.onExit(({ exitCode, signal }) => {
     exited = true;
-    clearTimeout(lifetime);
-    clearTimeout(escalation);
     const name = signal
       ? Object.entries(constants.signals).find(([, value]) => value === signal)?.[0]
       : undefined;
@@ -102,19 +109,11 @@ async function start(): Promise<void> {
     if (request.action === 'resize') child.resize(request.columns, request.rows);
     if (request.action === 'signal') child.kill(request.signal);
   });
-  process.on('disconnect', () => child.resume());
-  let escalation: ReturnType<typeof setTimeout> | undefined;
-  const lifetime = setTimeout(
-    () => {
-      if (exited) return;
-      child.resume();
-      child.kill('SIGTERM');
-      escalation = setTimeout(() => {
-        if (!exited) child.kill('SIGKILL');
-      }, 5000);
-    },
-    30 * 60 * 1000,
-  );
+  process.once('disconnect', () => {
+    // Exit the PTY owner. Its kernel watcher cleans the CLI session even if the owner
+    // is SIGKILLed before this callback can execute.
+    if (!exited) process.exit(1);
+  });
 }
 void start().catch(() => {
   if (process.connected) process.disconnect();

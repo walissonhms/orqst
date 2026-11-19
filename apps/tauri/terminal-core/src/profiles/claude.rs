@@ -132,6 +132,13 @@ pub fn claude_terminal_profiles(
         Some(candidate) => candidate.argv.clone(),
         None => vec!["--session-id".to_owned(), config.session_id.clone()],
     };
+    if let Some(session) = &config.resume_session_id {
+        if session != &config.session_id {
+            return Err(ProfileError::refused("Claude session identity changed"));
+        }
+        let flag = argv.len() - 2;
+        argv[flag] = "--resume".into();
+    }
     if config.owned_hooks {
         argv.extend(["--settings".to_owned(), claude_owned_hooks_path(config)]);
     }
@@ -153,7 +160,7 @@ pub fn claude_terminal_profiles(
         "Tool PATH: {}. ",
         terminal_tool_path(config.tool_path.as_deref())?
     );
-    permissions.push_str("Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ");
+    permissions.push_str("Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest. A reviewed Reopen may request an evidenced conversation. The PTY belongs to the current app run. Starts do not submit a prompt, bypass permissions or log in automatically. ");
     if config.owned_hooks {
         permissions.push_str("ORQST adds private metadata-only prompt/notification/stop hooks through an additional owned settings file; existing settings and policy remain effective. ");
     }

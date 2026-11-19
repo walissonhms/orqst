@@ -231,6 +231,10 @@ export function interactiveTerminalProfiles(
         reviewedUpdate,
       )
     : undefined;
+  const resume = config.identity?.resumeSessionId;
+  if (resume && resume !== config.sessionId) throw new Error('Claude session identity changed');
+  const sessionArgs = candidate?.argv ?? ['--session-id', config.sessionId];
+  const argv = resume ? [...sessionArgs.slice(0, -2), '--resume', resume] : sessionArgs;
   return [
     {
       id: 'claude-terminal-v1',
@@ -240,7 +244,7 @@ export function interactiveTerminalProfiles(
       executableVersion: config.executableVersion,
       cwd: config.project,
       argv: [
-        ...(candidate?.argv ?? ['--session-id', config.sessionId]),
+        ...argv,
         ...(config.ownedHooks ? ['--settings', claudeOwnedHooksPath(config)] : []),
         ...terminalModelArguments(config.model),
       ],
@@ -248,7 +252,7 @@ export function interactiveTerminalProfiles(
       cliAuthorizationScope: `claude-native-v1:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}${config.ownedHooks ? ':orqst-owned-hooks-v1' : ''}`,
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
-        'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest with a new UUID; existing UUIDs are rejected by the reviewed CLI. No prompt, resume, adoption, permission bypass or automatic login. 30 minute owned-process deadline; no descendant containment. ' +
+        'Native same-user Claude process, NOT a container or read-only sandbox. Native HOME/config/Keychain identity, hooks, plugins, policy and session writes stay shared. Credential refresh is provider-owned. One dispatch per manifest. A reviewed Reopen may request an evidenced conversation. The PTY belongs to the current app run. Starts do not submit a prompt, bypass permissions or log in automatically. ' +
         (config.ownedHooks
           ? 'ORQST adds private metadata-only prompt/notification/stop hooks through an additional owned settings file; existing settings and policy remain effective. '
           : '') +

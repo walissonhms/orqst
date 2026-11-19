@@ -9,10 +9,6 @@ import { ownedExitPendingSchema } from '../../../packages/core/src/terminal/exit
 import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { terminalIdentity } from '../../../packages/core/src/terminal/identity.js';
 import {
-  inspectDesktopAdmission,
-  DesktopAdmissionRefused,
-} from '../../../packages/core/src/managed-codex/desktop-admission-inspection.js';
-import {
   TerminalStartupError,
   terminalStartupFailureSchema,
   terminalStartupIdSchema,
@@ -79,16 +75,6 @@ export async function connectManagedTerminalCore(
   startupId: string = randomUUID(),
 ) {
   terminalStartupIdSchema.parse(startupId);
-  // Passive before fork, with authoritative admission repeated in the child against races.
-  try {
-    inspectDesktopAdmission(admissionDirectory);
-  } catch (error) {
-    throw new TerminalStartupError({
-      stage: 'core_admission',
-      code: error instanceof DesktopAdmissionRefused ? error.code : 'admission_invalid',
-      effects: 'possible',
-    });
-  }
   const config = readInteractiveTerminalConfig(files[0]!);
   // The profile reader has just verified this private runtime in this process.
   if (cachedTerminalExecutableSha256(config.node.path) !== config.node.sha256)

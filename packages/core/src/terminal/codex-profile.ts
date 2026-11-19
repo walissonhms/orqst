@@ -330,7 +330,7 @@ export function managedCodexProfiles(
       : 'managed-home-no-inherited-credentials-v1',
     permissions:
       `Tool PATH: ${terminalToolPath(config.toolPath)}. ` +
-      'Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.',
+      'Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. The PTY belongs to the current app run. Reopen may request an evidenced conversation.',
   };
   if (config.authentication)
     return [
@@ -346,8 +346,9 @@ export function managedCodexProfiles(
           'on-request',
           ...nativeCodexOverrides(config).flatMap((value) => ['-c', value]),
           ...mcpArguments,
+          ...(config.identity?.resumeSessionId ? ['resume', config.identity.resumeSessionId] : []),
         ],
-        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. ${mcp ? (config.interactive?.hub ? `Per-instance ORQST MCP connects to a private local relay. ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. Inherited MCPs remain enabled. ` : 'Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ') : ''}${common.permissions}`,
+        permissions: `Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. Reopen may request an evidenced conversation. Starts do not submit a task. ${mcp ? (config.interactive?.hub ? `Per-instance ORQST MCP connects to a private local relay. ORQST messaging: free between terminals of the same Feature, refused across Features; metadata-only audit; content from other terminals is untrusted data. Inherited MCPs remain enabled. ` : 'Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ') : ''}${common.permissions}`,
       },
     ];
   return [

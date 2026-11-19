@@ -70,7 +70,6 @@ test('stable terminal identity survives a replacement and a durable unassignment
     const peer = randomUUID();
     const replacement = randomUUID();
     const newcomer = randomUUID();
-    const epoch = randomUUID();
     const manifest = join(f.directory, 'SYNTHETIC-original.json');
     writeFileSync(manifest, '{}', { mode: 0o600 });
     const created = f.core.create({ name: 'SYNTHETIC lifecycle' });
@@ -91,20 +90,7 @@ test('stable terminal identity survives a replacement and a durable unassignment
       { terminalId: original, displayId: 'T-001' },
       { terminalId: peer, displayId: 'T-002' },
     ]);
-    assert.throws(
-      () => f.core.removeReleasedTerminal(featureId, original, feature.revision),
-      /unconfirmed/,
-    );
-    assert.throws(
-      () =>
-        f.core.replaceReleasedTerminal(featureId, original, replacement, {
-          featureRevision: feature.revision,
-          viewRevision: view.revision,
-        }),
-      /scope changed/,
-    );
-    f.core.recordTerminalRelease(original, manifest, epoch);
-    const reopened = f.core.replaceReleasedTerminal(featureId, original, replacement, {
+    const reopened = f.core.replaceEndedTerminal(featureId, original, replacement, {
       featureRevision: feature.revision,
       viewRevision: view.revision,
     }).feature;
@@ -124,16 +110,11 @@ test('stable terminal identity survives a replacement and a durable unassignment
     assert.equal(f.core.releasedTerminal(featureId, original), undefined);
 
     const saved = featureConfigurationDatabase(f.directory, workspace);
-    saved.recordTerminalRelease(
-      replacement,
-      join(f.directory, 'SYNTHETIC-next.json'),
-      randomUUID(),
-    );
     assert.throws(
-      () => saved.removeReleasedTerminal(featureId, replacement, feature.revision),
+      () => saved.removeEndedTerminal(featureId, replacement, feature.revision),
       /Stale/,
     );
-    const removed = saved.removeReleasedTerminal(featureId, replacement, reopened.revision);
+    const removed = saved.removeEndedTerminal(featureId, replacement, reopened.revision);
     assert.deepEqual(removed.terminalIds, [peer]);
     assert.deepEqual(saved.readLayout(featureId)?.order, [peer]);
     const after = saved.assignTerminal(featureId, newcomer, removed.revision);

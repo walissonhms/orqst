@@ -89,6 +89,7 @@ export interface TerminalCreationInput {
   openCodeStartupAuthorized?: boolean;
   model?: TerminalModelSelection;
   preparation?: TerminalPreparationBinding;
+  reopen?: { alias: string; sessionId?: string };
 }
 
 export interface TerminalCreationOverview {
@@ -162,7 +163,11 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
     const slot = String.fromCharCode(65 + index);
     const executable = executables[index]!;
     const common = {
-      identity: { terminalId: randomUUID() },
+      identity: {
+        terminalId: randomUUID(),
+        ...(input.reopen ? { alias: input.reopen.alias } : {}),
+        ...(input.reopen?.sessionId ? { resumeSessionId: input.reopen.sessionId } : {}),
+      },
       trust: 'native-same-user',
       executable,
       node,
@@ -228,7 +233,7 @@ export function prepareTerminalCreation(input: TerminalCreationInput) {
         version: 2,
         provider: 'claude',
         executableVersion: reviewedUpdate ?? pin.version,
-        sessionId: randomUUID(),
+        sessionId: input.reopen?.sessionId ?? randomUUID(),
         // Owner decision 2026-11-06: hub terminals keep owned hooks with MCP.
         ...(!input.mcp || input.hub ? { ownedHooks: true } : {}),
         authentication: {

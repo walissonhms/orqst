@@ -1,5 +1,9 @@
 # Private native administrative recovery boundary
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](../development/t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 This boundary belongs to the dedicated native `--offline-recovery` entry, before
 observer/Core, file hosts, terminals, PTY or provider startup. It has no renderer
 command, HTTP listener, websocket, public socket or bridge recovery endpoint. The

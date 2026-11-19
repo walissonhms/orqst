@@ -68,6 +68,8 @@ pub struct CodexConfig {
     pub node: Binary,
     pub tool_path: Option<String>,
     pub identity: Option<String>,
+    pub alias: Option<String>,
+    pub resume_session_id: Option<String>,
     pub project: String,
     pub state: String,
     pub model: Option<ModelSelection>,
@@ -96,6 +98,8 @@ pub struct ClaudeConfig {
     pub node: Binary,
     pub tool_path: Option<String>,
     pub identity: Option<String>,
+    pub alias: Option<String>,
+    pub resume_session_id: Option<String>,
     pub project: String,
     pub state: String,
     pub model: Option<ModelSelection>,
@@ -152,6 +156,8 @@ pub struct OpenCodeConfig {
     pub node: Binary,
     pub tool_path: Option<String>,
     pub identity: Option<String>,
+    pub alias: Option<String>,
+    pub resume_session_id: Option<String>,
     pub project: String,
     pub state: String,
     pub model: Option<ModelSelection>,
@@ -167,6 +173,8 @@ pub struct AntigravityConfig {
     pub node: Binary,
     pub tool_path: Option<String>,
     pub identity: Option<String>,
+    pub alias: Option<String>,
+    pub resume_session_id: Option<String>,
     pub project: String,
     pub state: String,
     pub model: Option<ModelSelection>,
@@ -214,6 +222,14 @@ impl InteractiveConfig {
             InteractiveConfig::Claude(c) => c.identity.as_deref(),
             InteractiveConfig::OpenCode(c) => c.identity.as_deref(),
             InteractiveConfig::Antigravity(c) => c.identity.as_deref(),
+        }
+    }
+    pub fn alias(&self) -> Option<&str> {
+        match self {
+            InteractiveConfig::Codex(c) => c.alias.as_deref(),
+            InteractiveConfig::Claude(c) => c.alias.as_deref(),
+            InteractiveConfig::OpenCode(c) => c.alias.as_deref(),
+            InteractiveConfig::Antigravity(c) => c.alias.as_deref(),
         }
     }
     pub fn node(&self) -> &Binary {
@@ -438,9 +454,25 @@ pub fn tool_path(value: &Js) -> Result<String> {
 }
 
 /// `terminalIdentitySchema` (`@orqst/protocol`).
-fn identity(value: &Js) -> Result<String> {
-    strict(value, "identity", &["terminalId"])?;
-    uuid(required(value, "terminalId")?, "terminalId")
+fn identity(value: &Js) -> Result<(String, Option<String>, Option<String>)> {
+    strict(value, "identity", &["terminalId", "alias", "resumeSessionId"])?;
+    let alias = opt(value, "alias").map(|value| {
+        let alias = string(value, "alias")?;
+        if !alias.strip_prefix("P-").is_some_and(|id| id.len() == 36
+            && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')) {
+            return schema("alias");
+        }
+        Ok(alias.to_owned())
+    }).transpose()?;
+    let resume = opt(value, "resumeSessionId").map(|value| {
+        let id = string(value, "resumeSessionId")?;
+        if id.strip_prefix("ses_").is_some_and(|suffix| !suffix.is_empty()
+            && suffix.len() <= 96 && suffix.bytes().all(|b| b.is_ascii_alphanumeric())) {
+            return Ok(id.to_owned());
+        }
+        uuid(value, "resumeSessionId")
+    }).transpose()?;
+    Ok((uuid(required(value, "terminalId")?, "terminalId")?, alias, resume))
 }
 
 struct Common {
@@ -448,6 +480,8 @@ struct Common {
     node: Binary,
     tool_path: Option<String>,
     identity: Option<String>,
+    alias: Option<String>,
+    resume_session_id: Option<String>,
     project: String,
     state: String,
     model: Option<ModelSelection>,
@@ -455,11 +489,20 @@ struct Common {
 }
 
 fn common(value: &Js, path: fn(&Js, &str) -> Result<String>) -> Result<Common> {
+    let (identity, alias, resume_session_id) = match opt(value, "identity") {
+        Some(value) => {
+            let (id, alias, resume) = identity(value)?;
+            (Some(id), alias, resume)
+        }
+        None => (None, None, None),
+    };
     Ok(Common {
         executable: binary(required(value, "executable")?, "executable", path)?,
         node: binary(required(value, "node")?, "node", path)?,
         tool_path: opt(value, "toolPath").map(tool_path).transpose()?,
-        identity: opt(value, "identity").map(identity).transpose()?,
+        identity,
+        alias,
+        resume_session_id,
         project: path(required(value, "project")?, "project")?,
         state: path(required(value, "state")?, "state")?,
         model: opt(value, "model").map(parse_model_selection).transpose()?,
@@ -545,6 +588,8 @@ pub fn parse_codex_config(value: &Js) -> Result<CodexConfig> {
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,
+        alias: c.alias,
+        resume_session_id: c.resume_session_id,
         project: c.project,
         state: c.state,
         model: c.model,
@@ -641,6 +686,8 @@ pub fn parse_claude_config(value: &Js) -> Result<ClaudeConfig> {
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,
+        alias: c.alias,
+        resume_session_id: c.resume_session_id,
         project: c.project,
         state: c.state,
         model: c.model,
@@ -748,6 +795,8 @@ pub fn parse_opencode_config(value: &Js) -> Result<OpenCodeConfig> {
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,
+        alias: c.alias,
+        resume_session_id: c.resume_session_id,
         project: c.project,
         state: c.state,
         model: c.model,
@@ -813,6 +862,8 @@ pub fn parse_antigravity_config(value: &Js) -> Result<AntigravityConfig> {
         node: c.node,
         tool_path: c.tool_path,
         identity: c.identity,
+        alias: c.alias,
+        resume_session_id: c.resume_session_id,
         project: c.project,
         state: c.state,
         model: c.model,

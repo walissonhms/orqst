@@ -21,7 +21,6 @@ export function PaneLifecycleContent({
   onViewLogs,
   onCancel,
   onReconnect,
-  onLocateReservation,
   details,
 }: {
   lifecycle: PaneLifecycle;
@@ -30,7 +29,6 @@ export function PaneLifecycleContent({
   onViewLogs?: () => void;
   onCancel?: () => void;
   onReconnect?: () => void;
-  onLocateReservation?: () => void;
   details?: ReactNode;
 }) {
   const { t } = useTranslation();
@@ -80,11 +78,6 @@ export function PaneLifecycleContent({
             onClick={onChangeCli}
           >
             {t('paneLifecycle.changeCli')}
-          </button>
-        )}
-        {onLocateReservation && (
-          <button className="button" type="button" onClick={onLocateReservation}>
-            {t('paneLifecycle.locateReservation')}
           </button>
         )}
         {onViewLogs && (

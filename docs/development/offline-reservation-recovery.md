@@ -1,5 +1,9 @@
 # Offline recovery implementation and review flow
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 Implemented source and synthetic fixtures are available; no operation on user
 AppData, native human review, kernel reboot, Core/PTY/provider run or Electron
 retirement is validated by this increment.

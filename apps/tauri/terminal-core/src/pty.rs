@@ -8,13 +8,9 @@ use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::ffi::OsStrExt;
 use std::sync::mpsc;
-use std::time::Duration;
 
 /// Bounded chunk size per data event (`pty-host.ts` splits at 16 KiB code units).
 pub const CHUNK: usize = 16 * 1024;
-/// Owned process deadline (`pty-host.ts` lifetime): SIGTERM, then SIGKILL after 5 s.
-pub const LIFETIME: Duration = Duration::from_secs(30 * 60);
-pub const ESCALATION: Duration = Duration::from_secs(5);
 /// The helper argv marker. The Core binary re-executes itself as node-pty's spawn-helper.
 pub const HELPER_ARG: &str = "--orqst-pty-helper";
 
@@ -106,16 +102,28 @@ fn check(result: libc::c_int) -> io::Result<libc::c_int> {
 /// The node-pty spawn-helper, run as `<core> --orqst-pty-helper <cwd> <file> <args...>`:
 /// opening the slave without O_NOCTTY makes it the controlling terminal of the new session.
 pub fn helper_main(args: &[std::ffi::OsString]) -> ! {
-    // SAFETY: plain libc calls on our own fds before exec; failure exits like spawn-helper.
+    if let Some((owner, command)) = args.split_first() {
+        if let Some((cwd, command)) = command.split_first() {
+            owned_exec(owner, Some(cwd), command);
+        }
+    }
+    std::process::exit(1);
+}
+
+pub const OWNED_EXEC_ARG: &str = "--orqst-owned-pty-exec";
+
+pub fn owned_exec(owner: &OsStr, cwd: Option<&OsStr>, command: &[std::ffi::OsString]) -> ! {
+    let owner = owner.to_str().and_then(|value| value.parse().ok()).unwrap_or(0);
+    // SAFETY: plain libc calls in the single-threaded exec helper.
     unsafe {
         let slave = libc::ttyname(libc::STDIN_FILENO);
         if !slave.is_null() {
             libc::close(libc::open(slave, libc::O_RDWR));
         }
-        let (Some(cwd), Some(file)) = (args.first(), args.get(1)) else {
+        let Some(file) = command.first() else {
             libc::_exit(1);
         };
-        if !cwd.is_empty() {
+        if let Some(cwd) = cwd.filter(|cwd| !cwd.is_empty()) {
             let Ok(cwd) = cstring(cwd.as_bytes()) else {
                 libc::_exit(1)
             };
@@ -127,7 +135,7 @@ pub fn helper_main(args: &[std::ffi::OsString]) -> ! {
             libc::_exit(1)
         };
         let mut argv: Vec<CString> = Vec::new();
-        for arg in &args[1..] {
+        for arg in command {
             let Ok(arg) = cstring(arg.as_bytes()) else {
                 libc::_exit(1)
             };
@@ -135,7 +143,9 @@ pub fn helper_main(args: &[std::ffi::OsString]) -> ! {
         }
         let mut ptrs: Vec<*const libc::c_char> = argv.iter().map(|a| a.as_ptr()).collect();
         ptrs.push(std::ptr::null());
-        libc::execvp(file_c.as_ptr(), ptrs.as_ptr());
+        if crate::pty_lifetime::watch(owner) {
+            libc::execv(file_c.as_ptr(), ptrs.as_ptr());
+        }
         libc::_exit(1);
     }
 }
@@ -174,6 +184,7 @@ impl Pty {
             let mut argv: Vec<CString> = vec![
                 cstring(helper.as_bytes())?,
                 cstring(HELPER_ARG.as_bytes())?,
+                cstring(libc::getpid().to_string().as_bytes())?,
                 cstring(spec.cwd.as_bytes())?,
                 cstring(spec.executable.as_bytes())?,
             ];

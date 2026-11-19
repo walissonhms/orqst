@@ -66,9 +66,7 @@ async function installFixture(
       {
         terminalId: uncertainId,
         displayId: 'T-002',
-        ...(mode === 'reserved'
-          ? { name: 'Codex 1', provider: 'codex' as const, activeReservation: true as const }
-          : {}),
+        ...(mode === 'reserved' ? { name: 'Codex 1', provider: 'codex' as const } : {}),
       },
       { terminalId: releasedId, displayId: 'T-003', released: true as const },
       ...(mode === 'antigravity' ? [{ terminalId: antigravityId, displayId: 'T-004' }] : []),
@@ -109,7 +107,13 @@ async function installFixture(
           ? { provider: 'codex', displayName: 'Codex 1' }
           : { provider: 'opencode', displayName: 'Backend' }),
       },
-      { slot: 1, terminalId: uncertainId, provider: 'codex', displayName: 'Investigar' },
+      {
+        slot: 1,
+        terminalId: uncertainId,
+        provider: 'codex',
+        displayName: 'Investigar',
+        closed: true,
+      },
       {
         slot: 2,
         terminalId: releasedId,
@@ -446,8 +450,8 @@ test('Studio renders live, starting, failed and ended states from their evidence
   await page.getByText('Encerrados (2)').click();
   const uncertain = page.locator('.pane-lifecycle-ended li').filter({ hasText: 'T-002' }).first();
   await expect(uncertain).toContainText('Investigar');
-  await expect(uncertain).toContainText('Estado incerto');
-  await expect(uncertain.getByText('Ver detalhes')).toBeVisible();
+  await expect(uncertain).toContainText('Encerrado');
+  await expect(uncertain.getByRole('button', { name: 'Reabrir' })).toBeVisible();
   const ended = page.locator('.pane-lifecycle-ended li').filter({ hasText: 'T-003' });
   await expect(ended.getByText('OpenCode', { exact: true })).toHaveCount(1);
   await expect(ended.getByRole('button', { name: 'Reabrir' })).toBeVisible();
@@ -807,32 +811,14 @@ test('diag28 approved V6 browser references', async ({ page }) => {
   await captureDiag28(page, 'v6-new-terminal');
 });
 
-test('a previous reservation links the failed opening to its named saved terminal', async ({
-  page,
-}) => {
+test('legacy saved terminals display normal ended actions', async ({ page }) => {
   await installFixture(page, 'reserved');
   await page.goto('/studio');
-  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
-  await page
-    .getByRole('dialog')
-    .getByRole('button', { name: 'Abrir terminal', exact: true })
-    .click();
-  await page.evaluate(() => Reflect.get(window, 'refuseOpen')());
-  const failure = page
-    .getByRole('alert')
-    .filter({ hasText: 'Um terminal anterior bloqueia novas aberturas' });
-  await expect(failure).toBeVisible();
-  await expect(failure.getByText('capacity_reserved')).toHaveCount(0);
-  await expect(failure.getByRole('button', { name: 'Tentar novamente' })).toHaveCount(0);
-  await failure.getByRole('button', { name: 'Ver reserva' }).click();
+  await page.getByRole('button', { name: /Encerrados/ }).click();
   const entry = page.locator('.pane-lifecycle-ended li').filter({ hasText: 'T-002' });
   await expect(entry).toContainText('Codex 1');
-  await expect(
-    entry.getByText('Codex', { exact: false }).filter({ hasText: /^· Codex$/ }),
-  ).toBeVisible();
-  await expect(entry).toContainText('Estado incerto');
-  await expect(entry).toContainText('As evidências de kernel exigidas');
-  await expect(entry.getByText('Ver detalhes')).toBeFocused();
-  await expect(entry.getByRole('button', { name: 'Reabrir' })).toHaveCount(0);
-  await expect(entry.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
+  await expect(entry).toContainText('Encerrado');
+  await expect(entry.getByRole('button', { name: 'Reabrir' })).toBeVisible();
+  await expect(entry.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();
+  await expect(page.getByText('Estado incerto', { exact: true })).toHaveCount(0);
 });

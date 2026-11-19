@@ -4,7 +4,6 @@ import {
   projectBatchOutcome,
   projectPaneLifecycle,
   reconcileEndedTerminals,
-  savedTerminalDisposition,
   type TerminalOpenCard,
 } from '../apps/dashboard/src/terminal-lifecycle.js';
 import { loadTerminalCatalog } from '../apps/dashboard/src/terminal-catalog-cache.js';
@@ -62,29 +61,6 @@ test('an enrollment ACK is not a PTY frame and uncertainty remains fenced on the
   });
   assert.equal(stale.failure?.reason, 'catalog_changed');
   assert.equal(stale.failure?.retryable, true);
-  const refused = { id: card.id, status: 'refused', reason: 'capacity_reserved' } as const;
-  assert.deepEqual(projectBatchOutcome(card, { ...refused, effects: 'not_started' }).failure, {
-    reason: 'capacity_reserved',
-    evidence: 'capacity_reserved',
-    retryable: false,
-  });
-  assert.equal(
-    projectBatchOutcome(card, { ...refused, effects: 'possible' }).failure?.reason,
-    'opening_uncertain',
-  );
-});
-
-test('saved missing ownership stays uncertain and a connected terminal stays out of history', () => {
-  assert.deepEqual(
-    reconcileEndedTerminals(
-      [
-        { terminalId: 'historical', disposition: 'uncertain' },
-        { terminalId: 'retained', disposition: 'uncertain' },
-      ],
-      new Set(['retained']),
-    ),
-    [{ terminalId: 'historical', disposition: 'uncertain' }],
-  );
 });
 
 test('a cached scope coalesces reads for 10 minutes, then refreshes', async (t) => {
@@ -126,19 +102,10 @@ test('a cached scope coalesces reads for 10 minutes, then refreshes', async (t) 
   assert.equal(calls, 3);
 });
 
-test('Quit and relaunch distinguish durable release, missing ownership and a connected process', () => {
-  const released = {
-    terminalId: 'retired',
-    disposition: savedTerminalDisposition(false, true),
-    released: true,
-  };
-  const orphan = { terminalId: 'orphan', disposition: savedTerminalDisposition(false, false) };
-  assert.equal(released.disposition, 'released');
-  assert.equal(orphan.disposition, 'uncertain');
-  assert.equal(savedTerminalDisposition(true, true), 'exit_confirmed');
-  const live = { terminalId: 'connected', disposition: 'uncertain' } as const;
-  assert.deepEqual(reconcileEndedTerminals([released, orphan, live], new Set([live.terminalId])), [
-    released,
-    orphan,
-  ]);
+test('relaunch projects all saved members without a current owner as ended', () => {
+  const stopped = { terminalId: 'stopped', exitedAt: 1700 };
+  const historical = { terminalId: 'historical' };
+  const all = [stopped, historical, { terminalId: 'connected' }];
+  assert.deepEqual(reconcileEndedTerminals(all, new Set(['connected'])), [stopped, historical]);
+  assert.deepEqual(reconcileEndedTerminals(all, new Set()), all);
 });

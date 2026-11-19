@@ -181,13 +181,15 @@ export function NativeTerminalCreator({
           : capacity)
     )
       return;
-    const names = defaultTerminalNames(
-      [...existingNames, ...(catalog.reopenable ?? []).map(({ name }) => name)],
-      requests.map(({ name, provider }) => ({
-        name,
-        providerName: t(`terminalStudio.providers.${provider}`),
-      })),
-    );
+    const names = reopenTerminalId
+      ? requests.map(({ name }) => name)
+      : defaultTerminalNames(
+          [...existingNames, ...(catalog.reopenable ?? []).map(({ name }) => name)],
+          requests.map(({ name, provider }) => ({
+            name,
+            providerName: t(`terminalStudio.providers.${provider}`),
+          })),
+        );
     const items = requests.map((request, index) => {
       const entry = catalog.providers.find((p) => p.provider === request.provider);
       return {

@@ -831,11 +831,11 @@
     "mcpConfirm": "Autorizar uma tarefa e seu resultado correlacionado entre estas duas instâncias de Terminal em execução por até 120 segundos. Isso não envia prompt aos agentes nem concede ferramentas do provedor. Login/configuração e gravações de sessões nativas ficam compartilhados. Codex e OpenCode mesclam outros MCPs; a seleção estrita do Claude os exclui. A desconexão MCP deixa resultado desconhecido e não encerra nenhum processo.",
     "mcpDenied": "A autorização MCP foi recusada ou seu resultado é desconhecido. As duas instâncias de Terminal devem manter a adesão explícita, a posse e a execução. Não repita trabalho com resultado incerto.",
     "retire": "Retirar seleção de terminais encerrados",
-    "retired": "Par de Terminais retirado; crie ou revise manifests novos nesta janela",
+    "retired": "Seleção encerrada após confirmar a saída dos terminais próprios.",
     "retireConfirm": "Liberar esta seleção somente após a saída confirmada de todos os processos próprios. O arquivo de metadados será preservado.",
-    "retireDenied": "O par não pode ser retirado. Cada processo iniciado exige saída própria confirmada; ownership perdido e reservas alteradas continuam bloqueados.",
-    "retireQuitNotice": "Encerrar os terminais próprios do ORQST, revisar a liberação segura da reserva e sair? Isso interrompe o trabalho em execução. O ORQST tenta liberar a reserva após confirmar as saídas. Se isso não for possível, só sai após preservar com segurança os registros de saída; processos descendentes podem continuar sem verificação. Evidência incerta mantém o app aberto.",
-    "retireQuit": "Encerrar, revisar reserva e sair",
+    "retireDenied": "O app não conseguiu confirmar o encerramento dos seus terminais.",
+    "retireQuitNotice": "Encerrar os terminais próprios do ORQST e sair? Isso interrompe o trabalho em execução.",
+    "retireQuit": "Encerrar e sair",
     "quitNotice": "Desconectar o Desktop? Os processos dos Terminais podem continuar até o prazo autorizado. Reservas não resolvidas continuam bloqueadas após reiniciar.",
     "reuse_unavailable": "Bloqueado: reuso do login nativo existente não validado para PTY interativo. Nenhum Core, journal ou provider foi iniciado.",
     "existing_state": "Bloqueado: este estado já tem um journal. Reservas existentes não serão adotadas, redefinidas ou removidas.",
@@ -1269,8 +1269,8 @@
     }
   },
   "tauriPreparation": {
-    "retireDenied": "A aposentadoria foi recusada ou não pôde ser confirmada. Preserve a reserva, os arquivos e os diários. Após uma autorização possivelmente enviada, este cliente permanece bloqueado; um arquivo de aposentadoria pode já existir. Saia e examine as evidências antes de selecionar perfis novos. Não há recuperação nem repetição automática.",
-    "retired": "Seleção aposentada após saídas confirmadas dos processos próprios e encerramento do Core. Saia e reabra o Tauri com perfis recém-preparados para selecionar novos terminais. Diários, metadados e resultados incertos anteriores são preservados. A reseleção na mesma janela ainda não está disponível.",
+    "retireDenied": "O app não conseguiu confirmar o encerramento dos seus terminais.",
+    "retired": "Seleção encerrada após confirmar a saída dos terminais próprios.",
     "menu": "Preparar terminais Tauri",
     "openPrepared": "Revisar e abrir terminais preparados…",
     "executable": "Selecione o executável nativo revisado do Codex ou Claude (arquivo canônico; sem shim)",
@@ -1564,12 +1564,12 @@
     "reconnect": "Reconectar",
     "endedList": "Encerrados ({{count}})",
     "endedAt": "Encerrado {{time}}",
-    "ownershipUncertain": "Estado incerto",
     "inspect": "Ver detalhes",
     "reopen": "Reabrir",
-    "recoveryIntro": "A propriedade desta sessão ainda não foi verificada.",
-    "locateReservation": "Ver reserva",
-    "reservationProofUnavailable": "As evidências de kernel exigidas para liberar esta reserva estão indisponíveis. A reserva continua ativa.",
+    "continuation": {
+      "fresh": "Nova sessão — a conversa anterior não pôde ser retomada",
+      "resume_requested": "Retomando a conversa anterior"
+    },
     "reopenBlocked": "A sessão anterior está preservada. A CLI e o modelo revisados precisam estar disponíveis para reabri-la.",
     "removalUnconfirmed": "Remoção não confirmada. Atualize antes de tentar novamente.",
     "remove": "Remover da Feature"

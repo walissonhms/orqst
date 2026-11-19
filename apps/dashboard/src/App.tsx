@@ -552,16 +552,6 @@ export function App() {
     liveWorkspace ??
     newManagedWorkspace ??
     savedWorkspace;
-  const [reservationTarget, setReservationTarget] = useState<{ terminalId: string }>();
-  const activeReservation = managedWorkspaces.flatMap(({ id, features }) =>
-    features.flatMap(({ featureId, terminalDisplays, status }) =>
-      status === 'archived'
-        ? []
-        : (terminalDisplays ?? [])
-            .filter(({ activeReservation }) => activeReservation)
-            .map(({ terminalId }) => ({ workspaceId: id, featureId, terminalId })),
-    ),
-  )[0];
   const activeSaved = managedWorkspaces.find(({ id }) => id === activeWorkspace?.id);
   const usingLiveWorkspace = liveWorkspace?.id === activeWorkspace?.id && !!liveSnapshot;
   const features = usingLiveWorkspace ? liveSnapshot.features : (activeSaved?.features ?? []);
@@ -1237,19 +1227,6 @@ export function App() {
           onPreparationHandled={() => setPreparationRequest(undefined)}
           savedStudio={savedStudio}
           onSavedMetadataChange={featureShell.retryStartup}
-          reservationTarget={reservationTarget}
-          onLocateReservation={
-            activeReservation && !usingLiveWorkspace
-              ? () =>
-                  requestNavigation(() => {
-                    setManagedWorkspaceId(activeReservation.workspaceId);
-                    setViewedFeatureId(activeReservation.featureId);
-                    setReservationTarget({ terminalId: activeReservation.terminalId });
-                    applySession(undefined);
-                    applyView('studio', '');
-                  })
-              : undefined
-          }
           onRetryStartup={
             !featureSnapshot && !featureShell.startupPending && !featureShell.startup
               ? featureShell.retryStartup

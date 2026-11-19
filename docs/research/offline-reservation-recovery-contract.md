@@ -1,5 +1,9 @@
 # Administrative offline non-dispatch recovery
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](../development/t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 Baseline: `03e5bcb3348e1faac7be03ee8065208253eb6d61`. This increment implements
 an offline transaction and synthetic fixtures. Native menu integration and any
 operation on user state require a separate review. It does not remove the OpenCode

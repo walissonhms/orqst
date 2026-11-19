@@ -148,26 +148,6 @@ impl Backend for PtyBackend {
         });
         let watch_pty = pty.clone();
         let watch_exited = exited.clone();
-        let lifetime_pty = pty.clone();
-        let lifetime_exited = exited.clone();
-        std::thread::spawn(move || {
-            // The owned deadline: SIGTERM after 30 minutes, SIGKILL 5 s later.
-            let deadline = std::time::Instant::now() + pty::LIFETIME;
-            while std::time::Instant::now() < deadline {
-                if lifetime_exited.load(Ordering::SeqCst) {
-                    return;
-                }
-                std::thread::sleep(std::time::Duration::from_secs(1));
-            }
-            if lifetime_exited.load(Ordering::SeqCst) {
-                return;
-            }
-            let _ = lifetime_pty.signal("SIGTERM");
-            std::thread::sleep(pty::ESCALATION);
-            if !lifetime_exited.load(Ordering::SeqCst) {
-                let _ = lifetime_pty.signal("SIGKILL");
-            }
-        });
         std::thread::spawn(move || {
             let _owned = watch_pty; // Keep the master open until the process exits.
             for event in receiver {

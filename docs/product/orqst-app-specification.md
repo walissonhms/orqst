@@ -347,16 +347,16 @@ selects it.
 
 ### 6.1 States shown on cards
 
-| State key          | pt-BR label     | Dot          | Meaning (evidence)                             | Card actions                              |
-| ------------------ | --------------- | ------------ | ---------------------------------------------- | ----------------------------------------- |
-| `starting`         | Iniciando       | pulsing grey | Open requested, no PTY frame yet               | Cancelar                                  |
-| `ready`            | Pronto          | green        | PTY alive, CLI at its prompt                   | —                                         |
-| `running`          | Executando      | green        | PTY alive, turn in progress (adapter evidence) | —                                         |
-| `waiting_for_user` | Aguardando você | amber        | CLI asked for input/approval                   | Focus                                     |
-| `unknown`          | Sem sinal       | grey         | PTY alive but turn state not evidenced         | — (still fully usable)                    |
-| `failed`           | Falhou          | red          | Launch or process failure with a reason code   | Tentar novamente · Alterar CLI · Ver logs |
-| `disconnected`     | Desconectado    | grey outline | Core or broker link lost                       | Reconectar                                |
-| `ended`            | Encerrado       | —            | Process ended (exit evidence)                  | moves to the Ended list                   |
+| State key          | pt-BR label     | Dot          | Meaning (evidence)                                         | Card actions                              |
+| ------------------ | --------------- | ------------ | ---------------------------------------------------------- | ----------------------------------------- |
+| `starting`         | Iniciando       | pulsing grey | Open requested, no PTY frame yet                           | Cancelar                                  |
+| `ready`            | Pronto          | green        | PTY alive, CLI at its prompt                               | —                                         |
+| `running`          | Executando      | green        | PTY alive, turn in progress (adapter evidence)             | —                                         |
+| `waiting_for_user` | Aguardando você | amber        | CLI asked for input/approval                               | Focus                                     |
+| `unknown`          | Sem sinal       | grey         | PTY alive but turn state not evidenced                     | — (still fully usable)                    |
+| `failed`           | Falhou          | red          | Launch or process failure with a reason code               | Tentar novamente · Alterar CLI · Ver logs |
+| `disconnected`     | Desconectado    | grey outline | Core or broker link lost                                   | Reconectar                                |
+| `ended`            | Encerrado       | —            | The current app run owns no process for the saved terminal | moves to the Ended list                   |
 
 A PTY that is alive and drawing is never labelled “indisponível”. `unknown` turn
 state is a tooltip detail, not a card-wide blocker.
@@ -375,18 +375,25 @@ state is a tooltip detail, not a card-wide blocker.
 
 ### 6.3 Restored and ended terminals
 
-On app start the Studio reconciles the Feature's saved layout with Core evidence:
+Owned managed terminal processes belong to the current app run. They keep
+running while the user hides a pane or changes Feature. A clean Quit sends
+signed stops and records the owned exit evidence. If the app crashes or is
+killed, the PTY lifetime watch tears down the owned CLI session. Attached
+terminals have no fixed lifetime timer.
 
-- Process still alive (kernel-verified, owned): card restored in place, `ready`/`running`.
-- Process gone: **no card in the grid.** The terminal goes to the Feature's
-  **Encerrados** list (a collapsible section at the end of the dock:
-  `Encerrados (3) ▾`). Each entry: `T-003 Frontend · Claude · encerrado há 2h` with
-  **Reabrir** (new session, same name/alias/CLI/model/cwd, same `T-###`) and
-  **Remover da Feature** (keeps history and evidence).
-- Uncertain ownership: entry in Encerrados with “estado incerto” and **Ver detalhes**;
-  release only through the documented kernel checks.
+On launch, saved Feature members without a process owned by the current run
+appear under **Encerrados**. A row shows `T-003 Frontend · Claude · encerrado há 2h`
+when a verified exit timestamp is available. With no timestamp, it shows
+`encerrado`. The app does not reattach to a prior process or use legacy
+reservation files to admit a new process.
 
-This rule removes the “many terminals unavailable” grid seen in diag25.
+- **Reabrir** starts a new native process after the ordinary one-use signed
+  start review and preserves the display ID, name, alias, CLI, model and working
+  directory. When the managed run captured a provider session identity and
+  the CLI supports resuming it, ORQST requests that conversation by ID. Otherwise
+  the card shows “Nova sessão — a conversa anterior não pôde ser retomada”.
+- **Remover da Feature** removes the visible membership and preserves its history
+  and lifecycle evidence.
 
 ---
 

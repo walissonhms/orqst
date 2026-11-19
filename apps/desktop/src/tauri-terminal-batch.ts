@@ -18,7 +18,7 @@ import { inspectManagedTerminalFiles } from '../../../packages/core/src/terminal
 import { prepareTerminalCreation, type TerminalCreationInput } from './terminal-creation.js';
 import {
   inspectTerminalPreparationCatalog,
-  inspectReleasedTerminal,
+  inspectEndedTerminal,
   resolveCatalogSelection,
   terminalCatalogId,
 } from './terminal-catalog.js';
@@ -42,6 +42,7 @@ export async function prepareTauriBatch(
   preflight: () => void,
   now: () => number,
   unsupportedOpenCode: boolean,
+  ownedTerminalIds: ReadonlySet<string>,
 ): Promise<{ status: 'batch'; items: Prepared[]; previousLayout: TerminalLayoutRecord | null }> {
   const items: Prepared[] = request.requests.map(({ id }) => ({
     id,
@@ -70,10 +71,11 @@ export async function prepareTauriBatch(
     return result();
   }
   const reopening = request.reopenTerminalId;
-  let saved: ReturnType<typeof inspectReleasedTerminal>;
+  let saved: ReturnType<typeof inspectEndedTerminal>;
   if (reopening) {
     try {
-      saved = inspectReleasedTerminal(discovered.workspace, reopening);
+      if (!ownedTerminalIds.has(reopening))
+        saved = inspectEndedTerminal(discovered.workspace, context.parent, reopening);
     } catch {
       // The old profile is now inaccessible. Pending data remains in the ended list.
     }
@@ -149,6 +151,7 @@ export async function prepareTauriBatch(
         limit: 8,
         project: discovered.workspace.project,
         preparation: binding,
+        ...(saved ? { reopen: { alias: saved.alias, sessionId: saved.resumeSessionId } } : {}),
         // MCP-capable terminals talk through the Feature-scoped hub; Antigravity has no per-session MCP.
         mcp: supportsHub,
         ...(supportsHub ? { hub: true } : {}),
@@ -263,7 +266,7 @@ export async function prepareTauriBatch(
             throw new Error('Released terminal Feature changed');
           const assigned =
             reopening && activeFeatureId && expected.featureRevision
-              ? workspace.features.replaceReleasedTerminal(
+              ? workspace.features.replaceEndedTerminal(
                   activeFeatureId,
                   reopening,
                   terminalIds[0]!,
@@ -311,6 +314,7 @@ export async function prepareTauriBatch(
       item.terminalId = member.config.identity.terminalId;
       item.file = files[0]!;
       item.name = saved?.name ?? request.requests[index]!.name;
+      if (saved) item.continuation = saved.resumeSessionId ? 'resume_requested' : 'fresh';
       const verifiedUpdate = candidate && reviewedCandidates.get(candidate.path);
       if (verifiedUpdate) item.verifiedUpdate = verifiedUpdate;
       item.status = 'prepared';

@@ -1,5 +1,19 @@
 # Native terminal client boundary
 
+## Managed terminal lifetime — 2026-11-19
+
+The current app run owns the managed PTY processes. Native starts still require
+the exact document, live focus and a one-use signed grant. Clean Quit retains
+signed stops and per-attempt receipts. The macOS PTY owner watch tears down
+the session after owner death. The current run uses an in-memory admission
+identity and leaves legacy marker and receipt files in place. Saved terminal
+projections can include an evidence-backed `exitedAt`. A Reopen batch reports
+`continuation: fresh | resume_requested` after enrollment. The provider owns
+whether the requested conversation actually resumes.
+
+See the [current lifetime contract](../development/t3-terminal-lifetime.md). Earlier cross-launch reservation
+and offline recovery descriptions record the superseded design.
+
 ## Studio CLI review and update notice
 
 The scoped Studio catalog can include an opaque `reviewId` for a sole

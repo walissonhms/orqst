@@ -218,18 +218,10 @@ test('L3 projects the submit before the native reply and preserves failure on th
   await page.keyboard.press('Escape');
   const ended = page.getByRole('button', { name: 'Encerrados (2)', exact: true });
   await ended.click();
-  await expect(page.getByText('Estado incerto', { exact: true })).toBeVisible();
-  const uncertainRow = page.locator('.pane-lifecycle-ended > ul > li').filter({ hasText: 'T-002' });
-  const recovery = uncertainRow.getByText('Ver detalhes', { exact: true });
-  await expect(recovery).toBeVisible();
-  await expect(uncertainRow.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
-  await recovery.click();
-  await expect(
-    uncertainRow.getByText('A propriedade desta sessão ainda não foi verificada.'),
-  ).toBeVisible();
-  await capture('recovery', 1440);
-  await recovery.click();
-  await expect(page.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();
+  await expect(page.getByText('Estado incerto', { exact: true })).toHaveCount(0);
+  const savedRow = page.locator('.pane-lifecycle-ended > ul > li').filter({ hasText: 'T-002' });
+  await expect(savedRow.getByRole('button', { name: 'Reabrir' })).toBeVisible();
+  await expect(savedRow.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();
   await page.evaluate((id) => {
     window.dispatchEvent(
       new CustomEvent('orqst-owned-pty-lifecycle', {

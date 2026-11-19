@@ -1,4 +1,5 @@
 import { build } from 'esbuild';
+import { execFileSync } from 'node:child_process';
 import { chmod, cp, mkdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -75,4 +76,12 @@ if (process.platform === 'darwin' && process.arch === 'arm64') {
       join(target, 'prebuilds/darwin-arm64', file),
     );
   await chmod(join(target, 'prebuilds/darwin-arm64/spawn-helper'), 0o700);
+  const manifest = 'apps/tauri/terminal-core/Cargo.toml';
+  execFileSync('cargo', ['build', '--release', '--locked', '--manifest-path', manifest], {
+    stdio: 'inherit',
+  });
+  const cargoTarget = process.env.CARGO_TARGET_DIR ?? join(dirname(manifest), 'target');
+  const helper = 'apps/desktop/dist/orqst-terminal-core';
+  await cp(join(cargoTarget, 'release/orqst-terminal-core'), helper);
+  await chmod(helper, 0o700);
 }

@@ -93,6 +93,14 @@ export function PaneCard({
             </span>
           </>
         )}
+        {terminal.continuation && (
+          <span
+            className="ts-name"
+            title={t(`paneLifecycle.continuation.${terminal.continuation}`)}
+          >
+            {t(`paneLifecycle.continuation.${terminal.continuation}`)}
+          </span>
+        )}
         {legacyMetadata}
         {actions}
       </div>

@@ -562,6 +562,7 @@ async function start() {
     mcpAuthorize: translate('managedTerminal.mcpAuthorize'),
     mcpDenied: translate('managedTerminal.mcpDenied'),
     panes: selection.map(({ config }, slot) => ({
+      terminalId: core.identities[slot]!.terminalId,
       profileId: `${interactiveProvider(config)}-terminal-v1`,
       title: `${slot + 1} · ${providers[slot]}`,
       provider: providers[slot]!,

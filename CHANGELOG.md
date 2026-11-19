@@ -1,5 +1,12 @@
 # Changelog
 
+## Run-owned managed terminals — 2026-11-19
+
+Studio opens managed PTYs without consulting prior launch reservations. Quit
+uses signed stops and a macOS lifetime watch tears down the owned PTY session
+if its owner crashes. Saved terminals appear under Encerrados and can reopen
+with the same display ID and an evidence-backed conversation ID when available.
+
 ## Legacy terminal reservation diagnostics
 
 The failed opening card explains a retained admission claim. Encerrados shows

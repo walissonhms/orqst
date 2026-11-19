@@ -664,7 +664,8 @@ pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
                         display.as_object().is_some_and(|fields| fields.iter().all(|(key, value)| {
                             match key.as_str() {
                                 "terminalId" | "displayId" => true,
-                                "released" | "activeReservation" => value == &json!(true),
+                                "released" => value == &json!(true),
+                                "exitedAt" => safe(value).is_some(),
                                 "name" => name(value),
                                 "provider" => matches!(value.as_str(), Some("codex" | "claude" | "opencode" | "antigravity")),
                                 _ => false,
@@ -686,7 +687,7 @@ fn saved_terminal_display_metadata_cannot_add_unrecognized_authority_fields() {
     let id = "00000000-0000-4000-8000-000000000001";
     let mut feature = json!({"terminalIds":[id],"terminalDisplays":[{
         "terminalId":id, "displayId":"T-004", "name":"Codex 1",
-        "provider":"codex", "activeReservation":true
+        "provider":"codex", "exitedAt":150
     }]});
     assert!(valid_terminal_displays(&feature));
     feature["terminalDisplays"][0]["kernelAbsent"] = json!(true);

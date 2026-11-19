@@ -381,7 +381,8 @@ fn valid_catalog(value: &Value, request: &Value) -> bool {
     }) && value.get("reopenable").is_none_or(|entries| {
         entries.as_array().is_some_and(|entries| {
             entries.len() <= 8 && entries.iter().all(|entry| {
-                exact(entry, &["terminalId", "displayId", "provider", "modelId", "name"])
+                (exact(entry, &["terminalId", "displayId", "provider", "modelId", "name"])
+                        || (exact(entry, &["terminalId", "displayId", "provider", "modelId", "name", "resume"]) && entry["resume"] == true))
                     && crate::features::uuid(&entry["terminalId"])
                     && crate::features::terminal_display_id(&entry["displayId"])
                     && crate::features::name(&entry["name"])
@@ -1077,6 +1078,7 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
                 "file",
                 "name",
                 "verifiedUpdate",
+                "continuation",
             ]
             .contains(&key.as_str())
         }) || item["id"] != input["id"]
@@ -1119,6 +1121,12 @@ fn batch_prepared(value: &Value, request: &Value) -> bool {
             {
                 return false;
             }
+        }
+        if item.get("continuation").is_some_and(|value| {
+            item["status"] != "prepared" || request.get("reopenTerminalId").is_none()
+                || !matches!(value.as_str(), Some("fresh" | "resume_requested"))
+        }) {
+            return false;
         }
         if item.get("verifiedUpdate").is_some_and(|version| {
             item["status"] != "prepared" || !valid_version_label(version)
@@ -1250,6 +1258,7 @@ fn open_batch(
         let fields = item.as_object_mut().unwrap();
         if !accepted {
             fields.remove("verifiedUpdate");
+            fields.remove("continuation");
         }
         fields.remove("file");
         fields.remove("name");

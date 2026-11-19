@@ -437,6 +437,7 @@ export function openFeatures(
       terminalId: string,
       replacementId: string,
       expected: { viewRevision: number; featureRevision: number },
+      requireRelease = true,
     ) =>
       transaction(() => {
         z.uuid().parse(replacementId);
@@ -445,7 +446,8 @@ export function openFeatures(
         if (
           view.featureId !== scope.featureId ||
           view.revision !== expected.viewRevision ||
-          !releasedTerminal(scope, terminalId)
+          !before.terminalIds.includes(terminalId) ||
+          (requireRelease && !releasedTerminal(scope, terminalId))
         )
           throw new Error('Released terminal scope changed');
         const layouts = openTerminalLayouts(db, transaction, scope.featureId);
@@ -512,10 +514,18 @@ export function openFeatures(
         audit(feature, 'feature.terminal_reopened', replacementId);
         return { feature, view, previousLayout: layouts.read(feature.terminalIds) ?? null };
       }),
-    removeReleasedTerminal: (scope: FeatureScope, terminalId: string, expectedRevision: number) =>
+    removeReleasedTerminal: (
+      scope: FeatureScope,
+      terminalId: string,
+      expectedRevision: number,
+      requireRelease = true,
+    ) =>
       transaction(() => {
         const before = checkMembershipRevision(scope, expectedRevision);
-        if (!releasedTerminal(scope, terminalId))
+        if (
+          !before.terminalIds.includes(terminalId) ||
+          (requireRelease && !releasedTerminal(scope, terminalId))
+        )
           throw new Error('Terminal release is unconfirmed');
         const layouts = openTerminalLayouts(db, transaction, scope.featureId);
         const previous = layouts.read(before.terminalIds);

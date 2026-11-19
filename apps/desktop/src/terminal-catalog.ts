@@ -1,6 +1,5 @@
+import { dirname } from 'node:path';
 import { terminalPreparationCatalogSchema, terminalCatalogRequestSchema } from '@orqst/protocol';
-import { z } from 'zod';
-import { terminalFile } from '../../../packages/core/src/terminal/codex-profile.js';
 import { cachedTerminalExecutableSha256 } from '../../../packages/core/src/terminal/codex-profile.js';
 import { isAutomaticCliReview } from '../../../packages/core/src/terminal/cli-executable-review.js';
 import { terminalDigest } from '../../../packages/core/src/terminal/authority.js';
@@ -18,6 +17,7 @@ import {
 } from '../../../packages/core/src/terminal/local-cli.js';
 import { inspectCatalogExecutables } from './terminal-discovery.js';
 import type { TerminalCreationInput } from './terminal-creation.js';
+import { savedTerminalMetadata } from './saved-terminal-metadata.js';
 
 /** Resolve the scope and re-read only providers participating in the request. */
 export function inspectTerminalPreparationCatalog(
@@ -104,30 +104,24 @@ export function terminalCatalogId(
   );
 }
 
-/** Fields from the already released immutable member. Every new launch has fresh review. */
-export function inspectReleasedTerminal(
+/** Saved membership and private manifest metadata. Reopening still requires a fresh review. */
+export function inspectEndedTerminal(
   workspace: ReturnType<typeof resolveTerminalPreparationContext>,
+  parent: string,
   terminalId: string,
+  metadata = savedTerminalMetadata(parent, new Set([terminalId])),
 ) {
   if (!workspace.feature) return;
   const member = workspace.feature.terminalDisplays?.find(
     (entry) => entry.terminalId === terminalId,
   );
-  if (!member?.released) return;
-  const receipt = workspace.features.releasedTerminal(workspace.feature.featureId, terminalId);
-  if (!receipt) return;
-  const saved = z
-    .object({
-      version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
-      identity: z.object({ terminalId: z.uuid() }),
-      project: z.string(),
-      model: z.object({ value: z.string().nullable() }).optional(),
-    })
-    .parse(JSON.parse(terminalFile(receipt.file, true).toString('utf8')));
-  if (saved.identity.terminalId !== terminalId || saved.project !== workspace.project) return;
+  const saved = metadata.get(terminalId);
+  if (!member || !saved || saved.project !== workspace.project) return;
   return {
-    provider: localCliProviders[saved.version - 1]!,
-    value: saved.model?.value ?? null,
+    provider: saved.provider,
+    value: saved.model,
+    resumeSessionId: saved.resumeSessionId,
+    alias: saved.alias,
     name:
       workspace.features
         .readLayout(workspace.feature.featureId)
@@ -139,8 +133,9 @@ export function inspectReleasedTerminal(
 export function terminalPreparationCatalog(
   raw: unknown,
   trusted: TerminalPreparationContext,
-  context: Pick<TerminalCreationInput, 'home' | 'environment'>,
+  context: Pick<TerminalCreationInput, 'home' | 'environment'> & { parent?: string },
   restoreSavedFeature = false,
+  ownedTerminalIds: ReadonlySet<string> = new Set(),
 ) {
   const { request, catalogId, providers, workspace } = inspectTerminalPreparationCatalog(
     raw,
@@ -150,10 +145,17 @@ export function terminalPreparationCatalog(
     restoreSavedFeature,
   );
   const feature = workspace.feature;
-  const reopenable = feature?.terminalDisplays?.flatMap((member) => {
-    if (!member.released) return [];
+  const parent = context.parent ?? dirname(trusted.preferencesDirectory);
+  const ended = feature?.terminalDisplays?.filter(
+    ({ terminalId }) => !ownedTerminalIds.has(terminalId),
+  );
+  const metadata = savedTerminalMetadata(
+    parent,
+    new Set(ended?.map(({ terminalId }) => terminalId)),
+  );
+  const reopenable = ended?.flatMap((member) => {
     try {
-      const saved = inspectReleasedTerminal(workspace, member.terminalId);
+      const saved = inspectEndedTerminal(workspace, parent, member.terminalId, metadata);
       const id = providers
         .find((entry) => entry.provider === saved?.provider)
         ?.models?.options.find((option) => option.selection.value === saved?.value)?.id;
@@ -165,6 +167,7 @@ export function terminalPreparationCatalog(
           provider: saved.provider,
           modelId: id,
           name: saved.name,
+          ...(saved.resumeSessionId ? { resume: true } : {}),
         },
       ];
     } catch {
@@ -183,7 +186,7 @@ export function terminalPreparationCatalog(
             featureId: workspace.feature.featureId,
             name: workspace.feature.name,
             terminalIds: workspace.feature.terminalIds,
-            ...(workspace.feature.terminalDisplays?.some((member) => member.released)
+            ...(workspace.feature.terminalDisplays?.length
               ? { terminalDisplays: workspace.feature.terminalDisplays }
               : {}),
           },

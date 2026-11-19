@@ -1,5 +1,9 @@
 # Dedicated offline native recovery increment
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 Baseline: main `03e5bcb3348e1faac7be03ee8065208253eb6d61`, service `2e0a32b`
 and contract `1b3dd9a`, corrected service freeze 744/1
 `3c33960bf7f2f546c74a10978079d6e10d7703fb` and final marker-ordering freeze

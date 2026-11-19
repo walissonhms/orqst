@@ -50,7 +50,7 @@ async function main() {
                     return {
                       ...entry,
                       provider: saved.provider,
-                      activeReservation: entry.released ? undefined : saved.activeReservation,
+                      ...(saved.exitedAt === undefined ? {} : { exitedAt: saved.exitedAt }),
                     };
                   }),
                 };
@@ -195,7 +195,9 @@ async function main() {
         ? terminalPreparationContextSchema.parse(JSON.parse(process.argv[4]))
         : undefined,
       process.argv[5] && process.argv[5] !== 'null'
-        ? desktopAdmissionContextSchema.parse(JSON.parse(process.argv[5]))
+        ? desktopAdmissionContextSchema
+            .extend({ ownedTerminalIds: z.array(z.uuid()).max(8) })
+            .parse(JSON.parse(process.argv[5]))
         : undefined,
       process.argv[6] === undefined
         ? 8

@@ -1,5 +1,9 @@
 # Offline administrative reservation recovery
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](../development/t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 This is a private Core module, not an HTTP/WebSocket, renderer command, runtime
 RPC, recovery CLI or production menu. Source entry:
 `packages/core/src/terminal/offline-recovery.ts`. Native integration must first

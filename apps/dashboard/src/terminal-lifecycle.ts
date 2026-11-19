@@ -20,7 +20,6 @@ export type PaneFailureReason =
   | 'catalog_changed'
   | 'native_authority_refused'
   | 'process_crashed'
-  | 'capacity_reserved'
   | 'open_refused'
   | 'opening_uncertain';
 
@@ -88,6 +87,7 @@ export interface TerminalOpenCard extends PaneLifecycle {
   provider: TerminalProvider;
   terminalId?: string;
   verifiedUpdate?: string;
+  continuation?: 'fresh' | 'resume_requested';
 }
 
 export function projectBatchOutcome(
@@ -98,6 +98,7 @@ export function projectBatchOutcome(
     return {
       ...card,
       terminalId: outcome.terminalId,
+      continuation: outcome.continuation,
       ...(outcome.verifiedUpdate ? { verifiedUpdate: outcome.verifiedUpdate } : {}),
     };
   const evidence = outcome?.reason ?? 'opening_uncertain';
@@ -108,8 +109,6 @@ export function projectBatchOutcome(
       state: 'failed',
       failure: { reason: 'opening_uncertain', evidence, retryable: false },
     };
-  if (evidence === 'capacity_reserved')
-    return { ...card, state: 'failed', failure: { reason: evidence, evidence, retryable: false } };
   const reason =
     evidence === 'cli_review_required'
       ? 'cli_review_required'
@@ -126,19 +125,7 @@ export interface EndedTerminal {
   displayId?: string;
   name?: string;
   provider?: TerminalProvider;
-  activeReservation?: boolean;
   exitedAt?: number;
-  disposition: 'exit_confirmed' | 'released' | 'uncertain';
-  released?: boolean;
-}
-
-/** Durable release enables reopening. It supplies neither signal nor exit time. */
-export function savedTerminalDisposition(
-  exitConfirmed: boolean,
-  released: boolean,
-): EndedTerminal['disposition'] {
-  if (exitConfirmed) return 'exit_confirmed';
-  return released ? 'released' : 'uncertain';
 }
 
 /** A closed UI, absent slot or persisted member ID has no process-authority implications. */

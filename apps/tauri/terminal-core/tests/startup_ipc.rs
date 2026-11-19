@@ -260,7 +260,7 @@ fn startup_failures_carry_stage_and_code() {
     assert!(events
         .iter()
         .any(|e| e == &json!({"event": "exit", "code": 1, "signal": null})));
-    // core_admission: capacity already reserved by another owner.
+    // A prior launch marker is preserved and does not participate in startup.
     let s = synthetic();
     let marker = Path::new(&s.preferences).join("active-pair.json");
     let other =
@@ -276,15 +276,9 @@ fn startup_failures_carry_stage_and_code() {
         startup.clone(),
     ];
     let events = run(&args, json!([]));
-    assert_eq!(
-        events[0]["message"]["failure"]["stage"], "core_admission",
-        "{events:?}"
-    );
+    assert_eq!(events[0]["message"]["type"], "ready", "{events:?}");
     assert_eq!(events[0]["message"]["id"], startup.as_str());
-    assert_eq!(
-        events[0]["message"]["failure"]["code"], "capacity_reserved",
-        "{events:?}"
-    );
+    assert_eq!(fs::read_to_string(marker).unwrap(), other.to_string() + "\n");
 }
 
 /// The hub composition in process: endpoints opened ahead, hub launch in the profile,

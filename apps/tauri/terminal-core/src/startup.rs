@@ -6,13 +6,11 @@
 //! `prepareMcp`/`authorizeMcp`, `config.interactive.mcp` without `hub`). Such a selection is
 //! refused at startup with the `core_startup` / `startup_failed` failure message; hub and
 //! non-MCP selections are composed.
+use std::os::unix::fs::DirBuilderExt;
 use crate::admission::enrollment::{inode, terminal_enrollment_file, TerminalEnrollmentBinding};
-use crate::admission::exit_pending::{
-    inspect_pending_owned_exits, preserve_owned_exit_pending, read_owned_exit_pending,
-    OwnedExitPending, LEADER_EXITED_RETIREMENT_PENDING,
-};
 use crate::admission::startup_failure::{core_startup_failure_message, is_startup_id};
-use crate::admission::{AdmissionError, DesktopAdmission, RefusalCode, SharedDesktopAdmission};
+use crate::admission::RefusalCode;
+use crate::admission::pair_admission::RunAdmission;
 use crate::authority::{ed25519_spki, now_ms, Authority};
 use crate::backend::{LifecycleReceipt, PtyBackend, Receipt, SessionReader, SlotProfiles};
 use crate::core::{CoreEvent, Extensions, Startup};
@@ -172,7 +170,7 @@ pub fn config_value(file: &str) -> R<Value> {
     for key in ["executable", "node"] {
         reorder_field(&mut out, key, &["path", "sha256"]);
     }
-    reorder_field(&mut out, "identity", &["terminalId"]);
+    reorder_field(&mut out, "identity", &["terminalId", "alias", "resumeSessionId"]);
     reorder_field(
         &mut out,
         "model",
@@ -271,7 +269,8 @@ pub fn enrollment_record(file: &str, config: InteractiveConfig) -> R<EnrollmentR
 }
 
 fn terminal_id(config: &InteractiveConfig) -> (String, String) {
-    terminal_identity(config.state(), config.identity())
+    let (id, alias) = terminal_identity(config.state(), config.identity());
+    (id, config.alias().map_or(alias, str::to_owned))
 }
 
 fn requested_model(value: &Value) -> Option<Value> {
@@ -446,18 +445,6 @@ fn prepared(backend: &ManagedProfileBackend) -> Vec<PreparedProfile> {
         .collect()
 }
 
-fn admission_failure(error: AdmissionError) -> Failure {
-    let refusal = match &error {
-        AdmissionError::Refused(code) => Some(*code),
-        _ => None,
-    };
-    Failure {
-        stage: "core_admission",
-        refusal,
-        detail: error.to_string(),
-    }
-}
-
 struct Hub {
     hub: Arc<TerminalMessageHub>,
     slots: Arc<Mutex<Vec<Option<HubSlot>>>>,
@@ -475,12 +462,10 @@ pub struct HostExtensions {
     selection: Vec<InteractiveConfig>,
     enrollment_files: Vec<EnrollmentRecord>,
     initial_members: Vec<Map<String, Value>>,
-    admission: SharedDesktopAdmission,
-    owner: String,
+    admission: RunAdmission,
     authority: Shared,
     epoch: String,
     hub: Option<Hub>,
-    preserved: Option<OwnedExitPending>,
     events: Sender<CoreEvent>,
     helper: OsString,
     closed: bool,
@@ -723,48 +708,6 @@ impl HostExtensions {
         }))
     }
 
-    fn begin_preserved(&self) -> Option<R<Option<Value>>> {
-        let preserved = self.preserved.as_ref()?;
-        Some((|| {
-            self.admission.preserve_pending_exit()?;
-            let record = read_owned_exit_pending(&self.preferences, &self.owner, &self.epoch)
-                .map_err(|e| e.to_string())?;
-            if record.as_ref().map(OwnedExitPending::to_json) != Some(preserved.to_json()) {
-                return Err("Pending exit evidence changed".into());
-            }
-            Ok(Some(preserved.evidence.to_value()))
-        })())
-    }
-
-    fn preserve(&mut self, pair: &mut Pair, draining: bool) -> R<Option<Value>> {
-        if !draining || !self.selection.iter().any(|c| c.version() == 3) {
-            return Err("Preserved owned exit is unavailable".into());
-        }
-        let record = match &self.preserved {
-            Some(record) => record.clone(),
-            None => {
-                let value = json!({
-                    "version": 1,
-                    "status": LEADER_EXITED_RETIREMENT_PENDING,
-                    "owner": self.owner,
-                    "evidence": pair.owned_exit_evidence()?,
-                });
-                let admission = self.admission.clone();
-                let assert = move || -> crate::admission::Result<()> {
-                    admission
-                        .with(|a| a.assert_owner())
-                        .map_err(|_| AdmissionError::Rejected("Desktop admission unavailable"))?
-                };
-                preserve_owned_exit_pending(&self.preferences, &value, &assert)
-                    .map_err(|e| e.to_string())?
-            }
-        };
-        self.preserved = Some(record.clone());
-        self.admission.preserve_pending_exit()?;
-        serde_json::from_str(&record.to_json())
-            .map(Some)
-            .map_err(|e| e.to_string())
-    }
 }
 
 impl Extensions for HostExtensions {
@@ -773,7 +716,7 @@ impl Extensions for HostExtensions {
         kind: &str,
         request: &Value,
         pair: &mut Pair,
-        draining: bool,
+        _draining: bool,
     ) -> Option<R<Option<Value>>> {
         if crate::features::handles(kind) {
             return Some(
@@ -795,16 +738,8 @@ impl Extensions for HostExtensions {
                         |hub| hub.hub.inspect(&request["command"])))))
             }
             "communicationProjection" => self.communication_projection(request),
-            // Called by the Core after it set `draining`; `None` answers with the inventory.
-            "beginOwnedShutdown" => self.begin_preserved(),
-            "preserveOwnedShutdown" => {
-                exact(request, &["kind", "id"]).then(|| self.preserve(pair, draining))
-            }
-            // The legacy pair MCP is refused at startup: nothing is ever opted in.
-            "prepareMcp" => exact(request, &["kind", "id"]).then(|| Err("MCP not opted in".into())),
-            "authorizeMcp" => {
-                exact(request, &["kind", "id", "proof"]).then(|| Err("MCP not opted in".into()))
-            }
+            "beginOwnedShutdown" => None,
+            "preserveOwnedShutdown" => Some(Err("Cross-launch terminal preservation is unavailable".into())),
             _ => None,
         }
     }
@@ -842,9 +777,6 @@ impl Extensions for HostExtensions {
         Ok(())
     }
 
-    fn retire_blocked(&self) -> bool {
-        self.selection.iter().any(|c| c.version() == 3)
-    }
 }
 
 /// `<exe dir>/orqst-mcp-relay.cjs` with its digest (`hubRelay()` in host.ts).
@@ -932,12 +864,15 @@ pub fn start(
     ));
     let epoch = authority.borrow().epoch.clone();
     let preferences = PathBuf::from(&args.preferences);
-    // Stage core_admission: the sticky desktop admission marker.
-    let admission =
-        DesktopAdmission::open(&preferences, &files, Some(&epoch)).map_err(admission_failure)?;
-    let owner = admission.owner().to_owned();
-    let admission = SharedDesktopAdmission::new(admission);
-    // Stage core_startup.
+    if let Err(error) = std::fs::DirBuilder::new().mode(0o700).create(&preferences) {
+        if error.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(Failure::startup(error.to_string()));
+        }
+    }
+    crate::admission::fs::terminal_directory(&preferences, true)
+        .map_err(|error| Failure::startup(error.to_string()))?;
+    let owner = uuid::Uuid::new_v4().to_string();
+    let admission = RunAdmission::default();
     let mut hub = None;
     if uses_hub {
         let slots: Arc<Mutex<Vec<Option<HubSlot>>>> = Arc::new(Mutex::new(
@@ -1049,7 +984,6 @@ pub fn start(
     }
     let pair = Pair::new(authority.clone(), slots, Box::new(admission.clone()), limit)
         .map_err(Failure::startup)?;
-    let pending = inspect_pending_owned_exits(&preferences).map_err(Failure::startup)?;
     let identities: Vec<Value> = selection
         .iter()
         .enumerate()
@@ -1060,14 +994,13 @@ pub fn start(
         .collect();
     let ready = json!({
         "type": "ready",
-        "pendingOwnedExits": pending,
         "id": args.startup_id,
         "epoch": epoch,
         "admissionOwner": owner,
         "initialFiles": files,
         "identities": identities,
     });
-    let opencode = selection.iter().any(|s| s.config.version() == 3);
+    let opencode = false;
     let extensions = HostExtensions {
         preferences,
         team_workspace_id: crate::profiles::terminal_digest(&project),
@@ -1077,11 +1010,9 @@ pub fn start(
         enrollment_files,
         initial_members,
         admission,
-        owner,
         authority,
         epoch,
         hub,
-        preserved: None,
         events,
         helper,
         closed: false,

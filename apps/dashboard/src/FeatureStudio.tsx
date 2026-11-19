@@ -47,7 +47,6 @@ import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catal
 import {
   projectPaneLifecycle,
   reconcileEndedTerminals,
-  savedTerminalDisposition,
   type EndedTerminal,
 } from './terminal-lifecycle.js';
 import { openFeatureTerminalIds } from './feature-counts.js';
@@ -123,8 +122,6 @@ export function FeatureStudio({
   savedStudio,
   liveWorkspaceId,
   onSavedMetadataChange,
-  onLocateReservation,
-  reservationTarget,
   onRetryStartup,
   onCanvas,
   onSnapshot,
@@ -146,8 +143,6 @@ export function FeatureStudio({
   savedStudio?: Pick<FeatureNativeSnapshot, 'workspace' | 'features' | 'view' | 'activeFeatureId'>;
   liveWorkspaceId?: string;
   onSavedMetadataChange?: () => void;
-  onLocateReservation?: () => void;
-  reservationTarget?: { terminalId: string };
   onRetryStartup?: () => void;
   onSnapshot?: (snapshot: FeatureNativeSnapshot) => void;
   onCanvas?: (evidence: { workspaceId: string; canvas: FeatureCanvasEvidence }) => void;
@@ -398,12 +393,7 @@ export function FeatureStudio({
   );
   const [history, setHistory] = useState<TerminalPreparationCatalog>();
   useEffect(() => {
-    if (
-      !creator ||
-      !openingWorkspaceId ||
-      !selected?.terminalDisplays?.some(({ released }) => released)
-    )
-      return;
+    if (!creator || !openingWorkspaceId || !selected?.terminalIds.length) return;
     let active = true;
     void loadTerminalCatalog(creator, {
       workspaceId: openingWorkspaceId,
@@ -433,18 +423,12 @@ export function FeatureStudio({
     return openings;
   }, [openingTerminals]);
   const existing = useMemo(() => {
-    const releasedIds = new Set(
-      selected?.terminalDisplays
-        ?.filter(({ released }) => released)
-        .map(({ terminalId }) => terminalId),
-    );
     const projected = studioTerminals(snapshot, panes, evidence, now);
     return projected.map((terminal) => {
       const opening = openingByTerminal.get(terminal.id);
       const facts = paneEvidence.get(terminal.id);
       const lifecycle =
-        releasedIds.has(terminal.id) ||
-        (terminal.cardState === 'ended' && facts?.process !== 'exited')
+        terminal.cardState === 'ended' && facts?.process !== 'exited'
           ? { state: 'ended' as const }
           : facts
             ? projectPaneLifecycle({
@@ -462,7 +446,9 @@ export function FeatureStudio({
         ...terminal,
         cardState: lifecycle.state,
         lifecycle,
-        ...(opening ? { correlationId: opening.id, name: opening.name } : {}),
+        ...(opening
+          ? { correlationId: opening.id, name: opening.name, continuation: opening.continuation }
+          : {}),
       };
     });
   }, [snapshot, selected, panes, evidence, now, paneEvidence, openingByTerminal, coreState]);
@@ -1257,19 +1243,24 @@ export function FeatureStudio({
       );
       return {
         terminalId: id,
-        disposition: savedTerminalDisposition(
-          !!exit || paneEvidence.get(id)?.process === 'exited',
-          display?.released === true,
-        ),
-        released: display?.released,
         displayId: display?.displayId ?? terminal?.label,
         provider: slot?.provider ?? display?.provider ?? release?.provider,
         name: slot?.displayName ?? display?.name ?? terminal?.name ?? release?.name,
-        activeReservation: display?.activeReservation,
-        exitedAt: exit?.exitedAt,
+        exitedAt: exit?.exitedAt ?? display?.exitedAt,
       };
     }),
-    new Set(ownedTerminals.map(({ id }) => id)),
+    new Set(
+      snapshot?.slots
+        .filter(
+          ({ closed, terminalId }) =>
+            !closed &&
+            paneEvidence.get(terminalId)?.process !== 'exited' &&
+            !evidence?.entries.some(
+              (entry) => entry.terminalId === terminalId && entry.state === 'exited',
+            ),
+        )
+        .map(({ terminalId }) => terminalId),
+    ),
   );
   async function removeSavedTerminal(terminalId: string) {
     if (!creator || !savedStudio || !selected || !preparationMatchesView || quitFence) return;
@@ -1302,7 +1293,6 @@ export function FeatureStudio({
     <EndedTerminalList
       key={scopeKey}
       terminals={savedMembers}
-      target={reservationTarget}
       now={now}
       onRemove={
         canWrite && selected && !busy
@@ -1923,13 +1913,7 @@ export function FeatureStudio({
                   }
                 : undefined;
             if (opening && (!real || opening.state === 'failed'))
-              return (
-                <TerminalOpeningCard
-                  card={opening}
-                  onRetry={retry}
-                  onLocateReservation={onLocateReservation}
-                />
-              );
+              return <TerminalOpeningCard card={opening} onRetry={retry} />;
             if (embedsPtys && !terminal.lifecycle?.failure)
               return (
                 <div className="ts-hole" aria-hidden="true">

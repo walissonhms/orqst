@@ -7,6 +7,12 @@ fn main() {
     {
         orqst_terminal_core::pty::helper_main(&args[2..]);
     }
+    if args.get(1).is_some_and(|arg| arg == orqst_terminal_core::pty::OWNED_EXEC_ARG) {
+        if let Some(owner) = args.get(2) {
+            orqst_terminal_core::pty::owned_exec(owner, None, &args[3..]);
+        }
+        std::process::exit(1);
+    }
     // `recovery` (offline recovery host) never collides with the Core: its argv[1] is JSON.
     if args.get(1).map(|a| a == "recovery").unwrap_or(false) {
         let rest: Option<Vec<String>> = args[2..]

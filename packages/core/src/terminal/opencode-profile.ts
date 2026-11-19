@@ -180,12 +180,15 @@ export function openCodeTerminalProfiles(
       executableSha256: config.executable.sha256,
       executableVersion: config.executableVersion,
       cwd: config.project,
-      argv: ['--standalone'],
+      argv: [
+        '--standalone',
+        ...(config.identity?.resumeSessionId ? ['--session', config.identity.resumeSessionId] : []),
+      ],
       environmentProfile: 'opencode-native-identity-no-inherited-credentials-v1',
       cliAuthorizationScope: `opencode-standalone-native-v1:${mcp ? 'orqst-mcp-configured' : 'native-mcp'}`,
       permissions:
         `Tool PATH: ${terminalToolPath(config.toolPath)}. Native identity selectors: ${JSON.stringify(config.authentication.nativeIdentity)}. ORQST state: ${config.state}. ` +
-        'Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. No automatic ORQST task/login/resume/adoption. --standalone selects a private native server with generated authentication and stdin lease; existing service is not adopted. 30 minute owned TUI deadline; exit proves TUI only, descendant exit and concurrent DB compatibility UNVALIDATED; capacity remains sticky. One dispatch per manifest. ' +
+        'Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. The PTY belongs to the current app run. One dispatch per manifest. A reviewed Reopen may request an evidenced conversation. --standalone selects a private native server with generated authentication and stdin lease. Concurrent native database compatibility is unvalidated. ' +
         (mcp
           ? 'Inline ORQST MCP MERGES with native definitions; ' +
             (config.interactive.hub

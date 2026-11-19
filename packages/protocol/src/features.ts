@@ -45,7 +45,7 @@ export const featureTerminalDisplaySchema = z.strictObject({
   released: z.literal(true).optional(),
   name: terminalDisplayNameSchema.optional(),
   provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']).optional(),
-  activeReservation: z.literal(true).optional(),
+  exitedAt: z.number().int().nonnegative().safe().optional(),
 });
 export type FeatureTerminalDisplay = z.infer<typeof featureTerminalDisplaySchema>;
 

@@ -16,4 +16,11 @@ export function terminalDisplayId(ordinal: number) {
   return terminalDisplayIdSchema.parse(`T-${String(ordinal).padStart(3, '0')}`);
 }
 
-export const terminalIdentitySchema = z.strictObject({ terminalId: z.uuid() });
+export const terminalIdentitySchema = z.strictObject({
+  terminalId: z.uuid(),
+  alias: z
+    .string()
+    .regex(/^P-[0-9a-f-]{36}$/i)
+    .optional(),
+  resumeSessionId: z.union([z.uuid(), z.string().regex(/^ses_[A-Za-z0-9]{1,96}$/)]).optional(),
+});

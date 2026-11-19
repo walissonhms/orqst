@@ -108,3 +108,43 @@ impl Admission for SharedDesktopAdmission {
         }))
     }
 }
+
+/// Run-local Core authority. Legacy marker readers and writers are offline tools.
+#[derive(Clone, Default)]
+pub struct RunAdmission(std::rc::Rc<std::cell::Cell<bool>>);
+
+impl Admission for RunAdmission {
+    fn claim(&mut self) -> std::result::Result<(), String> {
+        self.assert_owner()
+    }
+
+    fn assert_owner(&self) -> std::result::Result<(), String> {
+        if self.0.get() {
+            return Err("Terminal Core is retired".into());
+        }
+        Ok(())
+    }
+
+    fn prepare_release(
+        &mut self,
+        _evidence: &Value,
+    ) -> std::result::Result<Box<dyn FnMut() -> std::result::Result<(), String>>, String> {
+        self.assert_owner()?;
+        let retired = self.0.clone();
+        Ok(Box::new(move || {
+            retired.set(true);
+            Ok(())
+        }))
+    }
+
+    fn reserve_enrollment(
+        &mut self,
+        _input: &Value,
+        _manifest_file: &str,
+        _member: &Value,
+    ) -> std::result::Result<crate::pair::EnrollmentFinish, String> {
+        self.assert_owner()?;
+        let run = self.clone();
+        Ok(Box::new(move |_| run.assert_owner()))
+    }
+}

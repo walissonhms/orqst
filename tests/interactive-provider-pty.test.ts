@@ -140,6 +140,13 @@ for (const provider of ['claude', 'opencode'] as const)
           recursive: true,
         });
         chmodSync(join(root, 'terminal-pty/prebuilds/darwin-arm64/spawn-helper'), 0o700);
+        const manifest = 'apps/tauri/terminal-core/Cargo.toml';
+        const cargoTarget = process.env.CARGO_TARGET_DIR ?? join(dirname(manifest), 'target');
+        const helper = join(cargoTarget, 'debug/orqst-terminal-core');
+        if (!existsSync(helper))
+          execFileSync('cargo', ['build', '--locked', '--manifest-path', manifest]);
+        cpSync(helper, join(root, 'orqst-terminal-core'));
+
         const fixture = require(
           join(root, 'driver.cjs'),
         ) as typeof import('../packages/core/src/terminal/pty-backend.js') &
@@ -148,6 +155,16 @@ for (const provider of ['claude', 'opencode'] as const)
         const profile = fixture.interactiveTerminalProfiles(
           fixture.readInteractiveTerminalConfig(file),
         )[0]!;
+        const resumeSessionId = config.version === 2 ? config.sessionId : 'ses_SYNTHETIC123';
+        const resumed = fixture.interactiveTerminalProfiles({
+          ...config,
+          identity: { terminalId: randomUUID(), resumeSessionId },
+        })[0]!;
+        const flag = config.version === 2 ? '--resume' : '--session';
+        const index = resumed.argv.indexOf(flag);
+        assert.ok(index >= 0);
+        assert.equal(resumed.argv[index + 1], resumeSessionId);
+        assert.equal(resumed.argv.includes('--session-id'), false);
         const otherState = join(root, 'other-state');
         mkdirSync(otherState, { mode: 0o700 });
         mkdirSync(join(otherState, 'tmp'), { mode: 0o700 });

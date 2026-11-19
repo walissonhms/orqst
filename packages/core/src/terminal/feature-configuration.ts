@@ -137,7 +137,7 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withTerminalPreferences(directory, (store) =>
         store.features().recordTerminalRelease(workspaceId, terminalId, manifest, epoch),
       ),
-    replaceReleasedTerminal: (
+    replaceEndedTerminal: (
       featureId: string,
       terminalId: string,
       replacementId: string,
@@ -146,11 +146,13 @@ export function featureConfigurationDatabase(directory: string, workspaceId: str
       withTerminalPreferences(directory, (store) =>
         store
           .features()
-          .replaceReleasedTerminal(scope(featureId), terminalId, replacementId, expected),
+          .replaceReleasedTerminal(scope(featureId), terminalId, replacementId, expected, false),
       ),
-    removeReleasedTerminal: (featureId: string, terminalId: string, expectedRevision: number) =>
+    removeEndedTerminal: (featureId: string, terminalId: string, expectedRevision: number) =>
       withTerminalPreferences(directory, (store) =>
-        store.features().removeReleasedTerminal(scope(featureId), terminalId, expectedRevision),
+        store
+          .features()
+          .removeReleasedTerminal(scope(featureId), terminalId, expectedRevision, false),
       ),
     assignToOpenOrDefault: (
       requestedFeatureId: string | null,

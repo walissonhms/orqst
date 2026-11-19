@@ -1,5 +1,19 @@
 # ORQST
 
+## Managed terminal lifetime — 2026-11-19
+
+The current app run owns the managed PTY processes. Native starts still require
+the exact document, live focus and a one-use signed grant. Clean Quit retains
+signed stops and per-attempt receipts. The macOS PTY owner watch tears down
+the session after owner death. The current run uses an in-memory admission
+identity and leaves legacy marker and receipt files in place. Saved terminal
+projections can include an evidence-backed `exitedAt`. A Reopen batch reports
+`continuation: fresh | resume_requested` after enrollment. The provider owns
+whether the requested conversation actually resumes.
+
+See the [current lifetime contract](docs/development/t3-terminal-lifetime.md). Earlier cross-launch reservation
+and offline recovery descriptions record the superseded design.
+
 ## Legacy terminal reservations
 
 Studio explains when a previous reservation blocks a new Core and links to its

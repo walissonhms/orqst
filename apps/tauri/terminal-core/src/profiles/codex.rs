@@ -235,7 +235,7 @@ pub fn managed_codex_profiles(
         }
     );
     let common_permissions = format!(
-        "Tool PATH: {}. Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. 30 minute owned-process lifetime, then TERM/KILL; no descendant containment. No resume/adoption.",
+        "Tool PATH: {}. Native same-user process, NOT a container. Fixed read-only/on-request defaults; provider UI can change permissions. Network for provider/auth. The PTY belongs to the current app run. Reopen may request an evidenced conversation.",
         terminal_tool_path(config.tool_path.as_deref())?
     );
     let environment_profile = if config.authentication.is_some() {
@@ -276,6 +276,9 @@ pub fn managed_codex_profiles(
         let mut argv = base_argv(terminal_model_arguments(config.model.as_ref())?);
         argv.extend(with_c(native_codex_overrides(config)));
         argv.extend(mcp_arguments);
+        if let Some(session) = &config.resume_session_id {
+            argv.extend(["resume".to_owned(), session.clone()]);
+        }
         let hub = config.interactive.as_ref().is_some_and(|i| i.hub);
         let mcp_text = match (mcp.is_some(), hub) {
             (false, _) => "",
@@ -283,7 +286,7 @@ pub fn managed_codex_profiles(
             (true, false) => "Per-instance ORQST MCP connects to a private local relay; task delegation requires separate native authorization after both starts. Inherited MCPs remain enabled. ",
         };
         let permissions = format!(
-            "Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. No resume/adoption or automatic task. {mcp_text}{common_permissions}"
+            "Existing native login, config, MCPs, skills and session root are SHARED. Codex may refresh credentials and write NEW sessions; not ephemeral. Reopen may request an evidenced conversation. Starts do not submit a task. {mcp_text}{common_permissions}"
         );
         return Ok(vec![build("codex-terminal-v1", argv, &permissions)?]);
     }

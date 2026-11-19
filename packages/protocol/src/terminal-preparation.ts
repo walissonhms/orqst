@@ -84,6 +84,7 @@ export const terminalBatchItemSchema = z.strictObject({
   terminalId: z.uuid().optional(),
   slot: z.number().int().min(0).max(7).optional(),
   verifiedUpdate: cliVersion.optional(),
+  continuation: z.enum(['fresh', 'resume_requested']).optional(),
 });
 export const terminalBatchReplySchema = z
   .strictObject({
@@ -178,6 +179,7 @@ export const terminalPreparationCatalogSchema = z.strictObject({
         provider: terminalProviderSchema,
         modelId: digest,
         name: terminalDisplayNameSchema,
+        resume: z.literal(true).optional(),
       }),
     )
     .max(8)

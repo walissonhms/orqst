@@ -310,7 +310,7 @@ pub fn open_code_terminal_profiles(
         config.native_identity.to_js().stringify(),
         config.state
     );
-    permissions.push_str("Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. No automatic ORQST task/login/resume/adoption. --standalone selects a private native server with generated authentication and stdin lease; existing service is not adopted. 30 minute owned TUI deadline; exit proves TUI only, descendant exit and concurrent DB compatibility UNVALIDATED; capacity remains sticky. One dispatch per manifest. ");
+    permissions.push_str("Native same-user OpenCode, NOT a sandbox. Existing HOME/XDG/config/database identity is shared; no credentials are read or copied by ORQST. Startup opens writable SQLite, may change DB/sidecar permissions, WAL/pragmas, apply pending migrations and refresh credentials. Database/ledger NOT inspected; pending migrations UNKNOWN, no rollback guarantee. Native config, plugins, hooks, MCPs and startup activity may execute code/network/provider requests. The PTY belongs to the current app run. One dispatch per manifest. A reviewed Reopen may request an evidenced conversation. --standalone selects a private native server with generated authentication and stdin lease. Concurrent native database compatibility is unvalidated. ");
     if mcp.is_some() {
         permissions.push_str("Inline ORQST MCP MERGES with native definitions; ");
         permissions.push_str(if opted.hub {
@@ -332,7 +332,11 @@ pub fn open_code_terminal_profiles(
         ("executableSha256", Js::str(&config.executable.sha256)),
         ("executableVersion", Js::str(&config.executable_version)),
         ("cwd", Js::str(&config.project)),
-        ("argv", Js::strs(["--standalone"])),
+        ("argv", Js::strs(
+            std::iter::once("--standalone").chain(
+                config.resume_session_id.as_deref().into_iter().flat_map(|id| ["--session", id])
+            )
+        )),
         (
             "environmentProfile",
             Js::str("opencode-native-identity-no-inherited-credentials-v1"),

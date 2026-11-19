@@ -1,5 +1,9 @@
 # Studio admission blocked by a legacy reservation
 
+> **Superseded for Studio on 2026-11-19.** The
+> [managed terminal lifetime decision](t3-terminal-lifetime.md) supersedes
+> the cross-launch release model. The following text records the original contract.
+
 The diag30 baseline is `origin/integrate/spec` at `1610bb9`. The native Preview
 has one active admission marker. It references T-004, the Codex terminal
 documented in [diag28](diag28-lifecycle.md#historical-diag28-t-004).

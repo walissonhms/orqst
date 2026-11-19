@@ -91,6 +91,7 @@ export type PaneCardState = PaneLifecycleState;
 export type TerminalStatus = PaneCardState | 'completed' | 'interrupted';
 
 export interface StudioTerminal {
+  continuation?: 'fresh' | 'resume_requested';
   id: string;
   /** Stable visible label such as `T-001`. */
   label: string;

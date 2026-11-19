@@ -1,10 +1,5 @@
 import { mcpCommunicationJournal } from './mcp-communication.js';
 import { recordComposerMention } from './composer-mentions.js';
-import {
-  preserveOwnedExitPending,
-  inspectPendingOwnedExits,
-  readOwnedExitPending,
-} from './exit-pending.js';
 import { stableId } from '@orqst/shared';
 import {
   terminalSlotLimit,
@@ -24,8 +19,7 @@ import { interactiveHub, interactiveMcp, interactiveProvider } from './interacti
 import { interactiveCliAdapter } from './interactive-adapters.js';
 import { ManagedTerminalPair } from './managed-pair.js';
 import { inspectManagedTerminalFiles } from './managed-files.js';
-import { desktopAgentsAdmission } from '../managed-codex/desktop-admission.js';
-import { DesktopAdmissionRefused } from '../managed-codex/desktop-admission-inspection.js';
+import { runTerminalAdmission } from './run-admission.js';
 import { terminalStartupFailureSchema, terminalStartupIdSchema } from './startup-failure.js';
 import { terminalPairRPCSchema } from './rpc.js';
 import { InteractiveMcpSession } from './interactive-mcp.js';
@@ -38,15 +32,14 @@ import type { TerminalMcpLaunch } from './mcp-launch.js';
 import { terminalEnrollmentFile, inspectTerminalEnrollment } from './enrollment-files.js';
 
 process.umask(0o077);
-let startupStage: 'core_admission' | 'core_startup' = 'core_startup';
 const startupId = terminalStartupIdSchema.parse(process.argv[6]);
-function startupFailed(error: unknown) {
+function startupFailed() {
   const failure = terminalStartupFailureSchema.parse({
     type: 'startup-failure',
     id: startupId,
     failure: {
-      stage: startupStage,
-      code: error instanceof DesktopAdmissionRefused ? error.code : 'startup_failed',
+      stage: 'core_startup',
+      code: 'startup_failed',
       effects: 'possible',
     },
   });
@@ -85,9 +78,7 @@ async function start() {
     format: 'der',
   });
   const authority = new TerminalAuthority(new Map([['desktop-managed', publicKey]]), Date.now);
-  startupStage = 'core_admission';
-  const admission = desktopAgentsAdmission(process.argv[4]!, files, authority.epoch);
-  startupStage = 'core_startup';
+  const admission = runTerminalAdmission(process.argv[4]!);
   const stores: Store[] = [];
   let pair!: ManagedTerminalPair;
   // Feature-scoped hub for every terminal (docs/design/mcp-n-terminals.md); the disposable
@@ -286,7 +277,6 @@ async function start() {
     };
     let closed = false;
     let draining = false;
-    let preservedOwnedExit: ReturnType<typeof preserveOwnedExitPending> | undefined;
     function shutdown() {
       if (closed) return;
       closed = true;
@@ -565,44 +555,14 @@ async function start() {
           case 'beginOwnedShutdown':
             draining = true;
             mcp?.invalidate();
-            if (preservedOwnedExit) {
-              admission.preservePendingExit();
-              const record = readOwnedExitPending(
-                process.argv[4]!,
-                admission.owner,
-                authority.epoch,
-              );
-              if (JSON.stringify(record) !== JSON.stringify(preservedOwnedExit))
-                throw new Error('Pending exit evidence changed');
-              value = record!.evidence;
-            } else value = pair.ownedShutdownInventory();
+            value = pair.ownedShutdownInventory();
             break;
           case 'preserveOwnedShutdown':
-            if (!draining || !selection.some(({ config }) => config.version === 3))
-              throw new Error('Preserved owned exit is unavailable');
-            value =
-              preservedOwnedExit ??
-              preserveOwnedExitPending(
-                process.argv[4]!,
-                {
-                  version: 1,
-                  status: 'leader_exited_retirement_pending',
-                  owner: admission.owner,
-                  evidence: pair.ownedExitEvidence(),
-                },
-                admission.assertOwner,
-              );
-            preservedOwnedExit = value as ReturnType<typeof preserveOwnedExitPending>;
-            admission.preservePendingExit();
-            break;
+            throw new Error('Cross-launch terminal preservation is unavailable');
           case 'prepareRetire':
-            if (selection.some(({ config }) => config.version === 3))
-              throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
             value = pair.prepareRetire();
             break;
           case 'retire':
-            if (selection.some(({ config }) => config.version === 3))
-              throw new Error('OpenCode descendant exit unvalidated; capacity remains reserved');
             pair.retire(request.proof);
             for (const slot of selection.keys()) {
               try {
@@ -629,7 +589,6 @@ async function start() {
     });
     send({
       type: 'ready',
-      pendingOwnedExits: inspectPendingOwnedExits(process.argv[4]!),
       id: startupId,
       epoch: authority.epoch,
       admissionOwner: admission.owner,
@@ -640,8 +599,8 @@ async function start() {
         provider: interactiveProvider(config),
       })),
     });
-  } catch (error) {
-    startupFailed(error);
+  } catch {
+    startupFailed();
     authority.revoke('desktop-managed');
     pair?.close();
     await mcp?.close();
