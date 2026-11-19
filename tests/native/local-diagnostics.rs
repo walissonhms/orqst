@@ -28,3 +28,15 @@ fn refusals_are_projected_without_interpreting_text_as_launch_or_effect_evidence
     }
     assert_eq!(opening_outcome(Some("cancelled"), None), Outcome::Cancelled);
 }
+
+#[test]
+fn prepared_open_retry_requires_native_evidence_that_dispatch_was_refused() {
+    let denied = json!({"status":"denied"});
+    assert!(known_open_refusal(&denied, false));
+    assert!(!known_open_refusal(&denied, true));
+    assert!(known_open_refusal(&json!({"status":"busy"}), true));
+    assert!(known_open_refusal(
+        &json!({"status":"denied","authorization":"blocked"}),
+        true,
+    ));
+}

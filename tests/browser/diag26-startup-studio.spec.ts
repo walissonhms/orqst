@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   defaultFeatureId,
+  type DesktopFeatures,
   type FeatureNativeSnapshot,
   type StudioStartup,
   type TauriStudio,
@@ -47,6 +48,7 @@ function view(workspaceId: string, featureId: string | null) {
 async function installFixture(
   page: Page,
   mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity',
+  embedPtys = false,
 ) {
   const selected = {
     ...feature(workspaceId, featureId, 'Revisão'),
@@ -106,7 +108,7 @@ async function installFixture(
     ],
   };
   await page.addInitScript(
-    ({ mode, startup, live, modelId, releasedId }) => {
+    ({ mode, startup, live, modelId, releasedId, embedPtys }) => {
       localStorage.setItem('i18nextLng', 'pt-BR');
       if (!localStorage.getItem('orqst.shell.v1'))
         localStorage.setItem(
@@ -125,6 +127,12 @@ async function installFixture(
       };
       Reflect.set(window, 'orqstFeatures', {
         contractVersion: 1,
+        ...(embedPtys && {
+          arrange: async (request: Parameters<NonNullable<DesktopFeatures['arrange']>>[0]) => {
+            Reflect.set(window, 'diag27Layout', request);
+            return { status: 'ok' };
+          },
+        }),
         request: async () => {
           if (mode !== 'live' && mode !== 'antigravity') return { status: 'unavailable' };
           const at = Date.now();
@@ -200,7 +208,20 @@ async function installFixture(
               },
             };
           if (request.action === 'create-batch')
-            return new Promise((resolve) =>
+            return new Promise((resolve) => {
+              Reflect.set(window, 'acceptDiag27Open', (terminalId: string) =>
+                resolve({
+                  status: 'batch',
+                  items: request.requests.map(({ id }) => ({
+                    id,
+                    terminalId,
+                    slot: 3,
+                    status: 'accepted',
+                    reason: 'core_enrolled',
+                    effects: 'possible',
+                  })),
+                }),
+              );
               Reflect.set(window, 'refuseOpen', () =>
                 resolve({
                   status: 'batch',
@@ -211,13 +232,13 @@ async function installFixture(
                     effects: 'not_started',
                   })),
                 }),
-              ),
-            );
+              );
+            });
           return { status: 'denied' };
         },
       });
     },
-    { mode, startup, live, modelId, releasedId },
+    { mode, startup, live, modelId, releasedId, embedPtys },
   );
   await page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -381,4 +402,55 @@ test('approved V6 reference', async ({ page }) => {
   );
   await page.goto('/diag26-v6-reference');
   await capture(page, 'v6-studio');
+});
+
+test('a refused native open remains a failed Studio card with a retry action', async ({ page }) => {
+  await installFixture(page, 'live', true);
+  await page.goto('/studio');
+  const frame = () => page.evaluate(() => Reflect.get(window, 'diag27Layout'));
+  const liveBody = page.locator(`[data-pane-id="${terminalId}"] .ts-body`);
+  await expect(liveBody).toBeVisible();
+  const box = await liveBody.boundingBox();
+  expect(box).not.toBeNull();
+  await expect.poll(frame).toMatchObject({
+    layoutVersion: 2,
+    chrome: { sidebar: 155, top: 45, bottom: 33 },
+    panes: expect.arrayContaining([
+      expect.objectContaining({
+        terminalId,
+        rect: expect.objectContaining({
+          x: Math.round(box!.x - 155),
+          y: Math.round(box!.y - 45),
+        }),
+      }),
+    ]),
+  });
+  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect.poll(frame).toMatchObject({
+    panes: expect.arrayContaining([expect.objectContaining({ terminalId, rect: null })]),
+  });
+  await dialog.getByRole('textbox').first().fill('Terminal recusado');
+  await dialog.locator('button[type=submit]').click();
+  const card = page.locator('.ts-pane').filter({ hasText: 'Terminal recusado' });
+  await expect(card).toHaveAttribute('data-lifecycle', 'starting');
+  await page.evaluate(() => {
+    const terminalId = 'e75d4f83-d62e-4a74-950e-001ed1b735b7';
+    Reflect.get(window, 'acceptDiag27Open')(terminalId);
+    window.dispatchEvent(
+      new CustomEvent('orqst-owned-pty-lifecycle', {
+        detail: {
+          terminalId,
+          evidence: { transport: 'connected', process: 'open_refused', firstFrame: false },
+        },
+      }),
+    );
+  });
+  await expect(card).toHaveAttribute('data-lifecycle', 'failed');
+  await expect(card.getByText('Ação recusada')).toBeVisible();
+  await expect(page.locator('.pane-lifecycle-ended')).not.toContainText('Terminal recusado');
+  await card.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue(
+    'Terminal recusado',
+  );
 });

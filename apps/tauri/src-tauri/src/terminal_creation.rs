@@ -551,19 +551,26 @@ fn snapshot(app: &tauri::AppHandle) -> Value {
         "busy":guard.busy || blocked, "canCreate":available && !guard.committed,
         "canReview":available && !running && !guard.prepared.is_empty(), "selectionLocked":if running { !available } else { guard.opened }})
 }
+/// Geometry can invalidate the admission of an in-flight preparation mutation.
+pub(crate) fn freezes_layout(app: &tauri::AppHandle) -> bool {
+    let state = app.state::<Preparation>();
+    let guard = state.0.lock().unwrap();
+    guard.busy && !guard.passive
+}
+
 /// The same atomic latches protect native menu and Studio, including uncertain writes/admission.
 fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Option<u64> {
     if crate::terminal::presentation_blocked(app) {
         return None;
     }
     let running = crate::terminal::is_running(app);
-    let metadata = startup_metadata(request);
+    let passive = passive_read(request);
     let incremental = running
         && matches!(
             request["action"].as_str(),
             Some("catalog" | "create-selected" | "create-batch" | "remove-terminal" | "review-cli")
         );
-    if running && !metadata
+    if running && !passive
         && (!incremental
             || !crate::terminal::enrollment_available(app)
             || (request["action"] == "create-selected" && request["count"] != 1))
@@ -573,8 +580,8 @@ fn begin(app: &tauri::AppHandle, request: &Value, expected: Option<u64>) -> Opti
     let state = app.state::<Preparation>();
     let mut guard = state.0.lock().unwrap();
     if expected.is_some_and(|generation| generation != guard.generation)
-        || if metadata || incremental {
-            if guard.busy || (!metadata && guard.committed) {
+        || if passive || incremental {
+            if guard.busy || (!passive && guard.committed) {
                 true
             } else {
                 guard.busy = true;
@@ -1304,7 +1311,14 @@ fn run(
 ) -> Result<Value, Box<dyn std::error::Error>> {
     let deadline = Instant::now() + Duration::from_secs(300);
     let metadata = startup_metadata(&request);
-    let admission = if metadata { None } else { crate::terminal::preparation_admission(app)? };
+    let catalog = request["action"] == "catalog";
+    let admission = if metadata {
+        None
+    } else if catalog {
+        crate::terminal::catalog_admission(app)?
+    } else {
+        crate::terminal::preparation_admission(app)?
+    };
     // Native modal dialogs temporarily receive focus. Bind to the original visible
     // document and expiry, not the dialog's focus transition. CLI starts retain the
     // separate existing exact-document/focus/one-shot signed authorization.
@@ -1315,13 +1329,17 @@ fn run(
             && window.window().is_visible().unwrap_or(false)
             && window.url().is_ok_and(|url| url.as_str() == source)
             && app.state::<Preparation>().0.lock().unwrap().generation == generation
-            && (metadata || !crate::terminal::is_running(app)
+            && (metadata || catalog || !crate::terminal::is_running(app)
                 || (matches!(
                     request["action"].as_str(),
                     Some("catalog" | "create-selected" | "create-batch" | "remove-terminal" | "review-cli")
                 ) && crate::terminal::enrollment_available(app)))
             && !crate::terminal::presentation_blocked(app)
-            && (metadata || crate::terminal::preparation_admission_current(app, &admission))
+            && (metadata || if catalog {
+                crate::terminal::catalog_admission(app).is_ok_and(|current| current == admission)
+            } else {
+                crate::terminal::preparation_admission_current(app, &admission)
+            })
     };
     if !can_begin_document(&request, window.window().is_focused().unwrap_or(false), current()) {
         return Err("Preparation document unavailable".into());

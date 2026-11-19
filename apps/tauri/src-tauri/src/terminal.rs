@@ -520,7 +520,7 @@ async fn metadata_request_inner(
         || (review_owner.is_some() && !permission && !close)
         || (close
             && (review_owner.is_none()
-                || envelope["source"] != "orqst-features://local/index.html"))
+                || !envelope["source"].as_str().is_some_and(crate::features::studio_dashboard_source)))
         || (permission && envelope["actorId"] != format!("native-{epoch}"))
         || presentation_blocked(app)
     {
@@ -539,6 +539,9 @@ async fn metadata_request_inner(
     };
     if !document_is_current {
         return json!({"status":"denied"});
+    }
+    if envelope["request"]["action"] == "arrange" && crate::terminal_creation::freezes_layout(app) {
+        return json!({"status":"busy"});
     }
     let mutable = !crate::features::passive_request(&envelope["request"]);
     let owner = Arc::new(());
@@ -669,7 +672,8 @@ fn resumes_presentation(request: &Value, source: &str) -> bool {
     ) || (request["action"] == "pane" && request["command"] == "focus")
         || (request["action"] == "arrange"
             && request["layoutVersion"] == 2
-            && source == "orqst-features://local/index.html")
+            && (crate::features::studio_dashboard_source(source)
+                || source == "orqst-features://local/index.html"))
 }
 
 pub(crate) fn permission_review_begin(
@@ -1236,8 +1240,10 @@ async fn dispatch_terminal_request(
 ) -> Value {
     // Retain the originating preparation attempt for the first dispatch per member.
     // Taking this optional tag cannot consume an intent, grant, pending reply or reservation.
-    let diagnostic = if request["action"] == "open" {
-        let diagnostic = slot(&window).and_then(|slot| {
+    let opening = request["action"] == "open";
+    let terminal_slot = if opening { slot(&window) } else { None };
+    let diagnostic = if opening {
+        let diagnostic = terminal_slot.and_then(|slot| {
             let state = window.state::<Terminals>();
             let mut guard = state.0.lock().unwrap();
             guard
@@ -1252,12 +1258,28 @@ async fn dispatch_terminal_request(
     if let Some(diagnostic) = &diagnostic {
         diagnostic.record(Stage::CliOpening, Outcome::Requested, Effects::Unconfirmed);
     }
-    let value = dispatch_terminal_request_inner(window, request, expected, diagnostic.as_ref()).await;
+    let app = window.app_handle().clone();
+    let mut forwarded = false;
+    let value = dispatch_terminal_request_inner(
+        window, request, expected, diagnostic.as_ref(), &mut forwarded,
+    ).await;
     if let Some(diagnostic) = &diagnostic {
         let outcome = opening_outcome(value["status"].as_str(), value["opening"].as_str());
         diagnostic.record(Stage::CliOpening, outcome, Effects::Possible);
     }
+    if let (Some(slot), Some((_, presentation, _))) = (terminal_slot, expected) {
+        if value["status"] != "ok" {
+            publish_prepared_refusal(&app, slot, presentation, known_open_refusal(&value, forwarded));
+        }
+    }
     value
+}
+
+fn known_open_refusal(value: &Value, forwarded: bool) -> bool {
+    !forwarded
+        || matches!(value["status"].as_str(), Some("busy" | "cancelled" | "focus_required"))
+        || (value["status"] == "denied"
+            && matches!(value["authorization"].as_str(), Some("blocked" | "revoked")))
 }
 
 /// Only a correlated private broker read with a nonempty frame counts.
@@ -1339,6 +1361,7 @@ async fn dispatch_terminal_request_inner(
     request: Value,
     expected: Option<(u64, u64, Instant)>,
     diagnostic: Option<&Attempt>,
+    forwarded: &mut bool,
 ) -> Value {
     let denied = || json!({"status": "denied"});
     let Some(slot) = slot(&window) else {
@@ -1424,6 +1447,8 @@ async fn dispatch_terminal_request_inner(
         running.pending.insert(id.clone(), sender);
         running.busy[slot] = true;
         running.reviewing[slot] = !passive;
+        // A failed or interrupted pipe write can still have sent the request.
+        *forwarded = true;
         if running.child.write(bytes.as_bytes()).is_err() {
             running.pending.remove(&id);
             running.busy[slot] = false;
@@ -1513,9 +1538,21 @@ fn incomplete_open(value: &Value) -> Value {
     }
 }
 
+fn publish_prepared_refusal(app: &tauri::AppHandle, slot: usize, presentation: u64, definite: bool) {
+    if let Some((owner, current)) = metadata_context(app) {
+        if current == presentation {
+            crate::features::publish_terminal_lifecycle(
+                app, slot, &owner, current,
+                &json!({"transport":"connected","firstFrame":false,
+                    "process": if definite { "open_refused" } else { "open_unconfirmed" }}),
+            );
+        }
+    }
+}
+
 /// A single native-held intent from create-selected. No renderer path, profile or proof.
 #[tauri::command]
-pub async fn terminal_open_prepared(window: Webview) -> Value {
+pub async fn terminal_open_prepared(window: Webview, abandon: Option<bool>) -> Value {
     let idle = || json!({"attempted":false});
     let why = |reason: &str| {
         if focus_diagnostics() {
@@ -1547,10 +1584,27 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         }
         (r.generations[slot], r.layout_generation, intent.expires)
     };
-    // Dispatch checks AppKit focus before writing to Core. A refusal before dispatch
-    // restores the exact intent below, so this path needs no duplicate AppKit round trip.
-    if presentation_blocked(&app) || self::slot(&window) != Some(slot) {
-        why("blocked_or_stale_document");
+    if abandon == Some(true) {
+        let abandoned = {
+            let state = app.state::<Terminals>();
+            let mut guard = state.0.lock().unwrap();
+            guard.as_mut().is_some_and(|r| {
+                let current = (r.generations[slot], r.layout_generation);
+                current == (epoch.0, epoch.1)
+                    && take_opening(&mut r.pending_open[slot], epoch, current, Instant::now()).is_some()
+            })
+        };
+        return if abandoned {
+            publish_prepared_refusal(&app, slot, epoch.1, true);
+            json!({"attempted":true,"value":{"status":"focus_required"}})
+        } else {
+            idle()
+        };
+    }
+    // AppKit can deliver the layout event before the WKWebView becomes first responder.
+    // The renderer can wait a few times. Only dispatch consumes the signed native intent.
+    if presentation_blocked(&app) || self::slot(&window) != Some(slot) || !focused(&window).await {
+        why("blocked_or_unfocused_document");
         return idle();
     }
     let profile = {
@@ -1579,52 +1633,13 @@ pub async fn terminal_open_prepared(window: Webview) -> Value {
         why("take_failed");
         return idle();
     };
-    let rearm = profile.clone();
-    // The request sequence advances only right before a request is written to the host.
-    let sequence = app
-        .state::<Terminals>()
-        .0
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|r| r.sequence);
-    if focus_diagnostics() {
-        eprintln!("ORQST_OPEN_PREPARED dispatch slot={slot}");
-    }
+    // Once handed to the dispatch path the intent is consumed, including refusal.
     let value = dispatch_terminal_request(
         window,
         json!({"version":1,"action":"open","profileId":profile}),
         Some(epoch),
     )
     .await;
-    // A refusal before anything reached the host (focus_required, or denied while another
-    // request held the slot or metadata): nothing ran, so the same one-use intent is
-    // restored with its original document, presentation and expiry.
-    let refused = matches!(value["status"].as_str(), Some("focus_required" | "denied"));
-    if refused {
-        let mut rearmed = false;
-        let state = app.state::<Terminals>();
-        let mut guard = state.0.lock().unwrap();
-        if let Some(r) = guard.as_mut() {
-            if Some(r.sequence) == sequence
-                && r.pending_open[slot].is_none()
-                && r.generations[slot] == epoch.0
-                && r.layout_generation == epoch.1
-                && Instant::now() < epoch.2
-            {
-                r.pending_open[slot] = Some(OpeningIntent {
-                    profile: rearm,
-                    document: epoch.0,
-                    presentation: epoch.1,
-                    expires: epoch.2,
-                    focus_sent: true,
-                });
-                rearmed = true;
-            }
-        }
-        why(if rearmed { "refused_rearmed" } else { "refused" });
-        return idle();
-    }
     json!({"attempted":true,"value":value})
 }
 
@@ -2155,6 +2170,7 @@ pub(crate) async fn confirm_terminal_close(
     presentation: u64,
     document: u64,
     id: &str,
+    source: &str,
 ) -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -2182,7 +2198,7 @@ pub(crate) async fn confirm_terminal_close(
             presentation,
             document,
             id.into(),
-            "orqst-features://local/index.html".into(),
+            source.into(),
             move || {
                 crate::features::close_target_current(
                     &current_app,
@@ -2196,7 +2212,7 @@ pub(crate) async fn confirm_terminal_close(
     }
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (app, view, request, epoch, presentation, document, id);
+        let _ = (app, view, request, epoch, presentation, document, id, source);
         false
     }
 }
@@ -2525,7 +2541,10 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         r.layout = state.clone();
     }
     // The whole envelope is validated before any state, geometry or visibility change.
-    let show = crate::features::workspace_visible(state);
+    let studio = app.get_webview("main")
+        .and_then(|main| crate::features::dashboard_identity(&main))
+        .is_some_and(|(source, _)| crate::features::studio_dashboard_source(&source));
+    let show = studio && crate::features::workspace_visible(state);
     if !show {
         // A hidden workspace (e.g. while the New terminal dialog shows its results) revokes
         // every view, but pending openings follow their documents.
@@ -2544,29 +2563,6 @@ fn apply_layout_current(app: &tauri::AppHandle, value: &Value) {
         crate::agents::hide_surface(app);
     }
     emit_dock(app, state, show, value["generation"].as_u64().unwrap_or(0));
-    if let Some(chrome) = app.get_webview("feature-workspace") {
-        if show {
-            let _ = chrome.set_bounds(tauri::Rect {
-                position: tauri::LogicalPosition::new(0.0, 0.0).into(),
-                size: tauri::LogicalSize::new(logical.width as f64, logical.height as f64).into(),
-            });
-            // Dashboard remains mounted. Chrome must be above its opaque Webview.
-            // Visible terminals are raised afterwards, outside the summary canvas transform.
-            raise_surface(&chrome);
-            let _ = chrome.show();
-            // When native opening has only hidden PTYs, establish visible Studio
-            // focus. Later arrangements also accept an owned PTY first responder.
-            if !geometry_ready
-                && window.is_focused().unwrap_or(false)
-                && !presentation_blocked(app)
-                && metadata_generation(app) == value["generation"].as_u64()
-            {
-                let _ = chrome.set_focus();
-            }
-        } else {
-            let _ = chrome.hide();
-        }
-    }
     for bound in ordered_bounds(value) {
         let slot = bound["slot"].as_u64().unwrap();
         let Some(view) = app.get_webview(&format!("terminal-{slot}")) else {
@@ -3027,6 +3023,28 @@ fn admission_snapshot(r: &Running) -> PreparationAdmission {
         capacity: r.capacity,
     }
 }
+/// A catalog binds to the current owned pool lattice without taking an enrollment latch.
+pub(crate) fn catalog_admission(
+    app: &tauri::AppHandle,
+) -> Result<Option<PreparationAdmission>, Box<dyn std::error::Error>> {
+    if presentation_blocked(app) {
+        return Err("Native catalog unavailable".into());
+    }
+    let state = app.state::<Terminals>();
+    let guard = state.0.lock().unwrap();
+    match guard.as_ref() {
+        Some(r) if !r.retiring && !r.confirming_quit && !r.exit_authorized => {
+            // A modal's hidden frame changes only its rectangle revision. Launch
+            // commit independently captures and checks the complete admission.
+            let mut admission = admission_snapshot(r);
+            admission.revision = 0;
+            Ok(Some(admission))
+        }
+        Some(_) => Err("Native catalog unavailable".into()),
+        None => Ok(None),
+    }
+}
+
 pub(crate) fn preparation_admission(
     app: &tauri::AppHandle,
 ) -> Result<Option<PreparationAdmission>, Box<dyn std::error::Error>> {
@@ -3093,7 +3111,7 @@ fn create_terminal_view(
     let view = workspace.add_child(
         builder,
         tauri::LogicalPosition::new(0.0, 0.0),
-        tauri::LogicalSize::new(1280.0, 860.0),
+        tauri::LogicalSize::new(1.0, 1.0),
     )?;
     view.hide()?;
     Ok(())
@@ -4326,7 +4344,8 @@ mod opening_tests {
         let chrome = "orqst-features://local/index.html";
         let request = serde_json::json!({"action":"arrange","layoutVersion":2});
         assert!(super::resumes_presentation(&request, chrome));
-        assert!(!super::resumes_presentation(&request, "http://127.0.0.1/"));
+        assert!(super::resumes_presentation(&request, "http://127.0.0.1:4319/studio"));
+        assert!(!super::resumes_presentation(&request, "http://127.0.0.1:4319/configuracoes"));
         assert!(!super::resumes_presentation(
             &serde_json::json!({"action":"arrange","layoutVersion":1}),
             chrome

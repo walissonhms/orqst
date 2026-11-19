@@ -32,7 +32,8 @@ export interface PaneLifecycleFailure {
 
 export interface OwnedPaneEvidence {
   transport: 'connected' | 'lost';
-  process: 'prepared' | 'starting' | 'live' | 'exited' | 'uncertain';
+  process:
+    'prepared' | 'starting' | 'live' | 'exited' | 'uncertain' | 'open_refused' | 'open_unconfirmed';
   firstFrame?: boolean;
   prompt?: boolean;
   turn?: 'running' | 'waiting_for_user' | 'unknown';
@@ -46,6 +47,16 @@ export interface PaneLifecycle {
 
 /** Core admission and first-frame evidence are distinct from provider prompt/turn evidence. */
 export function projectPaneLifecycle(evidence: OwnedPaneEvidence): PaneLifecycle {
+  if (evidence.process === 'open_refused' || evidence.process === 'open_unconfirmed')
+    return {
+      state: 'failed',
+      failure: {
+        reason:
+          evidence.process === 'open_refused' ? 'native_authority_refused' : 'opening_uncertain',
+        evidence: evidence.process,
+        retryable: evidence.process === 'open_refused',
+      },
+    };
   if (evidence.process === 'exited') {
     if (evidence.exitCode !== undefined && evidence.exitCode !== 0)
       return {

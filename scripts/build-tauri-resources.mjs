@@ -103,7 +103,6 @@ const featuresClientResult = await build({
   entryPoints: {
     client: 'apps/tauri/src/features-client.ts',
     studio: 'apps/tauri/src/studio-client.ts',
-    workspace: 'apps/tauri/src/feature-workspace-client.ts',
   },
   absWorkingDir: root,
   outdir: join(output, 'features'),

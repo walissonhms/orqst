@@ -344,6 +344,7 @@ export function FeatureStudio({
   }, [snapshot, displayFeatureName, t]);
 
   const studio = nativeWorkspace || !!native || !!creator;
+  const embedsPtys = nativeWorkspace || (!!shell && !!native?.arrange);
   const [structuredFeature, setStructuredFeature] = useState<string>();
   const structured = nativeWorkspace ? window.orqstStructuredAgents : undefined;
   const structuredOpen =
@@ -395,10 +396,14 @@ export function FeatureStudio({
     selected?.terminalDisplays,
   ]);
   const paneEvidence = useOwnedPaneEvidence();
-  const openingByTerminal = useMemo(
-    () => new Map(openingTerminals.map((card) => [card.terminalId ?? card.id, card])),
-    [openingTerminals],
-  );
+  const openingByTerminal = useMemo(() => {
+    const openings = new Map<string, (typeof openingTerminals)[number]>();
+    for (const card of openingTerminals) {
+      openings.set(card.id, card);
+      if (card.terminalId) openings.set(card.terminalId, card);
+    }
+    return openings;
+  }, [openingTerminals]);
   const existing = useMemo(() => {
     const releasedIds = new Set(
       selected?.terminalDisplays
@@ -536,6 +541,11 @@ export function FeatureStudio({
     mode: ArrangementMode;
     scope: string;
   } | null>(null);
+  const preparingOpen = openingTerminals.some(
+    (card) => card.state === 'starting' && !card.terminalId,
+  );
+  const preparingOpenRef = useRef(preparingOpen);
+  preparingOpenRef.current = preparingOpen;
   const arrangeRef =
     useRef<(layout: NativePaneLayout[], mode: ArrangementMode, scope: string) => void>(undefined);
   const arrangeRetry = useRef<{ timer?: number; attempt: number }>({ attempt: 0 });
@@ -547,6 +557,7 @@ export function FeatureStudio({
       if (featureScopeKey(snapshot) !== frameScope) return;
       const submitted = { layout, mode, scope: frameScope };
       arranging.current = submitted;
+      if (preparingOpenRef.current) return;
       const resendLatest = (delay: number) => {
         window.clearTimeout(arrangeRetry.current.timer);
         arrangeRetry.current.timer = window.setTimeout(() => {
@@ -595,7 +606,10 @@ export function FeatureStudio({
               return;
             }
             // Native keeps one frame per 16 ms: resend the latest one shortly after.
-            if (reply.status === 'busy') return resendLatest(40);
+            if (reply.status === 'busy') {
+              if (arrangeRetry.current.attempt++ < 8) resendLatest(40);
+              return;
+            }
             // A newer generation hides the views until a matching frame: resend with it.
             if (
               reply.snapshot &&
@@ -649,7 +663,7 @@ export function FeatureStudio({
     const latest = arranging.current;
     if (generation === undefined || !latest || latest.scope !== scopeKey || !studio) return;
     arrange(latest.layout, latest.mode, latest.scope);
-  }, [generation, dockEpoch, arrange, scopeKey, studio]);
+  }, [generation, dockEpoch, arrange, scopeKey, studio, preparingOpen]);
   // A new terminal joined while the dialog was open: its frame brings the views back.
   const memberCount = snapshot?.slots.length ?? 0;
   const lastMemberCount = useRef(memberCount);
@@ -793,6 +807,26 @@ export function FeatureStudio({
     window.addEventListener('orqst-owned-turn-alert', receive);
     return () => window.removeEventListener('orqst-owned-turn-alert', receive);
   }, [native, addNotifications]);
+
+  // A cold host may become available between periodic snapshots. Ask once as soon
+  // as native accepts a UUID so its real body does not wait for the next poll.
+  const observedAdmissions = useRef(new Set<string>());
+  useEffect(() => {
+    if (!native?.arrange || busy) return;
+    const newAdmissions = openingTerminals.flatMap(({ terminalId, state }) =>
+      terminalId && state === 'starting' && !observedAdmissions.current.has(terminalId)
+        ? [terminalId]
+        : [],
+    );
+    if (!newAdmissions.length) return;
+    newAdmissions.forEach((id) => observedAdmissions.current.add(id));
+    if (
+      newAdmissions.some(
+        (id) => !current.current?.slots.some(({ terminalId }) => terminalId === id),
+      )
+    )
+      void request({ action: 'snapshot' });
+  }, [openingTerminals, busy, native, request]);
 
   // The main document receives the creator's cancel event after native suspended the
   // sibling webviews. Keep that presentation recovery separate from scope switches.
@@ -1818,7 +1852,14 @@ export function FeatureStudio({
                 : undefined;
             if (opening && (!real || opening.state === 'failed'))
               return <TerminalOpeningCard card={opening} onRetry={retry} />;
-            if (nativeWorkspace) return <div className="ts-hole" aria-hidden="true" />;
+            if (embedsPtys && terminal.cardState !== 'failed')
+              return (
+                <div className="ts-hole" aria-hidden="true">
+                  {terminal.lifecycle?.state === 'starting' && (
+                    <PaneLifecycleContent lifecycle={terminal.lifecycle} />
+                  )}
+                </div>
+              );
             if (
               paneEvidence.get(terminal.id)?.process === 'live' ||
               evidence?.entries.some(
@@ -1854,7 +1895,7 @@ export function FeatureStudio({
                       openDelegate.current?.(terminalId);
                   }
                 : undefined,
-            ...(nativeWorkspace && canWrite && selected?.status !== 'archived'
+            ...(embedsPtys && canWrite && selected?.status !== 'archived'
               ? {
                   onRename: (id: string) => {
                     const slot = available.find(({ terminalId }) => terminalId === id);
@@ -1873,7 +1914,7 @@ export function FeatureStudio({
               </>
             )
           }
-          {...(nativeWorkspace && selected?.status !== 'archived'
+          {...(embedsPtys && selected?.status !== 'archived'
             ? {
                 closePending: busy || quitFence,
                 onCloseTerminal: (terminalId: string) => {
@@ -1907,13 +1948,17 @@ export function FeatureStudio({
                 },
               }
             : {})}
-          {...(nativeWorkspace
+          {...(embedsPtys
             ? {
                 native: {
                   onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) =>
                     arrange(layout, mode, scopeKey),
+                  dashboard: !!shell,
                   // The limits panel hides only the views under it (data-native-overlay).
                   overlayOpen:
+                    (shell && !shell.active) ||
+                    !!creation ||
+                    preparingOpen ||
                     !!editor ||
                     !!renamePane ||
                     structuredOpen ||
@@ -1938,7 +1983,7 @@ export function FeatureStudio({
           }
         />
       </div>
-      {nativeWorkspace &&
+      {embedsPtys &&
         renamePane &&
         available.some((entry) => entry.terminalId === renamePane.terminalId) && (
           <Modal

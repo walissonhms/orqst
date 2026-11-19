@@ -125,16 +125,19 @@ test('EN/PT chrome hands exact scope to the existing Studio drawer without openi
         true,
       );
       const calls = await page.evaluate(() => Reflect.get(window, 'calls'));
-      assert.deepEqual(calls[0], {
-        command: 'feature_prepare',
-        scope: {
-          contractVersion: 1,
-          generation: 7,
-          workspaceId: 'synthetic-workspace',
-          featureId: '00000000-0000-4000-8000-000000000001',
-          expectedRevision: 3,
+      assert.deepEqual(
+        calls.find((call: { command?: string }) => call.command === 'feature_prepare'),
+        {
+          command: 'feature_prepare',
+          scope: {
+            contractVersion: 1,
+            generation: 7,
+            workspaceId: 'synthetic-workspace',
+            featureId: '00000000-0000-4000-8000-000000000001',
+            expectedRevision: 3,
+          },
         },
-      });
+      );
       assert.ok(calls.some((call: { action: string }) => call.action === 'catalog'));
       assert.ok(
         calls.every(
