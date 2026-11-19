@@ -207,7 +207,20 @@ async function installStudioFixture(
         value: {
           contractVersion: 1,
           async request() {
-            return { status: 'ok', snapshot: structuredClone(snapshot) };
+            const observedAt = Date.now();
+            return {
+              status: 'ok',
+              snapshot: structuredClone(snapshot),
+              canvas: {
+                observedAt,
+                entries: snapshot.slots.map(({ slot, terminalId }) => ({
+                  slot,
+                  terminalId,
+                  state: 'running',
+                  startedAt: observedAt - 1,
+                })),
+              },
+            };
           },
         },
       });
@@ -225,6 +238,7 @@ async function installStudioFixture(
         value: {
           contractVersion: 1,
           async request(input: { action: string; requests: { id: string }[] }) {
+            if (input.action === 'startup') return { status: 'unavailable' };
             calls.push(input);
             const mode = Reflect.get(window, 'lane4Mode');
             if (input.action === 'snapshot')
@@ -313,7 +327,7 @@ for (const [width, height] of [
     await expect(originals).toHaveCount(4);
     await originals.first().evaluate((node) => Reflect.set(window, 'lane4OriginalPane', node));
     await trigger.click();
-    const dialog = page.getByRole('dialog', { name: 'Novos terminais' });
+    const dialog = page.getByRole('dialog', { name: 'Novo terminal', exact: true });
     const name = dialog.getByLabel('Nome', { exact: true });
     const cli = dialog.getByRole('combobox', { name: 'CLI', exact: true });
     const model = dialog.getByRole('combobox', { name: 'Modelo', exact: true });
@@ -348,9 +362,10 @@ for (const [width, height] of [
 
     await trigger.click();
     await dialog.getByRole('button', { name: 'Vários terminais' }).click();
-    await expect(dialog.getByText('Quantos', { exact: true })).toBeVisible();
+    const batchDialog = page.getByRole('dialog', { name: 'Novos terminais', exact: true });
+    await expect(batchDialog.getByText('Quantos', { exact: true })).toBeVisible();
     await captureIntegrated(page, testInfo.outputPath('creation-batch.png'), 'creation-batch.png');
-    await dialog.getByRole('button', { name: 'Um terminal' }).click();
+    await batchDialog.getByRole('button', { name: 'Um terminal' }).click();
     await dialog.getByRole('button', { name: /Opções avançadas \(par MCP/ }).click();
     const advanced = page.getByRole('dialog', { name: 'Abrir terminal', exact: true });
     await expect(advanced.getByLabel('Provedor CLI')).toBeVisible();
@@ -429,7 +444,7 @@ for (const [width, height] of [
     await installStudioFixture(page, 0, 'pt-BR');
     await page.goto('/studio');
     await page.locator('.topbar').getByRole('button', { name: '＋ Terminal', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'Novos terminais' });
+    const dialog = page.getByRole('dialog', { name: 'Novo terminal', exact: true });
     await expect(dialog.getByLabel('Nome', { exact: true })).toBeFocused();
     await captureIntegrated(page, testInfo.outputPath('creation-empty.png'), 'creation-empty.png');
     await page.evaluate(() => Reflect.set(window, 'lane4Mode', 'accept'));
@@ -467,8 +482,9 @@ test('batch outcomes remain individual when native enrollment is uncertain', asy
   await installStudioFixture(page, 2, 'pt-BR');
   await page.goto('/studio');
   await page.locator('.topbar').getByRole('button', { name: '＋ Terminal', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Novos terminais' });
-  await dialog.getByRole('button', { name: 'Vários terminais' }).click();
+  const single = page.getByRole('dialog', { name: 'Novo terminal', exact: true });
+  await single.getByRole('button', { name: 'Vários terminais' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Novos terminais', exact: true });
   await dialog.getByRole('button', { name: '2', exact: true }).click();
   await dialog.locator('button[type="submit"]').click();
   await expect(dialog).toHaveCount(0);

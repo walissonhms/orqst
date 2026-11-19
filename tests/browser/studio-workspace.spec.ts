@@ -175,6 +175,7 @@ function syntheticSnapshot(): FeatureNativeSnapshot {
       slot,
       terminalId: terminalId(slot + 1),
       provider: providers[slot % providers.length],
+      selectedModel: 'synthetic-model',
     })),
     layoutSaved: true,
   });
@@ -285,7 +286,20 @@ async function openNativeFixture(page: Page, nativeWorkspace: boolean | 'dashboa
             snapshot.generation++;
           }
           if (input.action === 'canvas') publishDock(true);
-          return { status: 'ok', snapshot: structuredClone(snapshot) };
+          const observedAt = Date.now();
+          return {
+            status: 'ok',
+            snapshot: structuredClone(snapshot),
+            canvas: {
+              observedAt,
+              entries: snapshot.slots.map(({ slot, terminalId }) => ({
+                slot,
+                terminalId,
+                state: 'running',
+                startedAt: observedAt - 1,
+              })),
+            },
+          };
         },
         async arrange(input: Extract<FeatureNativeRequest, { action: 'arrange' }>) {
           frames.push(input);
@@ -603,23 +617,20 @@ for (const [width, height] of [
       'Tornar flutuante',
       'Minimizar',
       'Maximizar / restaurar',
-      'Duplicar configuração',
       'Enviar mensagem…',
-      'Reiniciar',
       'Detalhes e logs',
-      'Layout',
       'Encerrar processo',
     ]);
-    const layouts = menu.getByRole('menuitem', { name: 'Layout', exact: true });
-    await expect(layouts).toHaveAttribute('aria-expanded', 'false');
-    await expect(menu.getByRole('menuitemradio')).toHaveCount(0);
-    await layouts.click();
-    await expect(layouts).toHaveAttribute('aria-expanded', 'true');
-    for (const name of ['Mosaico', 'Colunas', 'Linhas', 'Foco']) {
-      await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeVisible();
-    }
-    await capture('06a-layouts');
-    await menu.getByRole('menuitemradio', { name: 'Linhas', exact: true }).click();
+    await expect(menu.getByRole('separator')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    const layouts = row.getByRole('combobox', { name: 'Layout', exact: true });
+    await expect(layouts.locator('option:not([disabled])')).toHaveText([
+      'Mosaico',
+      'Colunas',
+      'Linhas',
+      'Foco',
+    ]);
+    await layouts.selectOption('rows');
     await expect.poll(mode).toBe('rows');
     await restore.click();
     await expect.poll(mode).toBe('mosaic');
@@ -670,7 +681,8 @@ for (const [width, height] of [
     await capture('13-restored');
 
     await openMenu();
-    await expect(menu.getByRole('menuitem', { name: 'Duplicar configuração' })).toBeDisabled();
+    await expect(menu.getByRole('menuitem', { name: 'Duplicar configuração' })).toHaveCount(0);
+    await expect(menu.getByRole('menuitem', { name: 'Reiniciar' })).toHaveCount(0);
     await capture('14-duplicate-availability');
     await menu.getByRole('menuitem', { name: 'Definir orquestrador', exact: true }).click();
     await expect(first.locator('.ts-role')).toBeVisible();

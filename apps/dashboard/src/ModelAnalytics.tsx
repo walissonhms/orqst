@@ -1,3 +1,4 @@
+import { terminalDisplayId } from './terminal-display';
 import { RouteHeaderActions } from './AppShell';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -806,6 +807,7 @@ function FeatureUsage({ scope, featureId }: { scope?: FeatureNativeSnapshot; fea
           <thead>
             <tr>
               {[
+                'screens.overview.terminal',
                 'screens.cliLabel',
                 'model',
                 'input',
@@ -826,6 +828,7 @@ function FeatureUsage({ scope, featureId }: { scope?: FeatureNativeSnapshot; fea
               )?.usage;
               return (
                 <tr key={slot.terminalId}>
+                  <td>{terminalDisplayId(feature, slot.terminalId, slot.slot)}</td>
                   <td>{t(`screens.cli.${slot.provider}`)}</td>
                   <td>{slot.selectedModel ?? '—'}</td>
                   {(['input', 'output', 'cached', 'total'] as const).map((field) => (

@@ -48,7 +48,17 @@ test('L3 projects the submit before the native reply and preserves failure on th
       };
       Reflect.set(window, 'orqstFeatures', {
         contractVersion: 1,
-        request: async () => ({ status: 'ok', snapshot }),
+        request: async () => {
+          const observedAt = Date.now();
+          return {
+            status: 'ok',
+            snapshot,
+            canvas: {
+              observedAt,
+              entries: [{ slot: 0, terminalId, state: 'running', startedAt: observedAt - 1 }],
+            },
+          };
+        },
       });
       let catalogs = 0;
       document.addEventListener(
@@ -206,7 +216,7 @@ test('L3 projects the submit before the native reply and preserves failure on th
   await expect(dialog).toBeVisible();
   await expect.poll(() => page.evaluate(() => Reflect.get(window, 'fixtureCatalogs'))).toBe(2);
   await page.keyboard.press('Escape');
-  const ended = page.getByText('Encerrados (2)', { exact: true });
+  const ended = page.getByRole('button', { name: 'Encerrados (2)', exact: true });
   await ended.click();
   await expect(page.getByText('Estado incerto', { exact: true })).toBeVisible();
   const uncertainRow = page.locator('.pane-lifecycle-ended > ul > li').filter({ hasText: 'T-002' });
@@ -229,9 +239,11 @@ test('L3 projects the submit before the native reply and preserves failure on th
     );
   }, terminalId);
   await expect(page.getByRole('article', { name: 'T-001 OpenCode' })).toHaveCount(0);
-  await expect(page.getByText('Encerrados (3)', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Encerrados (3)', exact: true })).toBeVisible();
   await expect(page.locator('.ts-dock + .pane-lifecycle-dock .pane-lifecycle-ended')).toBeVisible();
-  await expect(page.getByText('Encerrado', { exact: true })).toHaveCount(2);
+  const endedRows = page.locator('.pane-lifecycle-ended > ul').getByRole('listitem');
+  await expect(endedRows.filter({ hasText: 'T-001' })).toContainText('Encerrado');
+  await expect(endedRows.filter({ hasText: 'T-003' })).toContainText('Encerrado');
   await capture('ended', 1440);
   await page.setViewportSize({ width: 1280, height: 800 });
   await capture('ended', 1280);

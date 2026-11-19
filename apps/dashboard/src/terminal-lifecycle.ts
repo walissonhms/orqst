@@ -36,7 +36,7 @@ export interface OwnedPaneEvidence {
     'prepared' | 'starting' | 'live' | 'exited' | 'uncertain' | 'open_refused' | 'open_unconfirmed';
   firstFrame?: boolean;
   prompt?: boolean;
-  turn?: 'running' | 'waiting_for_user' | 'unknown';
+  turn?: 'running' | 'waiting_for_user' | 'failed' | 'unknown';
   exitCode?: number;
 }
 
@@ -73,8 +73,7 @@ export function projectPaneLifecycle(evidence: OwnedPaneEvidence): PaneLifecycle
   if (evidence.transport === 'lost' || evidence.process === 'uncertain')
     return { state: 'disconnected' };
   if (evidence.process !== 'live' || !evidence.firstFrame) return { state: 'starting' };
-  if (evidence.turn === 'running' || evidence.turn === 'waiting_for_user')
-    return { state: evidence.turn };
+  if (evidence.turn && evidence.turn !== 'unknown') return { state: evidence.turn };
   return { state: evidence.prompt ? 'ready' : 'unknown' };
 }
 

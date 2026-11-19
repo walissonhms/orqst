@@ -1,3 +1,4 @@
+import { terminalDisplayId } from './terminal-display';
 import { RouteHeaderActions } from './AppShell';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,11 +65,12 @@ export function CommunicationInspector({
   const time = new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' });
   const date = new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short' });
   const slots = snapshot?.slots ?? [];
-  const label = (slot: number) => 'T-' + String(slot + 1).padStart(3, '0');
   const terminalName = (id: string) => {
     if (id === 'owner') return t('communication.owner');
     const slot = slots.find(({ terminalId }) => terminalId === id);
-    return slot ? label(slot.slot) + ' ' + providerLabels[slot.provider] : id;
+    const owner = features.find(({ terminalIds }) => terminalIds.includes(id));
+    const label = terminalDisplayId(owner, id, slot?.slot);
+    return [label ?? id, slot && providerLabels[slot.provider]].filter(Boolean).join(' ');
   };
   const members: StudioTerminal[] = snapshot
     ? slots
@@ -80,7 +82,7 @@ export function CommunicationInspector({
         )
         .map((slot) => ({
           id: slot.terminalId,
-          label: label(slot.slot),
+          label: terminalDisplayId(feature, slot.terminalId, slot.slot),
           name: slot.displayName ?? providerLabels[slot.provider],
           provider: slot.provider,
           model: slot.selectedModel,

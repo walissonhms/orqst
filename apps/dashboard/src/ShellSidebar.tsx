@@ -246,6 +246,7 @@ export function ShellSidebar({
           <button
             type="button"
             className="shell-icon"
+            role="button"
             aria-label={t('shell.palette.title')}
             title={`${t('shell.palette.shortLabel')} (⌘K)`}
             aria-keyshortcuts="Meta+K Control+K"

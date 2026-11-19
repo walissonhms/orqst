@@ -1,11 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 
-/** Native modal containment, Escape and focus restoration shared by shell overlays. */
+/** Native dialog presentation, Escape handling and focus restoration. */
 export function Modal({
   label,
   className,
   initialFocus,
   nativeOverlay,
+  nonModal = false,
+  descriptionId,
   onClose,
   children,
 }: {
@@ -13,6 +15,8 @@ export function Modal({
   className: string;
   initialFocus?: string;
   nativeOverlay?: boolean;
+  nonModal?: boolean;
+  descriptionId?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -20,19 +24,28 @@ export function Modal({
   useEffect(() => {
     const trigger = document.activeElement;
     const dialog = ref.current;
-    dialog?.showModal();
+    if (nonModal) dialog?.show();
+    else dialog?.showModal();
     if (initialFocus) dialog?.querySelector<HTMLElement>(initialFocus)?.focus();
     return () => {
       dialog?.close();
       if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
     };
-  }, [initialFocus]);
+  }, [initialFocus, nonModal]);
   return (
     <dialog
       ref={ref}
       className={className}
       aria-label={label}
+      aria-describedby={descriptionId}
       data-native-overlay={nativeOverlay ? '' : undefined}
+      onKeyDown={(event) => {
+        if (nonModal && event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       onCancel={(event) => {
         event.preventDefault();
         onClose();

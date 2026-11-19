@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EndedTerminal } from './terminal-lifecycle.js';
 import './pane-lifecycle.css';
@@ -19,6 +20,8 @@ export function EndedTerminalList({
   onHide,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   if (!terminals.length) return null;
   const relative = new Intl.RelativeTimeFormat(i18n.resolvedLanguage, {
     numeric: 'auto',
@@ -36,9 +39,20 @@ export function EndedTerminalList({
     return t('paneLifecycle.endedAt', { time });
   }
   return (
-    <details className="pane-lifecycle-ended">
-      <summary>{t('paneLifecycle.endedList', { count: terminals.length })}</summary>
-      <ul>
+    <section className="pane-lifecycle-ended">
+      <button
+        type="button"
+        className="pane-lifecycle-ended-toggle"
+        aria-expanded={expanded}
+        aria-controls={listId}
+        aria-label={t('paneLifecycle.endedList', { count: terminals.length })}
+        title={t('paneLifecycle.endedList', { count: terminals.length })}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>{' '}
+        {t('paneLifecycle.endedList', { count: terminals.length })}
+      </button>
+      <ul id={listId} hidden={!expanded}>
         {terminals.map((terminal) => {
           const provider = terminal.provider && t(`terminalStudio.providers.${terminal.provider}`);
           const name =
@@ -104,6 +118,6 @@ export function EndedTerminalList({
           );
         })}
       </ul>
-    </details>
+    </section>
   );
 }

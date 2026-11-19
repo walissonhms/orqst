@@ -200,6 +200,47 @@
   font-size: 12px;
   white-space: nowrap;
 }
+.feature-grid-control {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+}
+.feature-grid-control > .feature-grid,
+.app-shell .topbar-actions .feature-grid-control > .feature-grid {
+  border-radius: 5px 0 0 5px;
+}
+.feature-grid-control > .feature-layout-picker {
+  appearance: none;
+  width: 19px;
+  padding: 0;
+  font-size: 0;
+  border: 1px solid #373149;
+  border-left: 0;
+  border-radius: 0 5px 5px 0;
+  background: #1b1b29;
+  color: #d4cce5;
+  cursor: pointer;
+}
+.feature-grid-control::after {
+  position: absolute;
+  inset-inline-end: 7px;
+  top: calc(50% - 4px);
+  width: 5px;
+  height: 5px;
+  border-right: 1px solid #d4cce5;
+  border-bottom: 1px solid #d4cce5;
+  transform: rotate(45deg);
+  pointer-events: none;
+  content: '';
+}
+.feature-layout-picker option {
+  font-size: 12px;
+}
+.feature-grid-control > .feature-layout-picker:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .feature-workspace .feature-add-terminal {
   background: #6c45b8;
   border-color: #8156d6;

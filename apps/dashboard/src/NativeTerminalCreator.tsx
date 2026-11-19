@@ -16,7 +16,7 @@ import {
 } from './NewTerminalDialog.js';
 import { CliReviewStatus, reviewTerminalCli } from './CliReviewStatus.js';
 import { Modal } from './Modal.js';
-import { SavedTerminalList } from './SavedTerminalList.js';
+import { defaultTerminalNames } from './terminal-names.js';
 import { catalogModelId, dialogCatalog } from './native-terminal-catalog.js';
 import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catalog-cache.js';
 import {
@@ -55,6 +55,7 @@ interface Props {
   featureId: string | null;
   featureName?: string;
   reopenTerminalId?: string;
+  existingNames?: readonly string[];
   /** Open the previous detailed form (MCP pair, path review). */
   onAdvanced?: () => void;
   /** A possible native start owns presentation when the dialog closes. */
@@ -70,6 +71,7 @@ export function NativeTerminalCreator({
   featureId,
   featureName,
   reopenTerminalId,
+  existingNames = [],
   onAdvanced,
   onClose,
 }: Props) {
@@ -179,11 +181,15 @@ export function NativeTerminalCreator({
           : capacity)
     )
       return;
-    const counts = new Map<string, number>();
-    const items = requests.map((request) => {
+    const names = defaultTerminalNames(
+      [...existingNames, ...(catalog.reopenable ?? []).map(({ name }) => name)],
+      requests.map(({ name, provider }) => ({
+        name,
+        providerName: t(`terminalStudio.providers.${provider}`),
+      })),
+    );
+    const items = requests.map((request, index) => {
       const entry = catalog.providers.find((p) => p.provider === request.provider);
-      const n = (counts.get(request.provider) ?? 0) + 1;
-      counts.set(request.provider, n);
       return {
         request,
         id: requests.length === 1 && retry ? retry.id : crypto.randomUUID(),
@@ -191,7 +197,7 @@ export function NativeTerminalCreator({
         provider: request.provider as Entry['provider'],
         entry,
         modelId: catalogModelId(entry, request.model),
-        name: request.name || `${t(`terminalStudio.providers.${request.provider}`)} ${n}`,
+        name: names[index]!,
       };
     });
     if (
@@ -321,45 +327,6 @@ export function NativeTerminalCreator({
     }
   };
 
-  const remove = async (terminalId: string) => {
-    const restored = catalog?.restoredFeature;
-    if (
-      opening.current ||
-      !snapshot ||
-      !catalog ||
-      !restored ||
-      !restored.terminalDisplays?.some((entry) => entry.terminalId === terminalId && entry.released)
-    )
-      return;
-    opening.current = true;
-    try {
-      const reply = await native.request({
-        action: 'remove-terminal',
-        generation: snapshot.generation,
-        catalogId: catalog.catalogId,
-        workspaceId: workspace.id,
-        featureId: restored.featureId,
-        terminalId,
-      });
-      if (reply.status === 'ok') {
-        opening.current = false;
-        await load(true);
-        return;
-      }
-      setFailure(
-        reply.status === 'catalog' || reply.status === 'batch' ? undefined : reply.failure,
-      );
-      setMessage(t('paneLifecycle.removalUnconfirmed'));
-      setState('error');
-    } catch {
-      setFailure(undefined);
-      setMessage(t('paneLifecycle.removalUnconfirmed'));
-      setState('error');
-    } finally {
-      opening.current = false;
-    }
-  };
-
   const reopen = (terminalId: string) => {
     const member = catalog?.reopenable?.find((entry) => entry.terminalId === terminalId);
     if (!member) {
@@ -406,33 +373,6 @@ export function NativeTerminalCreator({
   const reopenTarget =
     reopenTerminalId &&
     catalog?.reopenable?.find(({ terminalId }) => terminalId === reopenTerminalId);
-  const savedMembers =
-    form &&
-    (catalog.restoredFeature?.terminalIds.map((id) => {
-      const display = catalog.restoredFeature?.terminalDisplays?.find(
-        ({ terminalId }) => terminalId === id,
-      );
-      const reopen = catalog.reopenable?.find(({ terminalId }) => terminalId === id);
-      return {
-        id,
-        provider: reopen?.provider,
-        name: reopen?.name,
-        closed: !!display?.released,
-        confirmedExit: !!display?.released,
-        displayId: display?.displayId,
-        released: display?.released,
-      };
-    }) ??
-      catalog.reopenable?.map(({ terminalId, provider, name, displayId }) => ({
-        id: terminalId,
-        provider,
-        name,
-        displayId,
-        closed: true,
-        confirmedExit: true,
-        released: true,
-      })) ??
-      []);
   const choices = catalog
     ? dialogCatalog(catalog, (reason) => t(`terminalStudio.create.reason_${reason}`))
     : [];
@@ -448,7 +388,7 @@ export function NativeTerminalCreator({
           'cli_review_required',
         ].includes(reason),
       ));
-  const title = t('terminalStudio.create.title');
+  const title = t(form && !batch ? 'studio.create.title' : 'terminalStudio.create.title');
   return (
     <Modal label={title} className={batch && form ? 'ntd' : 'ntd ntd-compact'} onClose={cancel}>
       {form &&
@@ -568,29 +508,6 @@ export function NativeTerminalCreator({
               {t('terminalStudio.mention.close')}
             </button>
           </footer>
-        </div>
-      )}
-      {form && savedMembers && (!!savedMembers.length || !!catalog.pendingOwnedExits?.length) && (
-        <div className="ntd-history">
-          <SavedTerminalList
-            members={savedMembers}
-            onRemove={
-              catalog.restoredFeature && state === 'ready' && !snapshot?.busy
-                ? (id) => void remove(id)
-                : undefined
-            }
-            onReopen={
-              state === 'ready' &&
-              snapshot?.canCreate &&
-              !snapshot.busy &&
-              snapshot.count < snapshot.limit
-                ? reopen
-                : undefined
-            }
-          />
-          {!!catalog.pendingOwnedExits?.length && (
-            <p role="status">{t('tauriPreparation.code_owned_exit_pending')}</p>
-          )}
         </div>
       )}
     </Modal>

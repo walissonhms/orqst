@@ -1,8 +1,9 @@
 /* Pane "⋯" menu, terminal details and account suggestions. Tokens only. */
 
 .ts-actions .ts-more {
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 26px;
   height: 26px;
   border-radius: var(--orqst-radius-control);
@@ -305,20 +306,7 @@
   opacity: 0.6;
   cursor: default;
 }
-.pm-v6 .pm-item:enabled:hover,
-.pm-v6 .pm-arrangements button:hover {
-  background: #3d3052;
-}
-.pm-arrangements button {
-  padding: 6px 8px 6px 22px;
-  color: #e5dcf1;
-  cursor: pointer;
-  display: block;
-  width: 100%;
-  text-align: start;
-}
-.pm-arrangements button[aria-checked='true'] {
-  color: #d9c9ff;
+.pm-v6 .pm-item:enabled:hover {
   background: #3d3052;
 }
 

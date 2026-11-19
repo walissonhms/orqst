@@ -11,6 +11,7 @@ import {
   type FeatureNativeSnapshot,
   type FeatureCanvasEvidence,
 } from '@orqst/protocol';
+import { terminalDisplayId } from './terminal-display.js';
 import type { WorkspacePane } from './feature-workspace-dock.js';
 
 export interface CanvasAgent {
@@ -84,7 +85,10 @@ export function canvasMembers(
         slot: slot.slot,
         groupId: selected?.featureId ?? 'unassigned',
         featureId: selected?.featureId ?? null,
-        title: pane?.label || `T-${String(slot.slot + 1).padStart(3, '0')}`,
+        title:
+          slot.displayName ||
+          pane?.label ||
+          terminalDisplayId(selected, slot.terminalId, slot.slot),
         provider: slot.provider,
         ...(slot.selectedModel === undefined ? {} : { selectedModel: slot.selectedModel }),
         ...(process ? { process } : {}),

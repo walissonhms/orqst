@@ -50,6 +50,7 @@ import {
   savedTerminalDisposition,
   type EndedTerminal,
 } from './terminal-lifecycle.js';
+import { openFeatureTerminalIds } from './feature-counts.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
 import {
   FeatureStudioStage,
@@ -80,7 +81,7 @@ import {
 } from './studio-native.js';
 import { RouteHeaderActions } from './AppShell';
 import { StudioShellContext } from './navigation';
-import type { ArrangementMode } from './terminal-arrangement.js';
+import { studioArrangementModes, type ArrangementMode } from './terminal-arrangement.js';
 
 export interface StudioCreationScope {
   workspaceId: string;
@@ -123,6 +124,7 @@ export function FeatureStudio({
   liveWorkspaceId,
   onSavedMetadataChange,
   onCanvas,
+  onSnapshot,
 }: {
   nativeWorkspace?: boolean;
   focusRef?: Ref<StudioFocus>;
@@ -141,6 +143,7 @@ export function FeatureStudio({
   savedStudio?: Pick<FeatureNativeSnapshot, 'workspace' | 'features' | 'view' | 'activeFeatureId'>;
   liveWorkspaceId?: string;
   onSavedMetadataChange?: () => void;
+  onSnapshot?: (snapshot: FeatureNativeSnapshot) => void;
   onCanvas?: (evidence: { workspaceId: string; canvas: FeatureCanvasEvidence }) => void;
   onWorkspace?: (id: string) => void;
 }) {
@@ -302,13 +305,17 @@ export function FeatureStudio({
   const editorVersion = useRef(0);
   const current = useRef<FeatureNativeSnapshot | undefined>(undefined);
   const noticeContext = useRef<FeatureNoticeContext | null>(null);
-  const acceptSnapshot = useCallback((incoming: FeatureNativeSnapshot) => {
-    if (current.current && incoming.generation < current.current.generation) return false;
-    current.current = incoming;
-    setSnapshot(incoming);
-    setCoreState('online');
-    return true;
-  }, []);
+  const acceptSnapshot = useCallback(
+    (incoming: FeatureNativeSnapshot) => {
+      if (current.current && incoming.generation < current.current.generation) return false;
+      current.current = incoming;
+      setSnapshot(incoming);
+      onSnapshot?.(incoming);
+      setCoreState('online');
+      return true;
+    },
+    [onSnapshot],
+  );
   useEffect(() => {
     const retired = () => {
       clearRetiredTerminalEvidence(
@@ -429,18 +436,22 @@ export function FeatureStudio({
     return projected.map((terminal) => {
       const opening = openingByTerminal.get(terminal.id);
       const facts = paneEvidence.get(terminal.id);
-      const lifecycle = releasedIds.has(terminal.id)
-        ? { state: 'ended' as const }
-        : facts
-          ? projectPaneLifecycle({
-              ...facts,
-              transport: coreState === 'online' ? facts.transport : 'lost',
-              turn:
-                terminal.status === 'running' || terminal.status === 'waiting_for_user'
-                  ? terminal.status
-                  : undefined,
-            })
-          : (opening ?? { state: terminal.cardState ?? 'unknown' });
+      const lifecycle =
+        releasedIds.has(terminal.id) ||
+        (terminal.cardState === 'ended' && facts?.process !== 'exited')
+          ? { state: 'ended' as const }
+          : facts
+            ? projectPaneLifecycle({
+                ...facts,
+                transport: coreState === 'online' ? facts.transport : 'lost',
+                turn:
+                  terminal.status === 'running' ||
+                  terminal.status === 'waiting_for_user' ||
+                  terminal.status === 'failed'
+                    ? terminal.status
+                    : undefined,
+              })
+            : (opening ?? { state: terminal.cardState ?? 'unknown' });
       return {
         ...terminal,
         cardState: lifecycle.state,
@@ -449,17 +460,13 @@ export function FeatureStudio({
       };
     });
   }, [snapshot, selected, panes, evidence, now, paneEvidence, openingByTerminal, coreState]);
-  const ownedTerminals = useMemo(
-    () =>
-      existing.filter(({ id, cardState }) => {
-        if (cardState === 'ended') return false;
-        const facts = paneEvidence.get(id);
-        if (facts?.process === 'uncertain') return false;
-        if (openingByTerminal.has(id) || facts?.process === 'live') return true;
-        return ['ready', 'running', 'waiting_for_user', 'failed'].includes(cardState);
-      }),
-    [existing, openingByTerminal, paneEvidence],
-  );
+  const ownedTerminals = useMemo(() => {
+    const openIds = openFeatureTerminalIds(snapshot, evidence, paneEvidence);
+    return existing.filter(({ id, cardState }) => {
+      if (cardState === 'ended' || paneEvidence.get(id)?.process === 'uncertain') return false;
+      return openIds.has(id) || openingByTerminal.has(id) || cardState === 'failed';
+    });
+  }, [snapshot, evidence, existing, openingByTerminal, paneEvidence]);
   const terminals = useMemo<StudioTerminal[]>(
     () => [
       ...ownedTerminals,
@@ -1371,6 +1378,24 @@ export function FeatureStudio({
   const prepareReason = t(
     selected?.status === 'archived' ? 'feature.archived' : 'features.creationUnavailable',
   );
+  const creationFeatureId =
+    creation && (creation.scope.featureId ?? defaultFeatureId(creation.scope.workspaceId));
+  const creationMemberIds =
+    liveSnapshot?.workspace.id === creation?.scope.workspaceId
+      ? liveSnapshot?.features.find(({ featureId }) => featureId === creationFeatureId)?.terminalIds
+      : undefined;
+  const creationNames = [
+    ...(liveSnapshot?.slots.flatMap(({ terminalId, displayName }) =>
+      displayName && creationMemberIds?.includes(terminalId) ? [displayName] : [],
+    ) ?? []),
+    ...openingTerminals.flatMap(({ targetFeatureId, name, state, failure }) =>
+      targetFeatureId === creationFeatureId &&
+      (state !== 'failed' || failure?.reason === 'opening_uncertain') &&
+      state !== 'ended'
+        ? [name]
+        : [],
+    ),
+  ];
   const breadcrumb = (
     <strong className="feature-crumb" title={selected?.featureId}>
       <span aria-hidden="true">◈ </span>
@@ -1380,27 +1405,50 @@ export function FeatureStudio({
       {selected ? ` / ${displayFeatureName(selected)}` : ''}
     </strong>
   );
-  const layoutActions = (onGrid: () => void, onRestore: () => void) => (
+  const layoutControlsDisabled = !available.length || busy || quitFence;
+  const layoutActions = (
     <>
-      <button
-        type="button"
-        className="feature-action feature-grid"
-        aria-disabled={!available.length || busy || quitFence}
-        title={!available.length ? gridReason : undefined}
-        onClick={() => {
-          if (available.length && !busy && !quitFence) onGrid();
-        }}
-      >
-        <span aria-hidden="true">▦ </span>
-        {t('features.grid')}
-      </button>
+      <div className="feature-grid-control">
+        <button
+          type="button"
+          className="feature-action feature-grid"
+          aria-disabled={layoutControlsDisabled}
+          title={!available.length ? gridReason : t('features.grid')}
+          onClick={() => {
+            if (!layoutControlsDisabled) layoutControls.current?.toggleGrid();
+          }}
+        >
+          <span aria-hidden="true">▦ </span>
+          {t('features.grid')}
+        </button>
+        <select
+          className="feature-layout-picker"
+          aria-label={t('studio.pane.layouts')}
+          title={t('studio.pane.layouts')}
+          disabled={layoutControlsDisabled}
+          value=""
+          onChange={(event) => {
+            const mode = studioArrangementModes.find((value) => value === event.target.value);
+            if (mode) layoutControls.current?.setMode(mode);
+          }}
+        >
+          <option value="" disabled>
+            {t('studio.pane.layouts')}
+          </option>
+          {studioArrangementModes.map((mode) => (
+            <option key={mode} value={mode}>
+              {t(`terminalStudio.mode.${mode}`)}
+            </option>
+          ))}
+        </select>
+      </div>
       <button
         type="button"
         className="feature-action feature-restore"
         aria-disabled={!available.length || busy || quitFence}
         title={!available.length ? t('feature.noRestore') : undefined}
         onClick={() => {
-          if (available.length && !busy && !quitFence) onRestore();
+          if (!layoutControlsDisabled) layoutControls.current?.restore();
         }}
       >
         <span aria-hidden="true">↺ </span>
@@ -1449,10 +1497,7 @@ export function FeatureStudio({
 
   const studioActions = (
     <>
-      {layoutActions(
-        () => layoutControls.current?.toggleGrid(),
-        () => layoutControls.current?.restore(),
-      )}
+      {layoutActions}
       {actions}
       {native && (
         <span className="studio-limits-control">
@@ -1490,7 +1535,6 @@ export function FeatureStudio({
           )}
         </p>
       )}
-      {snapshot && !snapshot.layoutSaved && <p>{t('features.layoutUnsaved')}</p>}
     </div>
   );
   const notificationsDrawer = (
@@ -1852,6 +1896,7 @@ export function FeatureStudio({
           terminals={terminals}
           messages={messages}
           recentMessage={recentMessage}
+          layoutUnsaved={snapshot?.layoutSaved === false}
           endingTerminal={endingTerminal}
           onNewTerminal={canPrepare ? (slot) => void prepare(slot) : undefined}
           dockEnd={
@@ -1871,7 +1916,7 @@ export function FeatureStudio({
                 : undefined;
             if (opening && (!real || opening.state === 'failed'))
               return <TerminalOpeningCard card={opening} onRetry={retry} />;
-            if (embedsPtys && terminal.cardState !== 'failed')
+            if (embedsPtys && !terminal.lifecycle?.failure)
               return (
                 <div className="ts-hole" aria-hidden="true">
                   {terminal.lifecycle?.state === 'starting' && (
@@ -2082,6 +2127,7 @@ export function FeatureStudio({
           featureId={creation.scope.featureId}
           featureName={creation.scope.featureName}
           reopenTerminalId={creation.scope.reopenTerminalId}
+          existingNames={creationNames}
           onAdvanced={() => setCreation({ ...creation, advanced: true })}
           onClose={closePreparation}
         />

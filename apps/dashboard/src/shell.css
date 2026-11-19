@@ -1290,8 +1290,9 @@ button:disabled {
 .shell-icon {
   position: relative;
   flex: none;
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 20px;
   height: 24px;
   border-radius: 5px;
@@ -1427,6 +1428,9 @@ button:disabled {
   width: 100%;
   margin: 0 auto;
   overflow: auto;
+}
+#main-content:focus {
+  outline: none;
 }
 .studio-shell #main-content {
   position: relative;
