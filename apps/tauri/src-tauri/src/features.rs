@@ -661,9 +661,15 @@ pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
             value["terminalIds"].as_array().is_some_and(|ids| {
                 displays.len() == ids.len()
                     && displays.iter().zip(ids).all(|(display, id)| {
-                        (exact(display, &["terminalId", "displayId"])
-                            || (exact(display, &["terminalId", "displayId", "released"])
-                                && display["released"] == true))
+                        display.as_object().is_some_and(|fields| fields.iter().all(|(key, value)| {
+                            match key.as_str() {
+                                "terminalId" | "displayId" => true,
+                                "released" | "activeReservation" => value == &json!(true),
+                                "name" => name(value),
+                                "provider" => matches!(value.as_str(), Some("codex" | "claude" | "opencode" | "antigravity")),
+                                _ => false,
+                            }
+                        }))
                             && &display["terminalId"] == id
                             && terminal_display_id(&display["displayId"])
                     })
@@ -672,6 +678,19 @@ pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
             })
         })
     })
+}
+
+#[cfg(test)]
+#[test]
+fn saved_terminal_display_metadata_cannot_add_unrecognized_authority_fields() {
+    let id = "00000000-0000-4000-8000-000000000001";
+    let mut feature = json!({"terminalIds":[id],"terminalDisplays":[{
+        "terminalId":id, "displayId":"T-004", "name":"Codex 1",
+        "provider":"codex", "activeReservation":true
+    }]});
+    assert!(valid_terminal_displays(&feature));
+    feature["terminalDisplays"][0]["kernelAbsent"] = json!(true);
+    assert!(!valid_terminal_displays(&feature));
 }
 
 pub(crate) fn valid_snapshot(v: &Value) -> bool {

@@ -1,5 +1,10 @@
 # V6 feature delivery checklist — 2026-11-04
 
+The diag30 Preview now identifies the saved terminal holding the global
+admission claim. The legacy T-004 receipt lacks the kernel identities needed
+for cross-launch release. The attached 30-minute PTY timer also remains a
+blocker. See [the recovery findings](../development/in-app-recovery.md).
+
 Saved Feature membership is rendered as history when no matching live slot is
 connected. View dismissal and fresh opening are available through the
 [Studio terminal picker](../development/diag25-terminal-availability.md).

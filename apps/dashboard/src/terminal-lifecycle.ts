@@ -20,6 +20,7 @@ export type PaneFailureReason =
   | 'catalog_changed'
   | 'native_authority_refused'
   | 'process_crashed'
+  | 'capacity_reserved'
   | 'open_refused'
   | 'opening_uncertain';
 
@@ -107,6 +108,8 @@ export function projectBatchOutcome(
       state: 'failed',
       failure: { reason: 'opening_uncertain', evidence, retryable: false },
     };
+  if (evidence === 'capacity_reserved')
+    return { ...card, state: 'failed', failure: { reason: evidence, evidence, retryable: false } };
   const reason =
     evidence === 'cli_review_required'
       ? 'cli_review_required'
@@ -123,6 +126,7 @@ export interface EndedTerminal {
   displayId?: string;
   name?: string;
   provider?: TerminalProvider;
+  activeReservation?: boolean;
   exitedAt?: number;
   disposition: 'exit_confirmed' | 'released' | 'uncertain';
   released?: boolean;

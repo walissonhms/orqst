@@ -1,10 +1,11 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EndedTerminal } from './terminal-lifecycle.js';
 import './pane-lifecycle.css';
 
 interface Props {
   terminals: readonly EndedTerminal[];
+  target?: { terminalId: string };
   now?: number;
   onReopen?: (terminal: EndedTerminal) => void;
   onRemove?: (terminal: EndedTerminal) => void;
@@ -14,6 +15,7 @@ interface Props {
 /** The caller supplies Core-backed recovery actions. The list grants no authority itself. */
 export function EndedTerminalList({
   terminals,
+  target,
   now = Date.now(),
   onReopen,
   onRemove,
@@ -22,6 +24,19 @@ export function EndedTerminalList({
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
+  const targetDetails = useRef<HTMLDetailsElement>(null);
+  const targetPresent = terminals.some(({ terminalId }) => terminalId === target?.terminalId);
+  useEffect(() => {
+    if (!target || !targetPresent) return;
+    const details = targetDetails.current;
+    if (!details) return;
+    setExpanded(true);
+    details.open = true;
+  }, [target, targetPresent]);
+  useEffect(() => {
+    if (expanded && targetDetails.current?.open)
+      targetDetails.current.querySelector('summary')?.focus();
+  }, [expanded, target]);
   if (!terminals.length) return null;
   const relative = new Intl.RelativeTimeFormat(i18n.resolvedLanguage, {
     numeric: 'auto',
@@ -84,14 +99,18 @@ export function EndedTerminalList({
               </span>
               <div className="pane-lifecycle-ended-actions">
                 {!terminal.released ? (
-                  <details className="pane-lifecycle-recovery">
+                  <details
+                    className="pane-lifecycle-recovery"
+                    ref={target?.terminalId === terminal.terminalId ? targetDetails : undefined}
+                  >
                     <summary>{t('paneLifecycle.inspect')}</summary>
-                    <p>{t('paneLifecycle.recoveryIntro')}</p>
-                    <ol>
-                      <li>{t('paneLifecycle.recoveryQuit')}</li>
-                      <li>{t('paneLifecycle.recoveryStart')}</li>
-                      <li>{t('paneLifecycle.recoveryVerify')}</li>
-                    </ol>
+                    <p>
+                      {t(
+                        terminal.activeReservation
+                          ? 'paneLifecycle.reservationProofUnavailable'
+                          : 'paneLifecycle.recoveryIntro',
+                      )}
+                    </p>
                     <code>{terminal.terminalId}</code>
                   </details>
                 ) : (

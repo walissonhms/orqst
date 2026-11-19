@@ -224,7 +224,9 @@ test('L3 projects the submit before the native reply and preserves failure on th
   await expect(recovery).toBeVisible();
   await expect(uncertainRow.getByRole('button', { name: 'Remover da Feature' })).toHaveCount(0);
   await recovery.click();
-  await expect(uncertainRow.getByText(/--offline-recovery/)).toBeVisible();
+  await expect(
+    uncertainRow.getByText('A propriedade desta sessão ainda não foi verificada.'),
+  ).toBeVisible();
   await capture('recovery', 1440);
   await recovery.click();
   await expect(page.getByRole('button', { name: 'Remover da Feature' })).toBeVisible();

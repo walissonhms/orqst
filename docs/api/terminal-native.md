@@ -1152,3 +1152,17 @@ scope against the accepted presentation. It authenticates both WebViews,
 checks current focus and admission, and suspends the terminal surface before
 dispatching the event to the retained dashboard. The dashboard routes through
 its draft guard or opens the existing dialog. An `ok` receipt records dispatch.
+
+## Saved terminal reservation display
+
+The existing passive Studio startup reply can include `name`, `provider` and
+`activeReservation: true` on saved `terminalDisplays` members. The native helper
+reads names from the matching Feature layout and resolves providers from
+validated private manifest locations. The admission association requires the
+member UUID and workspace project to match the native manifest. A missing,
+unreadable or ambiguous source omits the corresponding field. Paths, receipts,
+PID data and credentials do not cross this boundary.
+
+The metadata is a display hint. Activation opens the corresponding saved row
+only. Its fields do not change admission, authorize PTY input, prove exit or
+grant release. See [the legacy recovery boundary](../development/in-app-recovery.md#recovery-boundary).

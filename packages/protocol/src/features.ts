@@ -43,6 +43,9 @@ export const featureTerminalDisplaySchema = z.strictObject({
   terminalId: z.uuid(),
   displayId: terminalDisplayIdSchema,
   released: z.literal(true).optional(),
+  name: terminalDisplayNameSchema.optional(),
+  provider: z.enum(['codex', 'claude', 'opencode', 'antigravity']).optional(),
+  activeReservation: z.literal(true).optional(),
 });
 export type FeatureTerminalDisplay = z.infer<typeof featureTerminalDisplaySchema>;
 

@@ -1553,6 +1553,7 @@
       "catalog_changed": "Catalog changed",
       "native_authority_refused": "Action refused",
       "process_crashed": "Process exited (code {{exitCode}})",
+      "capacity_reserved": "A previous terminal blocks new opens",
       "open_refused": "Terminal could not open",
       "opening_uncertain": "Opening could not be verified",
       "cli_review_required": "CLI updated · review required"
@@ -1567,9 +1568,8 @@
     "inspect": "View details",
     "reopen": "Reopen",
     "recoveryIntro": "Ownership of this session is still unverified.",
-    "recoveryQuit": "Quit ORQST normally so the recovery session starts without the normal Core.",
-    "recoveryStart": "Launch the ORQST app executable with --offline-recovery to open the native recovery window.",
-    "recoveryVerify": "Use the native reviews to capture the reservation, verify the required kernel and session evidence, and authorize the release. Follow any restart requirement shown by native recovery.",
+    "locateReservation": "View reservation",
+    "reservationProofUnavailable": "The kernel evidence needed to release this reservation is unavailable. The reservation remains in place.",
     "reopenBlocked": "The previous session is preserved. Its reviewed CLI and model must be available to reopen it.",
     "removalUnconfirmed": "Removal unconfirmed. Refresh before retrying.",
     "remove": "Remove from Feature"

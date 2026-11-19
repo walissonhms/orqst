@@ -639,7 +639,28 @@ export function readStudioFeatures(file: string) {
     const features = openFeatures(db, (action) => action(), Date.now, true);
     return features.workspaceIds().map((id) => ({
       id,
-      features: features.list(id),
+      features: features.list(id).map((feature) => {
+        if (!feature.terminalDisplays?.length) return feature;
+        try {
+          const layout = openTerminalLayouts(
+            db,
+            (action) => action(),
+            feature.featureId,
+            true,
+          ).read(feature.terminalIds);
+          const names = new Map(layout?.names.map(({ id, name }) => [id, name]));
+          return {
+            ...feature,
+            terminalDisplays: feature.terminalDisplays.map((entry) => {
+              const name = names.get(entry.terminalId);
+              return name ? { ...entry, name } : entry;
+            }),
+          };
+        } catch {
+          // Older or unreadable layouts cannot supply names, but preserve Feature membership.
+          return feature;
+        }
+      }),
       view: features.readView(id),
     }));
   } finally {

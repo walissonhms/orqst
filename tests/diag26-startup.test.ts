@@ -1,9 +1,19 @@
+import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readdirSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { defaultFeatureId } from '@orqst/protocol';
+import { savedTerminalMetadata } from '../apps/desktop/src/saved-terminal-metadata.js';
 import { loadTerminalCatalog } from '../apps/dashboard/src/terminal-catalog-cache.js';
 import {
   readStudioFeatureTree,
@@ -114,4 +124,59 @@ test('startup tree reads a Feature file written before display identities existe
     undefined,
     'the passive read must not migrate the file',
   );
+});
+
+test('native saved terminal metadata preserves a synthetic legacy reservation and ignores foreign IDs', (t) => {
+  const parent = realpathSync(mkdtempSync(join(tmpdir(), 'orqst-saved-terminal-')));
+  t.after(() => rmSync(parent, { recursive: true, force: true }));
+  const terminalId = randomUUID();
+  const featureId = randomUUID();
+  const workspaceId = 'synthetic-managed';
+  const state = join(parent, `terminal-pair-${randomUUID()}`, 'A');
+  const file = join(state, 'terminal.json');
+  const managed = join(parent, 'managed-agents');
+  mkdirSync(state, { recursive: true, mode: 0o700 });
+  mkdirSync(managed, { mode: 0o700 });
+  writeFileSync(
+    file,
+    JSON.stringify({ version: 1, identity: { terminalId }, state, project: '/synthetic' }),
+    { mode: 0o600 },
+  );
+  const markerPath = join(managed, 'active-pair.json');
+  const marker = JSON.stringify({
+    version: 1,
+    owner: randomUUID(),
+    epoch: randomUUID(),
+    manifests: [file],
+  });
+  writeFileSync(markerPath, marker, { mode: 0o600 });
+  withTerminalPreferences(managed, (store) => {
+    const features = store.features();
+    const general = defaultFeatureId(workspaceId);
+    features.saveView(workspaceId, { featureId: general, expectedRevision: 0 });
+    features.assignTerminal({ featureId: general, workspaceId }, terminalId, 1);
+    store.terminalLayouts(general).save([terminalId], {
+      version: 1,
+      axis: 'columns',
+      columns: 2,
+      percent: 50,
+      order: [terminalId],
+      shown: [terminalId],
+      active: terminalId,
+      maximized: null,
+      names: [{ id: terminalId, name: 'Codex 1' }],
+    });
+  });
+  assert.equal(
+    readStudioFeatureTree(managed)[0]?.features[0]?.terminalDisplays?.[0]?.name,
+    'Codex 1',
+  );
+  assert.deepEqual(savedTerminalMetadata(parent, new Set([terminalId])).get(terminalId), {
+    provider: 'codex',
+    project: '/synthetic',
+    activeReservation: true,
+  });
+  assert.equal(savedTerminalMetadata(parent, new Set([featureId])).size, 0);
+  assert.equal(readFileSync(markerPath, 'utf8'), marker);
+  assert.deepEqual(readdirSync(state), ['terminal.json']);
 });

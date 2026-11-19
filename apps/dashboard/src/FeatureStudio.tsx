@@ -123,6 +123,8 @@ export function FeatureStudio({
   savedStudio,
   liveWorkspaceId,
   onSavedMetadataChange,
+  onLocateReservation,
+  reservationTarget,
   onRetryStartup,
   onCanvas,
   onSnapshot,
@@ -144,6 +146,8 @@ export function FeatureStudio({
   savedStudio?: Pick<FeatureNativeSnapshot, 'workspace' | 'features' | 'view' | 'activeFeatureId'>;
   liveWorkspaceId?: string;
   onSavedMetadataChange?: () => void;
+  onLocateReservation?: () => void;
+  reservationTarget?: { terminalId: string };
   onRetryStartup?: () => void;
   onSnapshot?: (snapshot: FeatureNativeSnapshot) => void;
   onCanvas?: (evidence: { workspaceId: string; canvas: FeatureCanvasEvidence }) => void;
@@ -1259,8 +1263,9 @@ export function FeatureStudio({
         ),
         released: display?.released,
         displayId: display?.displayId ?? terminal?.label,
-        provider: slot?.provider ?? release?.provider,
-        name: slot?.displayName ?? terminal?.name ?? release?.name,
+        provider: slot?.provider ?? display?.provider ?? release?.provider,
+        name: slot?.displayName ?? display?.name ?? terminal?.name ?? release?.name,
+        activeReservation: display?.activeReservation,
         exitedAt: exit?.exitedAt,
       };
     }),
@@ -1297,6 +1302,7 @@ export function FeatureStudio({
     <EndedTerminalList
       key={scopeKey}
       terminals={savedMembers}
+      target={reservationTarget}
       now={now}
       onRemove={
         canWrite && selected && !busy
@@ -1917,7 +1923,13 @@ export function FeatureStudio({
                   }
                 : undefined;
             if (opening && (!real || opening.state === 'failed'))
-              return <TerminalOpeningCard card={opening} onRetry={retry} />;
+              return (
+                <TerminalOpeningCard
+                  card={opening}
+                  onRetry={retry}
+                  onLocateReservation={onLocateReservation}
+                />
+              );
             if (embedsPtys && !terminal.lifecycle?.failure)
               return (
                 <div className="ts-hole" aria-hidden="true">

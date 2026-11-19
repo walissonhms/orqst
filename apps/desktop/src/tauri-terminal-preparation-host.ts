@@ -12,6 +12,7 @@ import { createInstance } from 'i18next';
 import { z } from 'zod';
 import en from '../../dashboard/src/locales/en-US.json';
 import pt from '../../dashboard/src/locales/pt-BR.json';
+import { savedTerminalMetadata } from './saved-terminal-metadata.js';
 import { prepareTauriTerminals, tauriPreparationFailure } from './tauri-terminal-preparation.js';
 
 process.umask(0o077);
@@ -30,12 +31,32 @@ async function main() {
       passive.data.action === 'startup'
         ? (() => {
             inspectPreparationDatabases(trusted);
-            const workspaces = readStudioFeatureTree(trusted.preferencesDirectory).map(
-              (workspace) => {
-                const path = lookupTerminalWorkspace(trusted.observerDatabase, workspace.id);
-                return { ...workspace, name: (path && basename(path)) || workspace.id };
-              },
+            const tree = readStudioFeatureTree(trusted.preferencesDirectory);
+            const metadata = savedTerminalMetadata(
+              parent,
+              new Set(
+                tree.flatMap(({ features }) => features.flatMap(({ terminalIds }) => terminalIds)),
+              ),
             );
+            const workspaces = tree.map((workspace) => {
+              const path = lookupTerminalWorkspace(trusted.observerDatabase, workspace.id);
+              const features = workspace.features.map((feature) => {
+                if (!feature.terminalDisplays) return feature;
+                return {
+                  ...feature,
+                  terminalDisplays: feature.terminalDisplays.map((entry) => {
+                    const saved = metadata.get(entry.terminalId);
+                    if (!saved || saved.project !== path) return entry;
+                    return {
+                      ...entry,
+                      provider: saved.provider,
+                      activeReservation: entry.released ? undefined : saved.activeReservation,
+                    };
+                  }),
+                };
+              });
+              return { ...workspace, features, name: (path && basename(path)) || workspace.id };
+            });
             return { status: 'startup', startup: studioStartupSchema.parse({ workspaces }) };
           })()
         : {
