@@ -1227,6 +1227,11 @@ export function App() {
           onPreparationHandled={() => setPreparationRequest(undefined)}
           savedStudio={savedStudio}
           onSavedMetadataChange={featureShell.retryStartup}
+          onRetryStartup={
+            !featureSnapshot && !featureShell.startupPending && !featureShell.startup
+              ? featureShell.retryStartup
+              : undefined
+          }
           onSnapshot={featureShell.observeSnapshot}
           onCanvas={setStudioCanvas}
           workspaces={managedWorkspace ? [managedWorkspace] : []}
@@ -1268,18 +1273,7 @@ export function App() {
 
       {studioOutlet}
       {view === 'studio' ? (
-        managedStudio ? (
-          !featureSnapshot &&
-          !featureShell.startupPending &&
-          !featureShell.startup && (
-            <div className="notice" role="alert">
-              {t('features.creationUnavailable')}
-              <button type="button" className="button" onClick={featureShell.retryStartup}>
-                {t('paneLifecycle.retry')}
-              </button>
-            </div>
-          )
-        ) : (
+        managedStudio ? null : (
           <FeatureStudio />
         )
       ) : view === 'settings' || view === 'agents' ? (
@@ -1403,7 +1397,7 @@ export function App() {
       {guideOpen &&
         (managedShell
           ? featureShell.startup?.workspaces.length === 0 && !liveSnapshot && !featureShell.loading
-          : !!snapshot) && (
+          : !!snapshot || offline) && (
           <ObservationGuide
             canCreateWorkspace={!!snapshot && connection === 'connected' && !error}
             onStart={startOnboarding}

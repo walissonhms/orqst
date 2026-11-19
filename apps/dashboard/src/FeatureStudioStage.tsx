@@ -1360,8 +1360,9 @@ export function FeatureStudioStage({
         {viewState.panes.length === 0 &&
           (!canonical || !onNewTerminal || !!emptyHint || !dockGeometry) && (
             <div className="ts-empty">
-              <p>{t(canonical ? 'studio.pane.emptyFeature' : 'terminalStudio.empty')}</p>
-              {emptyHint}
+              {emptyHint ?? (
+                <p>{t(canonical ? 'studio.pane.emptyFeature' : 'terminalStudio.empty')}</p>
+              )}
               {onNewTerminal && (
                 <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
                   {!canonical && <Plus size={15} />}

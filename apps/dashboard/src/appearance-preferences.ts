@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export interface AppearancePreferences {
   theme: 'dark' | 'light' | 'system';
@@ -52,7 +52,7 @@ function readAppearancePreferences(): AppearancePreferences {
   }
 }
 export function useAppearancePreferences() {
-  const [appearance, setAppearance] = useState(readAppearancePreferences);
+  const [appearance, setCurrentAppearance] = useState(readAppearancePreferences);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
   const [systemReducedMotion, setSystemReducedMotion] = useState(
     () => matchMedia('(prefers-reduced-motion: reduce)').matches,
@@ -72,14 +72,17 @@ export function useAppearancePreferences() {
     root.dataset.contentSize = appearance.contentSize;
     root.dataset.contentFont = appearance.contentFont;
   }, [appearance, resolvedTheme]);
-  useEffect(() => {
+  // Only an explicit local edit writes. Mirroring a storage event back would
+  // let an earlier cross-tab snapshot overwrite a more recent edit.
+  const setAppearance = useCallback((next: AppearancePreferences) => {
+    setCurrentAppearance(next);
     try {
-      localStorage.setItem(appearanceStorageKey, JSON.stringify(appearance));
+      localStorage.setItem(appearanceStorageKey, JSON.stringify(next));
       setStorageUnavailable(false);
     } catch {
       setStorageUnavailable(true);
     }
-  }, [appearance]);
+  }, []);
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const onChange = () => setSystemReducedMotion(media.matches);
@@ -87,12 +90,20 @@ export function useAppearancePreferences() {
     const themeMedia = matchMedia('(prefers-color-scheme: light)');
     const onThemeChange = () => setSystemLightTheme(themeMedia.matches);
     themeMedia.addEventListener('change', onThemeChange);
+    let storage: Storage | undefined;
+    try {
+      storage = window.localStorage;
+      setCurrentAppearance(parseAppearancePreferences(storage.getItem(appearanceStorageKey)));
+    } catch {
+      setStorageUnavailable(true);
+    }
     const onStorage = (event: StorageEvent) => {
       if (
-        event.storageArea === localStorage &&
+        storage &&
+        event.storageArea === storage &&
         (event.key === appearanceStorageKey || event.key === null)
       )
-        setAppearance(parseAppearancePreferences(event.newValue));
+        setCurrentAppearance(readAppearancePreferences());
     };
     window.addEventListener('storage', onStorage);
     return () => {

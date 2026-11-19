@@ -92,6 +92,9 @@ test(
               import { spawn as nativeSpawn } from 'node:child_process';
               import { writeFileSync } from 'node:fs';
               import { join } from 'node:path';
+              export function spawnSync() {
+                throw new Error('synthetic: executable signature probe not selected');
+              }
               export function spawn(...args) {
                 const child = nativeSpawn(...args);
                 setImmediate(() => {

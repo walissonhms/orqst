@@ -1,7 +1,12 @@
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
-import { defaultFeatureId, featureNativeSnapshotSchema, type Snapshot } from '@orqst/protocol';
+import {
+  defaultFeatureId,
+  featureNativeSnapshotSchema,
+  type Snapshot,
+  type TauriStudioRequest,
+} from '@orqst/protocol';
 import { changeLanguage, openObservedSessions, settingsTabs } from '../helpers/spec-dashboard.js';
 
 const sourceId = 'synthetic-browser-session';
@@ -77,8 +82,21 @@ async function studioFixture(page: Page) {
           command?: { kind: string };
         }) {
           calls.push(action === 'inspector' ? `inspector:${command?.kind}` : action);
-          if (action === 'pane') return { status: 'ok', snapshot: structuredClone(snapshot) };
-          if (action === 'snapshot') return { status: 'ok', snapshot: structuredClone(snapshot) };
+          const observedAt = Date.now();
+          const reply = () => ({
+            status: 'ok',
+            snapshot: structuredClone(snapshot),
+            canvas: {
+              observedAt,
+              entries: snapshot.slots.map(({ slot, terminalId }) => ({
+                slot,
+                terminalId,
+                state: 'running',
+                startedAt: observedAt - 1,
+              })),
+            },
+          });
+          if (action === 'pane' || action === 'snapshot') return reply();
           if (
             action !== 'select' ||
             !snapshot.features.some((item) => item.featureId === featureId)
@@ -90,7 +108,7 @@ async function studioFixture(page: Page) {
           window.dispatchEvent(
             new CustomEvent('orqst-feature-state', { detail: structuredClone(snapshot) }),
           );
-          return { status: 'ok', snapshot: structuredClone(snapshot) };
+          return reply();
         },
       },
     });
@@ -207,9 +225,14 @@ for (const size of screenSizes) {
     );
     await expect(topbar.locator('.studio-limits-control')).toContainText('—');
     await expect(topbar.locator('.studio-limits-control')).not.toContainText('0%');
-    await expect(sidebar.getByRole('button', { name: 'browser-test' }).locator('small')).toHaveText(
-      '0',
-    );
+    // Observed projects belong to the observation views, outside the managed tree.
+    await expect(sidebar.getByRole('button', { name: 'browser-test' })).toHaveCount(0);
+    await expect(
+      sidebar.getByRole('button', { name: 'Geral', exact: true }).locator('small'),
+    ).toHaveText('0');
+    await expect(
+      sidebar.getByRole('button', { name: 'Revisão de teste', exact: true }).locator('small'),
+    ).toHaveText('4');
     await expect(
       sidebar.getByRole('button', { name: 'Workspace de teste' }).locator('small'),
     ).toHaveText('2');
@@ -426,6 +449,34 @@ test('command palette searches observed models and sessions, navigates and resto
 test('adapter inventory is truthful, bilingual and has no execution or model selection affordance', async ({
   page,
 }) => {
+  await studioFixture(page);
+  // Only a scope-bound native catalog can supply the capability matrix.
+  await page.addInitScript(() => {
+    const catalogRequests: TauriStudioRequest[] = [];
+    Reflect.set(window, 'inventoryRequests', catalogRequests);
+    Reflect.set(window, 'orqstTauriStudio', {
+      contractVersion: 1,
+      async request(input: TauriStudioRequest) {
+        catalogRequests.push(input);
+        if (input.action !== 'catalog') return { status: 'unavailable' };
+        return {
+          status: 'catalog',
+          catalog: {
+            contractVersion: 1,
+            workspaceId: input.workspaceId,
+            featureId: input.featureId,
+            catalogId: 'a'.repeat(64),
+            providers: ['codex', 'opencode', 'claude', 'antigravity'].map((provider) => ({
+              provider,
+              status: 'unavailable',
+              reason: 'executable_inspection_failed',
+              models: [],
+            })),
+          },
+        };
+      },
+    });
+  });
   await page.goto('/#agents');
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
   const matrix = page.getByRole('region', {
@@ -450,6 +501,17 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
   await expect(page.getByRole('heading', { name: 'Agentes', exact: true })).toBeVisible();
   await expect(matrix.getByRole('row', { name: /^Modelos/ }).getByRole('cell')).toHaveText(
     Array(4).fill('—'),
+  );
+  const calls = await page.evaluate(
+    () => Reflect.get(window, 'inventoryRequests') as TauriStudioRequest[],
+  );
+  expect(calls).toContainEqual({
+    action: 'catalog',
+    workspaceId: 'synthetic-managed-workspace',
+    featureId: defaultFeatureId('synthetic-managed-workspace'),
+  });
+  expect(calls.every(({ action }) => ['startup', 'discovery', 'catalog'].includes(action))).toBe(
+    true,
   );
 });
 
@@ -490,7 +552,12 @@ test('new views and dialogs fit desktop, laptop and mobile with reduced motion',
     await page.setViewportSize({ width, height: 900 });
     for (const view of ['workspaces', 'agents']) {
       await page.goto(`/#${view}`);
-      await expect(page.locator('.workspace-directory, .spec-cli')).toBeVisible();
+      if (view === 'workspaces') await expect(page.locator('.workspace-directory')).toBeVisible();
+      else {
+        await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
+        await expect(page.getByText('Catalog unavailable', { exact: true })).toBeVisible();
+        await expect(page.getByRole('region', { name: 'CLI support matrix' })).toHaveCount(0);
+      }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );

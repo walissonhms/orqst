@@ -63,9 +63,19 @@ async function openStudio(page: Page, locale = 'pt-BR') {
           )
             return { status: 'denied' };
           const state = Reflect.get(window, 'studioLimits');
+          const observedAt = Date.now();
           return {
             status: 'ok',
             snapshot: structuredClone(snapshot),
+            canvas: {
+              observedAt,
+              entries: snapshot.slots.map(({ slot, terminalId }) => ({
+                slot,
+                terminalId,
+                state: 'running',
+                startedAt: observedAt - 1,
+              })),
+            },
             ...(state ? { accountLimits: state } : {}),
           };
         },

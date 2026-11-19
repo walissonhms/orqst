@@ -52,7 +52,8 @@ test('the header qualifies the observed identifier without time, controls or usa
   for (const required of [
     "t('modelObservation.identifier')",
     "session.model ?? t('modelObservation.notRecorded')",
-    "t('modelObservation.historyNote')",
+    "t('modelObservation.historyNote.label')",
+    "title={t('modelObservation.historyNote.detail')}",
     "t('modelObservation.availabilityNote')",
   ])
     assert.equal(block.includes(required), true, required);
@@ -110,12 +111,20 @@ test('both locales describe observation limits without claiming current or avail
     'limits',
     'notRecorded',
   ]);
-  const enText = Object.values(en.modelObservation as Record<string, string>).join(' ');
-  const ptText = Object.values(pt.modelObservation as Record<string, string>).join(' ');
-  for (const text of [enText, ptText]) {
+  for (const locale of [en, pt]) {
+    const { historyNote, ...messages } = locale.modelObservation as {
+      historyNote: { label: string; detail: string };
+      availabilityNote: string;
+      identifier: string;
+      limits: string;
+      notRecorded: string;
+    };
+    assert.deepEqual(Object.keys(historyNote).sort(), ['detail', 'label']);
+    assert.match(historyNote.label, /historical|histórico/i);
+    assert.match(historyNote.detail, /time is unavailable|horário.*indisponível/i);
+    const text = [...Object.values(messages), historyNote.label, historyNote.detail].join(' ');
     // Discovery is explicitly not implemented and nothing is verified.
     assert.match(text, /not implemented|não está implementada/i);
-    assert.match(text, /time is unavailable|horário.*indisponível/i);
     assert.match(text, /not been verified|não foram verificadas/i);
     assert.equal(/\b(current model|modelo atual)\b/i.test(text), false);
   }

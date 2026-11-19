@@ -123,6 +123,7 @@ export function FeatureStudio({
   savedStudio,
   liveWorkspaceId,
   onSavedMetadataChange,
+  onRetryStartup,
   onCanvas,
   onSnapshot,
 }: {
@@ -143,6 +144,7 @@ export function FeatureStudio({
   savedStudio?: Pick<FeatureNativeSnapshot, 'workspace' | 'features' | 'view' | 'activeFeatureId'>;
   liveWorkspaceId?: string;
   onSavedMetadataChange?: () => void;
+  onRetryStartup?: () => void;
   onSnapshot?: (snapshot: FeatureNativeSnapshot) => void;
   onCanvas?: (evidence: { workspaceId: string; canvas: FeatureCanvasEvidence }) => void;
   onWorkspace?: (id: string) => void;
@@ -1943,7 +1945,15 @@ export function FeatureStudio({
             return terminal.lifecycle && <PaneLifecycleContent lifecycle={terminal.lifecycle} />;
           }}
           emptyHint={
-            !snapshot && !openingWorkspaceId ? (
+            onRetryStartup ? (
+              <>
+                <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
+                <span role="alert">{t('feature.workspace.startupUnavailable')}</span>
+                <button type="button" className="button" onClick={onRetryStartup}>
+                  {t('paneLifecycle.retry')}
+                </button>
+              </>
+            ) : !snapshot && !openingWorkspaceId ? (
               <span className="ts-loading">{t(`feature.core.${coreState}`)}</span>
             ) : selected?.status === 'archived' ? (
               <span>{t('feature.archived')}</span>

@@ -554,3 +554,17 @@ p.al-unknown {
   opacity: 0.5;
   cursor: default;
 }
+
+@media (max-width: 420px) {
+  .app-shell .studio-limits-control {
+    flex: none;
+    max-width: 50px;
+    padding-inline-start: 4px;
+  }
+  .app-shell .studio-limits-control > .al-trigger {
+    height: 28px;
+    gap: 3px;
+    padding-inline: 4px;
+    font-size: 10px;
+  }
+}

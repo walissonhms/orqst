@@ -366,7 +366,7 @@ for (const [width, height] of [
   [1440, 900],
   [1280, 800],
 ] as const) {
-  test(`V6 comparison captures at ${width}x${height}`, async ({ page }) => {
+  test(`V6 comparison captures at ${width}x${height}`, async ({ page, context }) => {
     const integrated = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
     test.skip(
       !integrated && process.env.ORQST_SPEC_L5_SCREENSHOTS !== '1',
@@ -376,8 +376,8 @@ for (const [width, height] of [
     await page.addInitScript(() => localStorage.setItem('i18nextLng', 'pt-BR'));
     await installNative(page);
     await installAnalytics(page);
-    const capture = (name: string) =>
-      page.screenshot({
+    const capture = (name: string, target = page) =>
+      target.screenshot({
         path: `${integrated ?? 'docs/development/spec-l5'}/${width}x${height}/${name}.png`,
         animations: 'disabled',
       });
@@ -417,11 +417,35 @@ for (const [width, height] of [
     await expect(screen.getByText('Não instalado', { exact: true })).toBeVisible();
     await capture('settings-agents');
 
-    await page.goto('/');
+    const firstRun = await context.newPage();
+    await firstRun.setViewportSize({ width, height });
+    await firstRun.addInitScript(
+      (providers) => {
+        localStorage.setItem('i18nextLng', 'pt-BR');
+        Reflect.set(window, 'orqstFeatures', {
+          contractVersion: 1,
+          request: async () => ({ status: 'unavailable' }),
+        });
+        Reflect.set(window, 'orqstTauriStudio', {
+          contractVersion: 1,
+          async request({ action }: { action: string }) {
+            if (action === 'startup') return { status: 'startup', startup: { workspaces: [] } };
+            if (action === 'discovery') return { status: 'discovery', clis: providers };
+            return { status: 'denied' };
+          },
+        });
+      },
+      nativeFixture().catalog.providers.map(({ provider, status }) => ({
+        provider,
+        lookup: status === 'available' ? 'candidate_found' : 'not_found',
+      })),
+    );
+    await firstRun.goto('/');
     await expect(
-      page.getByRole('dialog', { name: 'Boas-vindas ao ORQST' }).getByText('Não instalado'),
+      firstRun.getByRole('dialog', { name: 'Boas-vindas ao ORQST' }).getByText('Não instalado'),
     ).toBeVisible();
-    await capture('onboarding');
+    await capture('onboarding', firstRun);
+    await firstRun.close();
 
     const reference = resolve('docs/design/v6/source/ORQST_workspace_v6_features.html');
     await page.goto(pathToFileURL(reference).href);

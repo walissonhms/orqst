@@ -293,9 +293,14 @@ test('comfortable appearance carries across observed-data views without changing
           ),
         );
         await expect(page.getByRole('region', { name: 'Session details' })).toBeVisible();
+      } else if (view === 'workspaces') {
+        await expect(page.locator('.workspace-directory')).toBeVisible();
       } else {
         await expect(
-          page.locator('.workspace-directory, .spec-cli, .analytics').first(),
+          page.getByRole('heading', {
+            name: view === 'agents' ? 'Agents' : 'Metrics',
+            exact: true,
+          }),
         ).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(

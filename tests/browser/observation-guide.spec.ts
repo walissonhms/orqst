@@ -122,6 +122,19 @@ test('offline onboarding can be skipped and diagnostics keep unknown values unkn
   const onboarding = page.getByRole('dialog', { name: 'Welcome to ORQST' });
   await expect(onboarding.getByRole('heading', { name: 'Welcome to ORQST' })).toBeFocused();
   await expect(onboarding.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  const captures = process.env.ORQST_SUITE_GREEN_CAPTURES;
+  if (captures) {
+    for (const [width, height] of [
+      [1440, 900],
+      [1280, 800],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.screenshot({
+        path: `${captures}/offline-onboarding-${width}.png`,
+        animations: 'disabled',
+      });
+    }
+  }
   await onboarding.getByRole('button', { name: 'Skip', exact: true }).click();
   await expect(onboarding).toHaveCount(0);
   const advanced = await openAdvanced(page);

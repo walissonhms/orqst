@@ -1355,6 +1355,7 @@
     },
     "workspace": {
       "create": "＋ New Workspace",
+      "startupUnavailable": "Workspace list unavailable",
       "creationUnavailable": "Managed Workspace creation is unavailable in this Desktop session. Observer Workspaces are managed separately.",
       "unmanaged": "{{name}} is available in the observer. This managed Core serves one Workspace."
     }

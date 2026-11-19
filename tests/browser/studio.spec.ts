@@ -525,7 +525,18 @@ const mentionBundle = () =>
         window.orqstFeatures = {
           contractVersion: 1,
           async request(input) {
-            if (input.action !== 'mention') return { status: 'ok', snapshot };
+            if (input.action !== 'mention') {
+              const observedAt = Date.now();
+              return {
+                status: 'ok', snapshot,
+                canvas: {
+                  observedAt,
+                  entries: snapshot.slots.map(({ slot, terminalId }) => ({
+                    slot, terminalId, state: 'running', startedAt: observedAt - 1,
+                  })),
+                },
+              };
+            }
             calls.push(input);
             return {
               status: 'ok',

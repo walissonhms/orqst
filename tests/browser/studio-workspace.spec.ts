@@ -6,6 +6,8 @@ import {
   type FeatureNativeRequest,
   type FeatureNativeSnapshot,
   type FeaturePreparationRequest,
+  type StudioStartup,
+  type TauriStudioRequest,
   type WorkspaceFeature,
 } from '@orqst/protocol';
 
@@ -13,7 +15,18 @@ import {
 test('Studio fills the viewport with one workspace and keeps preparation in a dismissible drawer', async ({
   page,
 }, testInfo) => {
-  await page.addInitScript(() => {
+  const saved = syntheticSnapshot();
+  const empty = saved.features[3]!;
+  const startup: StudioStartup = {
+    workspaces: [
+      {
+        ...saved.workspace,
+        features: [empty],
+        view: { ...saved.view, featureId: empty.featureId },
+      },
+    ],
+  };
+  await page.addInitScript((startup) => {
     Reflect.set(window, 'featureCalls', []);
     Reflect.set(window, 'studioCalls', []);
     Object.defineProperty(window, 'orqstFeatures', {
@@ -28,13 +41,17 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
     Object.defineProperty(window, 'orqstTauriStudio', {
       value: {
         contractVersion: 1,
-        async request({ action }: { action: string }) {
-          (Reflect.get(window, 'studioCalls') as string[]).push(action);
+        async request(input: TauriStudioRequest) {
+          (Reflect.get(window, 'studioCalls') as TauriStudioRequest[]).push(input);
+          if (input.action === 'startup')
+            return Reflect.get(window, 'startupReadable')
+              ? { status: 'startup', startup }
+              : { status: 'unavailable' };
           return { status: 'denied' };
         },
       },
     });
-  });
+  }, startup);
   await page.goto('/studio');
   const workspace = page.locator('.studio-workspace > .feature-workspace');
   await expect(workspace).toBeVisible();
@@ -43,6 +60,11 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await expect(page.locator('.main-shell > .topbar')).toHaveCSS('height', '45px');
   await expect(page.locator('.app-footer')).toBeHidden();
   await expect(page.locator('.feature-workspace')).toHaveCount(1);
+  const retryStartup = workspace.getByRole('button', { name: 'Try again', exact: true });
+  await expect(retryStartup).toBeVisible();
+  await expect(workspace.getByRole('alert')).toHaveText('Workspace list unavailable');
+  await expect(workspace.getByText('No terminals in this Feature', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '＋ Terminal', exact: true })).toBeDisabled();
   for (const [width, height] of [
     [1440, 900],
     [720, 700],
@@ -59,6 +81,7 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
         width: width! - sidebarWidth,
         height: height! - 45,
       });
+    await expect(page.locator('.studio-limits-control > button')).toBeInViewport({ ratio: 1 });
     expect(
       await page.evaluate(() => ({
         width: document.documentElement.scrollWidth,
@@ -66,7 +89,27 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
       })),
     ).toEqual({ width, height });
   }
+  const captures = process.env.ORQST_SUITE_GREEN_CAPTURES;
+  if (captures) {
+    for (const [width, height] of [
+      [1440, 900],
+      [1280, 800],
+      [320, 600],
+    ] as const) {
+      await page.setViewportSize({ width, height });
+      await page.screenshot({
+        path: `${captures}/startup-retry-${width}.png`,
+        animations: 'disabled',
+      });
+    }
+  }
   await page.setViewportSize({ width: 1440, height: 900 });
+  await page.evaluate(() => Reflect.set(window, 'startupReadable', true));
+  await retryStartup.click();
+  await expect(page.getByRole('button', { name: empty.name, exact: true })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
   await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: 'New terminals', exact: true });
   await expect(drawer).toBeVisible();
@@ -97,10 +140,22 @@ test('Studio fills the viewport with one workspace and keeps preparation in a di
   await page.screenshot({ path: testInfo.outputPath('studio-preparation-pt.png') });
   await page.getByRole('button', { name: 'Fechar', exact: true }).click();
   await page.screenshot({ path: testInfo.outputPath('studio-full-viewport-pt.png') });
-  expect(await page.evaluate(() => Reflect.get(window, 'studioCalls'))).toEqual([
-    'catalog',
-    'catalog',
-  ]);
+  const studioCalls = await page.evaluate(
+    () => Reflect.get(window, 'studioCalls') as TauriStudioRequest[],
+  );
+  expect(studioCalls.filter(({ action }) => action === 'startup')).toHaveLength(2);
+  const catalogCalls = studioCalls.filter(({ action }) => action !== 'startup');
+  expect(catalogCalls).toContainEqual({
+    action: 'catalog',
+    workspaceId: saved.workspace.id,
+    featureId: empty.featureId,
+  });
+  for (const call of catalogCalls)
+    expect(call).toEqual({
+      action: 'catalog',
+      workspaceId: saved.workspace.id,
+      featureId: empty.featureId,
+    });
   const calls = (await page.evaluate(() => Reflect.get(window, 'featureCalls'))) as string[];
   expect(calls.length).toBeGreaterThanOrEqual(2);
   expect(new Set(calls)).toEqual(new Set(['snapshot']));
@@ -470,7 +525,9 @@ for (const [width, height] of [
     await expect.poll(paneIds).toEqual([]);
     await capture('07-created-empty');
 
-    await page.locator('.ts-empty').getByRole('button', { name: '＋ Terminal' }).click();
+    const slots = page.getByRole('button', { name: '＋ Espaço livre', exact: true });
+    await expect(slots).toHaveCount(4);
+    await slots.first().click();
     const prepares = await page.evaluate(() => Reflect.get(window, 'fixturePrepares'));
     expect(prepares).toMatchObject([{ featureId: featureId(5), expectedRevision: 6 }]);
     await expect(page.locator('.feature-feedback')).toBeVisible();
@@ -507,13 +564,14 @@ for (const [width, height] of [
   });
 }
 
-test('the renderer restores the previous terminal control by its ID within the returning Feature', async ({
+test('the renderer restores focus to the previous terminal by its ID within the returning Feature', async ({
   page,
 }) => {
   await openNativeFixture(page, false);
-  const original = page.locator(`[data-terminal-id="${terminalId(4)}"]`).getByRole('button');
-  await original.focus();
-  await expect(original).toBeFocused();
+  const original = page.locator(`[data-pane-id="${terminalId(4)}"]`);
+  const menu = original.getByRole('button', { name: 'Mais ações', exact: true });
+  await menu.focus();
+  await expect(menu).toBeFocused();
   await page.locator(`[data-feature-scope="${featureId(2)}"]`).click();
   await expect(original).toHaveCount(0);
   await page.locator(`[data-feature-scope="${featureId(1)}"]`).click();

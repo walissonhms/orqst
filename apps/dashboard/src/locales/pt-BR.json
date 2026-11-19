@@ -1355,6 +1355,7 @@
     },
     "workspace": {
       "create": "＋ Novo Workspace",
+      "startupUnavailable": "Workspaces indisponíveis",
       "creationUnavailable": "A criação de Workspaces gerenciados está indisponível nesta sessão do Desktop. Os Workspaces do observador são gerenciados separadamente.",
       "unmanaged": "{{name}} está disponível no observador. Este Core gerenciado atende um Workspace."
     }

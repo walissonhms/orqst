@@ -44,10 +44,20 @@ test('reading preferences migrate old storage, synchronize, survive reload and r
   await expect(page.getByRole('combobox', { name: 'Contrast', exact: true })).toHaveValue('high');
   const other = await context.newPage();
   await openSettings(other);
+  await other.evaluate(() => {
+    const writes: string[] = [];
+    Reflect.set(window, 'replicatedAppearanceWrites', writes);
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'orqst.appearance.v1') writes.push(value);
+      setItem.call(this, key, value);
+    };
+  });
   await enlargeReading(page);
   await expect(other.locator('html')).toHaveAttribute('data-content-size', 'extra-large');
   await expect(other.locator('html')).toHaveAttribute('data-text-size', 'extra-large');
   await expect(other.locator('html')).toHaveAttribute('data-content-font', 'sans');
+  expect(await other.evaluate(() => Reflect.get(window, 'replicatedAppearanceWrites'))).toEqual([]);
   await page.reload();
   await openAppearance(page);
   await expect(page.getByRole('combobox', { name: 'Captured text font', exact: true })).toHaveValue(
