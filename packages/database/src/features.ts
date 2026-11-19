@@ -95,19 +95,38 @@ export function openFeatures(
       revision: row?.revision ?? 0,
     });
   };
+  const tables = new Map<string, boolean>();
+  const tableExists = (name: string) => {
+    if (!readOnly) return true;
+    let known = tables.get(name);
+    if (known === undefined) {
+      known = !!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(name);
+      tables.set(name, known);
+    }
+    return known;
+  };
+  const displaysAvailable = () => tableExists('feature_terminal_displays');
   const read = (raw: FeatureScope): WorkspaceFeature => {
     const scope = featureScopeSchema.parse(raw);
     const row = db
       .prepare('SELECT * FROM features WHERE id=? AND workspace_id=?')
       .get(scope.featureId, scope.workspaceId);
     if (!row) throw new Error('Feature unavailable in workspace');
-    const members = db
-      .prepare(
-        `SELECT a.terminal_id,d.ordinal,d.released_epoch FROM feature_terminal_assignments a
+    // A read-only open never migrates. A file written before display identities existed
+    // keeps its memberships; display IDs appear after the owning writer migrates it.
+    const members = displaysAvailable()
+      ? db
+          .prepare(
+            `SELECT a.terminal_id,d.ordinal,d.released_epoch FROM feature_terminal_assignments a
        JOIN feature_terminal_displays d ON d.terminal_id=a.terminal_id AND d.workspace_id=?
        AND d.replaced_by IS NULL AND d.removed_at IS NULL WHERE a.feature_id=? ORDER BY a.rowid`,
-      )
-      .all(scope.workspaceId, scope.featureId);
+          )
+          .all(scope.workspaceId, scope.featureId)
+      : db
+          .prepare(
+            'SELECT terminal_id FROM feature_terminal_assignments WHERE feature_id=? ORDER BY rowid',
+          )
+          .all(scope.featureId);
     if (
       Number(
         db
@@ -127,7 +146,7 @@ export function openFeatures(
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       terminalIds: members.map((member) => member.terminal_id),
-      ...(members.length
+      ...(members.length && displaysAvailable()
         ? {
             terminalDisplays: members.map((member) => ({
               terminalId: member.terminal_id,
@@ -136,10 +155,11 @@ export function openFeatures(
             })),
           }
         : {}),
-      orchestratorTerminalId:
-        db
-          .prepare('SELECT terminal_id FROM feature_orchestrator_labels WHERE feature_id=?')
-          .get(scope.featureId)?.terminal_id ?? null,
+      orchestratorTerminalId: tableExists('feature_orchestrator_labels')
+        ? (db
+            .prepare('SELECT terminal_id FROM feature_orchestrator_labels WHERE feature_id=?')
+            .get(scope.featureId)?.terminal_id ?? null)
+        : null,
     });
   };
   const readAssignmentTarget = (workspaceId: string, featureId: string | null) => {

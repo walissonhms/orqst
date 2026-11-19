@@ -75,3 +75,43 @@ test('a refused passive catalog read can be retried in the same scope', async ()
   assert.equal((await loadTerminalCatalog(native, scope, true)).status, 'denied');
   assert.equal(calls, 2);
 });
+
+test('startup tree reads a Feature file written before display identities existed', async (t) => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const dir = mkdtempSync(join(tmpdir(), 'orqst-diag27-unit-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  let featureId = '';
+  withTerminalPreferences(dir, (store) => {
+    const features = store.features();
+    features.saveView('synthetic-legacy', {
+      featureId: defaultFeatureId('synthetic-legacy'),
+      expectedRevision: 0,
+    });
+    featureId = features.create({ workspaceId: 'synthetic-legacy', name: 'Legacy' }).featureId;
+  });
+  const file = join(dir, 'terminal-layouts', 'preferences.sqlite');
+  const terminalId = '00000000-0000-4000-8000-000000000001';
+  const legacy = new DatabaseSync(file);
+  // Synthetic pre-display file: the membership exists, the display and label tables do not.
+  legacy.exec(
+    'DROP TABLE feature_orchestrator_labels; DROP INDEX feature_terminal_current_ordinal; DROP TABLE feature_terminal_displays;',
+  );
+  legacy
+    .prepare('INSERT INTO feature_terminal_assignments VALUES (?, ?)')
+    .run(terminalId, featureId);
+  legacy.close();
+
+  const [workspace] = readStudioFeatureTree(dir);
+  const feature = workspace?.features.find((entry) => entry.featureId === featureId);
+  assert.ok(feature);
+  assert.deepEqual(feature.terminalIds, [terminalId]);
+  assert.equal(feature.terminalDisplays, undefined);
+  assert.equal(feature.orchestratorTerminalId, null);
+  const tables = new DatabaseSync(file, { readOnly: true });
+  t.after(() => tables.close());
+  assert.equal(
+    tables.prepare("SELECT 1 FROM sqlite_schema WHERE name='feature_terminal_displays'").get(),
+    undefined,
+    'the passive read must not migrate the file',
+  );
+});
