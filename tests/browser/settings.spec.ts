@@ -2,22 +2,26 @@ import { test, expect, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { resolve } from 'node:path';
 import type { Preferences, SessionMetricsResult, Snapshot } from '@orqst/protocol';
+import { changeLanguage, openAppearance, settingsTabs } from '../helpers/spec-dashboard.js';
 
 async function settings(page: Page) {
   await page.goto('/#settings');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await openAppearance(page);
 }
 
 test('Settings navigation, appearance persistence and scoped reset preserve keyboard ownership', async ({
   page,
 }) => {
   await page.goto('/#workspaces');
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await expect(page).toHaveURL(/\/configuracoes$/);
+  await openAppearance(page);
   await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption('high');
   await page.getByRole('combobox', { name: 'Spacing', exact: true }).selectOption('comfortable');
   await page.getByRole('combobox', { name: 'Motion', exact: true }).selectOption('reduced');
   await page.reload();
+  await openAppearance(page);
   await expect(page.getByRole('combobox', { name: 'Contrast', exact: true })).toHaveValue('high');
   await expect(page.getByRole('combobox', { name: 'Spacing', exact: true })).toHaveValue(
     'comfortable',
@@ -54,9 +58,10 @@ test('Settings navigation, appearance persistence and scoped reset preserve keyb
   await page.keyboard.press('Enter');
   await expect(palette).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Workspace directory', exact: true }).click();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await openAppearance(page);
 });
 
 test('appearance works offline and reports storage denial without disabling observation UI', async ({
@@ -74,13 +79,16 @@ test('appearance works offline and reports storage denial without disabling obse
   await expect(
     page.getByText('Appearance applies for this visit.', { exact: false }),
   ).toBeVisible();
-  await expect(page.getByRole('checkbox', { name: 'Turn completed', exact: true })).toBeDisabled();
+
   await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption('high');
   await expect(page.locator('html')).toHaveAttribute('data-contrast', 'high');
   await page.getByRole('combobox', { name: 'Motion', exact: true }).selectOption('reduced');
   await expect(page.locator('html')).toHaveAttribute('data-motion', 'reduced');
-  await page.getByRole('link', { name: 'Workspace directory', exact: true }).click();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-contrast', 'high');
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await settingsTabs(page).getByRole('button', { name: 'Notifications', exact: true }).click();
+  await expect(page.getByRole('checkbox', { name: 'Turn completed', exact: true })).toBeDisabled();
 });
 
 test('malformed preferences use defaults and appearance changes synchronize between same-origin tabs', async ({
@@ -109,7 +117,7 @@ test('malformed preferences use defaults and appearance changes synchronize betw
 });
 
 async function animationName(page: Page) {
-  return page.locator('#settings-appearance').evaluate((heading) => {
+  return page.locator('#settings-tab-title').evaluate((heading) => {
     // Apply the real confirmed-metric cue to a disposable test element; no synthetic data enters runtime.
     const probe = document.createElement('span');
     probe.className = 'live-metric-updated';
@@ -130,17 +138,23 @@ test('both explicit and OS reduced motion suppress the real update cue while com
   expect(await animationName(page)).toBe('none');
   await page.getByRole('combobox', { name: 'Motion', exact: true }).selectOption('system');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(
-    page.getByText('Your system requests reduced motion.', { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Motion' })).toHaveAttribute(
+    'title',
+    /system requests reduced motion/i,
+  );
   expect(await animationName(page)).toBe('none');
   await page.getByRole('combobox', { name: 'Spacing', exact: true }).selectOption('comfortable');
   const size = await page.getByRole('combobox', { name: 'Contrast', exact: true }).boundingBox();
   expect(size!.height).toBeGreaterThanOrEqual(40);
   await page.getByRole('combobox', { name: 'Contrast', exact: true }).selectOption('high');
-  const muted = await page
-    .locator('#settings-appearance + p')
-    .evaluate((node) => getComputedStyle(node).color);
+  const muted = await page.locator('.spec-settings-content').evaluate((node) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--spec-muted)';
+    node.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
   expect(muted).toBe('rgb(217, 201, 255)');
 });
 
@@ -164,13 +178,17 @@ test('notification preferences share confirmed values and rollback errors; bilin
     return route.fulfill({ json: prefs });
   });
   await settings(page);
+  await settingsTabs(page).getByRole('button', { name: 'Notifications', exact: true }).click();
   const completed = page.getByRole('checkbox', { name: 'Turn completed', exact: true });
   await expect(completed).toBeEnabled();
   await completed.uncheck();
   await expect(completed).toBeEnabled();
   await expect(completed).not.toBeChecked();
   expect(writes).toBe(1);
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true })
+    .click();
   const drawer = page.getByRole('dialog', { name: 'Notifications', exact: true });
   await expect(
     drawer.getByRole('checkbox', { name: 'Turn completed', exact: true }),
@@ -178,24 +196,24 @@ test('notification preferences share confirmed values and rollback errors; bilin
   await page.keyboard.press('Escape');
   failSave = true;
   await completed.check();
-  await expect(page.getByRole('alert').filter({ hasText: 'Could not save' })).toBeVisible();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Preference change unconfirmed.' }),
+  ).toBeVisible();
   await expect(completed).not.toBeChecked();
   const capturedTask = await page.evaluate(async () => {
     const snapshot = (await (await fetch('/api/snapshot')).json()) as Snapshot;
     return snapshot.sessions.find((session) => session.id === 'synthetic-browser-session')!.task!;
   });
   expect(capturedTask).toBeTruthy();
-  await page
-    .locator('.settings-group')
-    .filter({ has: page.getByRole('heading', { name: 'General', exact: true }) })
-    .getByRole('combobox')
-    .selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openAppearance(page);
   await expect(page.getByRole('heading', { name: 'Configurações', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Contraste', exact: true })).toHaveValue(
     'standard',
   );
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Aparência e acessibilidade' })).toBeVisible();
+  await openAppearance(page);
+  await expect(page.getByRole('heading', { name: 'Aparência', exact: true })).toBeVisible();
   await page.goto('/#session=synthetic-browser-session');
   await expect(page.getByRole('region', { name: 'Detalhes da sessão' })).toContainText(
     capturedTask,
@@ -228,11 +246,10 @@ test('Settings remain contained on desktop, laptop and mobile with both contrast
     expect((await dialog.boundingBox())!.width).toBeLessThanOrEqual(width);
     await page.keyboard.press('Escape');
   }
-  await page
-    .locator('.settings-group')
-    .getByRole('combobox', { name: 'Language', exact: true })
-    .selectOption('pt-BR');
-  await expect(page.getByRole('heading', { name: 'Privacidade e armazenamento' })).toBeVisible();
+  await changeLanguage(page, 'pt-BR');
+  await openAppearance(page);
+  await settingsTabs(page).getByRole('button', { name: 'Privacidade e dados' }).click();
+  await expect(page.getByRole('heading', { name: 'Privacidade e dados' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -278,7 +295,7 @@ test('comfortable appearance carries across observed-data views without changing
         await expect(page.getByRole('region', { name: 'Session details' })).toBeVisible();
       } else {
         await expect(
-          page.locator('.workspace-directory, .adapter-panel, .analytics').first(),
+          page.locator('.workspace-directory, .spec-cli, .analytics').first(),
         ).toBeVisible();
       }
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -292,7 +309,7 @@ for (const locale of ['en-US', 'pt-BR'] as const) {
   test.describe(`V6 settings in ${locale}`, () => {
     test.use({ locale, colorScheme: 'dark', reducedMotion: 'reduce' });
 
-    test('opens settings from Studio through Overview and restores guide focus', async ({
+    test('opens settings from Studio through Overview and restores reset focus', async ({
       page,
     }) => {
       await page.addInitScript(() => {
@@ -315,29 +332,34 @@ for (const locale of ['en-US', 'pt-BR'] as const) {
         await page
           .getByRole('link', { name: portuguese ? 'Visão geral' : 'Overview', exact: true })
           .click();
-        await expect(page).toHaveURL(/\/overview$/);
+        await expect(page).toHaveURL(/\/visao-geral$/);
         await page
           .getByRole('link', { name: portuguese ? 'Configurações' : 'Settings', exact: true })
           .click();
-        await expect(page).toHaveURL(/\/settings$/);
+        await expect(page).toHaveURL(/\/configuracoes$/);
         const capture = (name: string) =>
           page.screenshot({
             path: test.info().outputPath(`${width}x${height}`, 'observer', `${name}.png`),
           });
-        const guideLabel = portuguese ? 'Guia de observação' : 'Observation guide';
-        const guide = page.getByRole('button', { name: guideLabel, exact: true });
-        await expect(guide).toBeVisible();
+        await openAppearance(page);
+        const resetLabel = portuguese ? 'Redefinir aparência' : 'Reset appearance';
+        const reset = page.getByRole('button', { name: resetLabel, exact: true });
+        await expect(reset).toBeVisible();
         await capture('settings');
-        await guide.click();
-        const dialog = page.getByRole('dialog', { name: guideLabel });
-        await expect(dialog.getByRole('heading', { name: guideLabel })).toBeFocused();
-        await capture('08-settings-guide');
-        await page.keyboard.press('Shift+Tab');
+        await reset.click();
+        const dialog = page.getByRole('dialog', { name: resetLabel });
+        await expect(
+          dialog.getByRole('button', { name: portuguese ? 'Cancelar' : 'Cancel' }),
+        ).toBeFocused();
+        await capture('settings-reset');
+        await page.keyboard.press('Tab');
         await expect(dialog.getByRole('button').last()).toBeFocused();
+        await page.keyboard.press('Shift+Tab');
+        await expect(dialog.getByRole('button').first()).toBeFocused();
         await page.keyboard.press('Escape');
-        await expect(guide).toBeFocused();
+        await expect(reset).toBeFocused();
         await page.goBack();
-        await expect(page).toHaveURL(/\/overview$/);
+        await expect(page).toHaveURL(/\/visao-geral$/);
         await page.goBack();
         await expect(page).toHaveURL(/\/studio$/);
       }

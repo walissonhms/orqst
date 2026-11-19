@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { Preferences, Snapshot } from '@orqst/protocol';
 import { createBridge } from '../../apps/bridge/src/app.js';
+import { changeLanguage, coreStatus } from '../helpers/spec-dashboard.js';
 
 test('live browser alerts follow persisted categories, exclude replay, and expose read state', async ({
   page,
@@ -38,13 +39,15 @@ test('live browser alerts follow persisted categories, exclude replay, and expos
   const sessionId = 'notification-alert-test';
   const record = (type: string, payload: unknown) =>
     JSON.stringify({ type, timestamp: new Date().toISOString(), payload }) + '\n';
-  const bell = page.getByRole('button', { name: 'Notifications', exact: true });
+  const bell = page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Notifications', exact: true });
   try {
     await mkdir(sessionsDir);
     const base = `http://127.0.0.1:${await bridge.start()}`;
-    await page.goto(base);
-    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+    await page.goto(base + '/visao-geral');
+    await expect(coreStatus(page).filter({ hasText: 'CORE ONLINE' })).toBeVisible();
     expect(await notices()).toEqual([]);
     const before = (await (await page.request.get(`${base}/api/snapshot`)).json()) as Snapshot;
     const setPrefs = async (patch: Partial<Preferences>) => {
@@ -111,13 +114,19 @@ test('live browser alerts follow persisted categories, exclude replay, and expos
     await expect(bell).toHaveAccessibleDescription('0 unread');
     await page.keyboard.press('Escape');
     await expect(bell).toBeFocused();
-    await page.getByLabel('Language').selectOption('pt-BR');
-    await page.getByRole('button', { name: 'Notificações', exact: true }).click();
+    await changeLanguage(page, 'pt-BR');
+    await page
+      .locator('#app-sidebar')
+      .getByRole('button', { name: 'Notificações', exact: true })
+      .click();
     await expect(
       page.getByRole('dialog').getByRole('option', { name: 'Turno concluído' }),
     ).toBeAttached();
     await page.reload();
-    await page.getByRole('button', { name: 'Notificações', exact: true }).click();
+    await page
+      .locator('#app-sidebar')
+      .getByRole('button', { name: 'Notificações', exact: true })
+      .click();
     await expect(page.getByRole('dialog').locator('.notification-item')).toHaveCount(3);
     expect(await notices()).toEqual([]);
     expect(errors).toEqual([]);
@@ -140,10 +149,13 @@ test('loading and offline drawers avoid a false empty history or unread count', 
   });
   try {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/');
-    await expect(page.locator('.stats .stat strong')).toHaveText(Array(4).fill('Unavailable'));
+    await page.goto('/visao-geral');
+    await expect(page.locator('.spec-counters dd')).toHaveText(Array(5).fill('—'));
     await expect(page.getByText('All quiet here.')).toHaveCount(0);
-    await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+    await page
+      .locator('#app-sidebar')
+      .getByRole('button', { name: 'Notifications', exact: true })
+      .click();
     const dialog = page.getByRole('dialog', { name: 'Notifications', exact: true });
     await expect(dialog.getByText('Loading notifications…')).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Mark all read' })).toHaveCount(0);
@@ -165,7 +177,7 @@ test.describe('Tauri dashboard user-agent', () => {
     page,
   }) => {
     await page.goto('/settings');
-    await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+    await expect(coreStatus(page).filter({ hasText: 'CORE ONLINE' })).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Enable browser notifications', exact: true }),
     ).toHaveCount(0);
@@ -176,7 +188,7 @@ test.describe('Tauri dashboard user-agent', () => {
     const checked = page.waitForResponse('**/api/snapshot');
     await dispatch('missing-synthetic-session');
     await checked;
-    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page).toHaveURL(/\/configuracoes$/);
     await dispatch('synthetic-browser-session');
     await expect(page).toHaveURL(/\/overview\/sessions\/synthetic-browser-session$/);
     await expect(page.getByRole('region', { name: 'Session details' })).toContainText(

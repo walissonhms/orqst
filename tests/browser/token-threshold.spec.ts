@@ -1,3 +1,4 @@
+import { changeLanguage, openObservedSessions } from '../helpers/spec-dashboard.js';
 import { test, expect, type Page } from '@playwright/test';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -200,10 +201,15 @@ test('threshold is memory-only, localized and keyboard accessible at mobile widt
 }) => {
   await page.setViewportSize({ width: 360, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const { header, apply } = await openControl(page);
+  await page.goto('/configuracoes');
+  await changeLanguage(page, 'pt-BR');
+  await page.goto('/overview/sessions/synthetic-browser-session');
+  const header = page.locator('.session-detail > .live-metrics');
+  await expect(header).toHaveAttribute('aria-busy', 'false');
+  await header.locator('.live-token-threshold-control > summary').click();
   const input = header.locator('input');
-  await apply('1');
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await input.fill('1');
+  await input.press('Enter');
   await expect(header.locator('.live-token-threshold')).toContainText(
     'O último total confirmado atingiu ou ultrapassou o limiar.',
   );
@@ -229,18 +235,15 @@ test('threshold is memory-only, localized and keyboard accessible at mobile widt
     .getByRole('button', { name: 'Fechar', exact: true })
     .click();
   await expect(header).toHaveCount(0);
-  await page
-    .getByRole('button', { name: 'Ver sessão Synthetic browser agent', exact: true })
-    .click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   await expect(header).toBeVisible();
   await expect(header.locator('.live-token-threshold')).toHaveCount(0);
   await header.getByText('Alerta de tokens da sessão', { exact: true }).click();
   await header.getByLabel('Limiar do total de tokens', { exact: true }).fill('1');
   await header.getByRole('button', { name: 'Aplicar limiar', exact: true }).click();
   await page.reload();
-  await page
-    .getByRole('button', { name: 'Ver sessão Synthetic browser agent', exact: true })
-    .click();
+  await expect(page).toHaveURL('/overview/sessions/synthetic-browser-session');
   await expect(header).toBeVisible();
   await expect(header.locator('.live-token-threshold')).toHaveCount(0);
 });

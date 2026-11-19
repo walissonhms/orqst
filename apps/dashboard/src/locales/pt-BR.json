@@ -628,6 +628,7 @@
     "reset": "Redefinir aparência",
     "resetHelp": "Restaurar tema escuro, contraste padrão, espaçamento compacto, movimento do sistema, tamanhos de texto padrão e tipografia de leitura original? Idioma, workspace selecionado, preferências de notificação, histórico capturado e rascunhos de artefatos permanecem iguais.",
     "resetConfirm": "Restaurar aparência padrão",
+    "notificationSaveUnconfirmed": "Alteração de preferência sem confirmação.",
     "notificationScope": "Categorias e som são salvos pelo Bridge local e compartilhados pelos painéis conectados. A permissão é gerenciada pelo navegador; o áudio pode exigir nova ativação após recarregar.",
     "notificationsUnavailable": {
       "label": "Reconecte para editar notificações.",
@@ -2035,6 +2036,7 @@
         "advanced": "Avançado"
       },
       "startup": "Início",
+      "appearanceVisit": "A aparência vale nesta visita.",
       "lastPage": "Última página",
       "terminalFont": "Fonte do terminal",
       "defaultFolder": "Pasta padrão",

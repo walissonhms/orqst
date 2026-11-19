@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
+import { changeLanguage, openObservedSessions } from '../helpers/spec-dashboard.js';
 
 const sourceId = 'synthetic-browser-session';
 const otherId = 'synthetic-navigation-session';
@@ -32,15 +33,23 @@ async function fixture(page: Page) {
   });
 }
 
-async function openDraft(page: Page) {
+async function openDraft(page: Page, localized = false) {
   await fixture(page);
   await page.goto(`/#session=${sourceId}`);
   await page
-    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .getByRole('button', {
+      name: localized ? 'Extrair artefato manualmente' : 'Extract artifact manually',
+      exact: true,
+    })
     .first()
     .click();
-  const panel = page.getByRole('region', { name: 'Manual artifact', exact: true });
-  await panel.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  const panel = page.getByRole('region', {
+    name: localized ? 'Artefato manual' : 'Manual artifact',
+    exact: true,
+  });
+  await panel
+    .getByRole('button', { name: localized ? 'Editar rascunho' : 'Edit draft', exact: true })
+    .click();
   await panel.getByRole('textbox').fill(draftText);
   return panel;
 }
@@ -63,6 +72,7 @@ test('view navigation waits for confirmation; cancellation preserves exact text 
     if (new URL(request.url()).pathname === '/api/artifacts/extract') extractions++;
   });
   const panel = await openDraft(page);
+  await panel.locator('.spec-artifact-source > summary').click();
   const provenance = await panel.locator('.artifact-provenance').innerText();
   const settings = page.getByRole('link', { name: 'Settings', exact: true });
   await settings.click();
@@ -82,7 +92,7 @@ test('view navigation waits for confirmation; cancellation preserves exact text 
   expect(await page.evaluate(() => Reflect.get(window, 'orqstInjected'))).toBeUndefined();
   await settings.click();
   await confirmNavigation(page);
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/configuracoes$/);
   await expect(panel).toHaveCount(0);
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await page
@@ -97,11 +107,6 @@ test('same-view/session/workspace actions and inspector tabs keep the draft; wor
 }) => {
   const panel = await openDraft(page);
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page.getByRole('link', { name: 'ORQST', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
-    .click();
-  await page.locator('.sidebar').getByRole('button', { name: 'browser-test', exact: true }).click();
   await page.getByRole('button', { name: 'Latest result', exact: true }).click();
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
   await expect(discardDialog(page)).toHaveCount(0);
@@ -123,15 +128,20 @@ test('table session changes and notification source links share the guard and ap
   page,
 }) => {
   const panel = await openDraft(page);
-  const other = page.getByRole('button', {
-    name: 'View session Synthetic navigation agent',
-    exact: true,
-  });
-  await other.click();
+  const other = () => page.getByRole('dialog', { name: 'Search & commands' }).getByRole('textbox');
+  const chooseOther = async () => {
+    await page.getByRole('button', { name: 'Search & commands' }).click();
+    await other().fill('Synthetic navigation agent');
+    await other().press('Enter');
+  };
+  await chooseOther();
   await page.keyboard.press('Escape');
-  await expect(other).toBeFocused();
+  await expect(panel.getByRole('heading')).toBeFocused();
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true })
+    .click();
   await page.locator('.notification-item').click();
   await expect(page.getByRole('dialog', { name: 'Notifications', exact: true })).toHaveCount(0);
   await expect(
@@ -140,7 +150,7 @@ test('table session changes and notification source links share the guard and ap
   await page.keyboard.press('Escape');
   await expect(panel.getByRole('heading', { name: 'Manual artifact', exact: true })).toBeFocused();
   await expect(panel.getByRole('textbox')).toHaveValue(draftText);
-  await other.click();
+  await chooseOther();
   await confirmNavigation(page);
   await expect(panel).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toContainText(
@@ -175,7 +185,7 @@ for (const query of ['Settings', 'Synthetic navigation agent', 'Synthetic naviga
     await page.keyboard.press('Enter');
     await confirmNavigation(page);
     await expect(panel).toHaveCount(0);
-    if (query === 'Settings') await expect(page).toHaveURL(/\/settings$/);
+    if (query === 'Settings') await expect(page).toHaveURL(/\/configuracoes$/);
     else if (query === 'Synthetic navigation agent')
       await expect(
         page.getByRole('region', { name: 'Session details', exact: true }),
@@ -190,9 +200,8 @@ test('session hashes, Back and Forward keep current context until a decision wit
   await fixture(page);
   await page.goto('/#agents');
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
-    .click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   await page
     .getByRole('button', { name: 'Extract artifact manually', exact: true })
     .first()
@@ -245,9 +254,10 @@ test('pending save blocks view, session and hash changes without replaying a del
   await panel.getByRole('button', { name: 'Save draft Markdown…', exact: true }).click();
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await expect(panel.getByRole('status').filter({ hasText: 'Finish or cancel' })).toBeVisible();
-  await page
-    .getByRole('button', { name: 'View session Synthetic navigation agent', exact: true })
-    .click();
+  await page.getByRole('button', { name: 'Search & commands' }).click();
+  const search = page.getByRole('dialog', { name: 'Search & commands' }).getByRole('textbox');
+  await search.fill('Synthetic navigation agent');
+  await search.press('Enter');
   await page.evaluate(() => {
     location.hash = 'agents';
   });
@@ -308,9 +318,10 @@ test('pt-BR navigation confirmation contains focus and fits 320px with maximum r
       }),
     );
   });
-  await openDraft(page);
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-  await page.getByRole('button', { name: 'Configurações', exact: true }).click();
+  await page.goto('/configuracoes');
+  await changeLanguage(page, 'pt-BR');
+  await openDraft(page, true);
+  await page.getByRole('link', { name: 'Configurações', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Descartar rascunho do artefato?', exact: true });
   const cancel = dialog.getByRole('button', { name: 'Cancelar', exact: true });
   await expect(cancel).toBeFocused();

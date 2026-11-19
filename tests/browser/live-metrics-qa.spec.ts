@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 import { test, expect, type Locator, type Page } from '@playwright/test';
 
 // Disposable synthetic Bridge fixture (tests/browser/server.ts). No user data.
@@ -332,7 +333,7 @@ test('pt-BR translation and narrow layout keep the reading accessible', async ({
   const { header, metrics } = await openConfirmed(page);
   const expected = counts(metrics);
 
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
   await expect(header.locator('p.eyebrow')).toHaveText('Tokens confirmados da sessão');
   await expect(
     visualStatus(
@@ -359,6 +360,6 @@ test('pt-BR translation and narrow layout keep the reading accessible', async ({
   expect(motion.animation).toBe('none');
   expect(motion.transition).toBe('0s');
 
-  await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
+  await changeLanguage(page, 'en-US');
   await expect(visualStatus(header, confirmedStatus)).toBeVisible();
 });

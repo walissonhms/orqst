@@ -16,7 +16,7 @@
   align-content: start;
   color: var(--spec-text);
   font:
-    12px/1.45 Inter,
+    0.75rem/1.45 Inter,
     system-ui,
     -apple-system,
     sans-serif;
@@ -35,14 +35,22 @@
   --spec-accent: var(--orqst-primary);
 }
 
+:root[data-contrast='high'] .spec-screen {
+  --spec-text: var(--orqst-text);
+  --spec-muted: var(--orqst-muted);
+  --spec-control-line: var(--orqst-border-strong);
+  --spec-button-text: var(--orqst-text);
+  --spec-accent: var(--orqst-neon);
+}
+
 .spec-screen :is(h1, h2, h3, p, dl, ul) {
   margin: 0;
 }
 .spec-screen h1 {
-  font-size: 16px;
+  font-size: 1rem;
 }
 .spec-screen :is(h2, h3) {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .spec-screen h3 {
   font-weight: 600;
@@ -205,11 +213,25 @@
   margin: 0;
   padding: 4px 8px;
 }
+.topbar-actions:has(.spec-metrics-controls) {
+  min-width: 0;
+}
+.topbar-actions > .spec-actions {
+  flex-wrap: nowrap;
+}
 .spec-metrics-controls {
-  align-items: end;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  white-space: nowrap;
+  padding: 2px;
 }
 .spec-metrics-controls :is(input, select) {
-  max-width: 160px;
+  max-width: 110px;
+}
+.spec-metrics-refresh {
+  flex: none;
 }
 .spec-metrics .stat {
   min-height: auto;

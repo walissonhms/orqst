@@ -1,13 +1,21 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 import { expect, test, type Page } from '@playwright/test';
 
-async function openArtifact(page: Page) {
+async function openArtifact(page: Page, localized = false) {
   await page.goto('/#session=synthetic-browser-session');
   await page
-    .getByRole('button', { name: 'Extract artifact manually', exact: true })
+    .getByRole('button', {
+      name: localized ? 'Extrair artefato manualmente' : 'Extract artifact manually',
+      exact: true,
+    })
     .first()
     .click();
-  const panel = page.getByRole('region', { name: 'Manual artifact', exact: true });
+  const panel = page.getByRole('region', {
+    name: localized ? 'Artefato manual' : 'Manual artifact',
+    exact: true,
+  });
   await expect(panel.locator('pre.artifact-content')).toBeVisible();
+  await panel.locator('.spec-artifact-source > summary').click();
   return panel;
 }
 
@@ -79,10 +87,10 @@ test('literal comparison, pt-BR restoration and Escape cancellation work by keyb
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  const panel = await openArtifact(page);
-  const original = await panel.locator('pre.artifact-content').innerText();
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-  const localized = page.getByRole('region', { name: 'Artefato manual', exact: true });
+  await page.goto('/configuracoes');
+  await changeLanguage(page, 'pt-BR');
+  const localized = await openArtifact(page, true);
+  const original = await localized.locator('pre.artifact-content').innerText();
   await localized.getByRole('button', { name: 'Editar rascunho', exact: true }).click();
   const editor = localized.getByRole('textbox');
   const restore = localized.getByRole('button', {
@@ -312,9 +320,9 @@ test('pt-BR discard confirmation traps keyboard focus and fits a mobile viewport
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openArtifact(page);
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-  const panel = page.getByRole('region', { name: 'Artefato manual', exact: true });
+  await page.goto('/configuracoes');
+  await changeLanguage(page, 'pt-BR');
+  const panel = await openArtifact(page, true);
   await panel.getByRole('button', { name: 'Editar rascunho', exact: true }).click();
   await panel.getByRole('textbox').fill('Rascunho sintético');
   await panel

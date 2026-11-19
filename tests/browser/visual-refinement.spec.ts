@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
+import { openModelsTab, openObservedSessions, settingsTabs } from '../helpers/spec-dashboard.js';
 
 async function contained(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -62,10 +63,14 @@ for (const theme of ['dark', 'light']) {
           await expect(page.locator('main h1')).toBeVisible();
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
           if (view === 'overview') {
-            await expect(page.locator('.agent-cell').first()).toBeVisible();
-            await expect(page.locator('.stat-live')).toHaveCount(0);
+            await openObservedSessions(page);
+            await expect(
+              page.getByRole('link', { name: 'Synthetic browser agent', exact: true }),
+            ).toBeVisible();
+            await expect(page.locator('.spec-counters dd')).toHaveText(Array(5).fill('—'));
           }
-          if (view === 'models')
+          if (view === 'models') {
+            await openModelsTab(page);
             await expect(
               page
                 .getByRole('region', {
@@ -74,25 +79,16 @@ for (const theme of ['dark', 'light']) {
                 })
                 .first(),
             ).toBeVisible();
+          }
           if (view === 'settings' && width === 1440) {
-            const appearance = await page
-              .locator('[aria-labelledby="settings-appearance"]')
-              .boundingBox();
-            const notifications = await page
-              .locator('[aria-labelledby="settings-notifications"]')
-              .boundingBox();
-            expect(notifications!.y).toBeLessThan(appearance!.y + appearance!.height);
+            await expect(settingsTabs(page)).toBeVisible();
+            const bounds = await page.locator('.spec-settings-content').boundingBox();
+            expect(bounds!.width).toBeLessThanOrEqual(640);
           }
           if (view === 'models') {
-            const padding = await page
-              .locator('.analytics-export')
-              .evaluate((element) => parseFloat(getComputedStyle(element).paddingLeft));
-            expect(padding).toBeGreaterThanOrEqual(16);
-            const evolutionInset = await page
-              .locator('.analytics-evolution > p')
-              .first()
-              .evaluate((element) => parseFloat(getComputedStyle(element).marginLeft));
-            expect(evolutionInset).toBeGreaterThanOrEqual(16);
+            const exportPanel = page.locator('.analytics-export');
+            await exportPanel.locator('summary').click();
+            await expect(exportPanel.getByRole('button', { name: /CSV/ })).toBeVisible();
           }
           await contained(page);
           const controls = await page.locator('.topbar-actions').evaluate((bar) => {
@@ -107,7 +103,20 @@ for (const theme of ['dark', 'light']) {
               );
             });
           });
-          expect(controls).toBe(true);
+          if (view === 'models') {
+            const filters = page.locator('.spec-metrics-controls');
+            const header = page.locator('.topbar');
+            await expect(header).toHaveCSS('height', '45px');
+            for (const control of await filters.getByRole('combobox').all()) {
+              await control.focus();
+              await expect(control).toBeInViewport();
+            }
+            const refresh = header.getByRole('button', { name: /^(Refresh|Atualizar)$/ });
+            await refresh.focus();
+            await expect(refresh).toBeInViewport();
+          } else {
+            expect(controls).toBe(true);
+          }
           if (language === 'en-US' && (width === 1440 || width === 390)) {
             await page.screenshot({
               path: test.info().outputPath(`${view}-${width}.png`),
@@ -118,10 +127,13 @@ for (const theme of ['dark', 'light']) {
         await page.goto('/overview/sessions/synthetic-browser-session');
         await expect(page.locator('.session-detail')).toBeVisible();
         await contained(page);
-        await page.locator('.session-detail').scrollIntoViewIfNeeded();
-        const header = await page.locator('.topbar').boundingBox();
-        const context = await page.locator('.session-context-bar').boundingBox();
-        expect(context!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+        const header = page.locator('.topbar');
+        const badge = header.locator('.session-token-badge');
+        await expect(badge).toBeInViewport();
+        await expect(header).toHaveCSS('height', '45px');
+        const frame = (await header.boundingBox())!;
+        const inspector = (await page.locator('.session-detail').boundingBox())!;
+        expect(inspector.y).toBeGreaterThanOrEqual(frame.y + frame.height);
         if (language === 'en-US' && width === 390) {
           await page.screenshot({ path: test.info().outputPath('session-mobile.png') });
         }
@@ -131,29 +143,28 @@ for (const theme of ['dark', 'light']) {
   }
 }
 
-test('short sidebar remains scrollable and the mobile disclosure closes with Escape and restores focus', async ({
+test('short layout keeps the persistent mobile rail and restores notification focus', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 540 });
-  await page.goto('/overview');
-  await expect(page.locator('.agent-cell').first()).toBeVisible();
-  await page.locator('.sidebar-bottom').scrollIntoViewIfNeeded();
-  expect(await page.locator('.sidebar').evaluate((element) => element.scrollTop)).toBeGreaterThan(
-    0,
-  );
-  await expect(page.locator('.local-badge')).toBeInViewport();
-  await page.getByRole('link', { name: 'Overview', exact: true }).focus();
-  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toBeInViewport();
+  await page.goto('/visao-geral');
+  await openObservedSessions(page);
+  await expect(
+    page.getByRole('link', { name: 'Synthetic browser agent', exact: true }),
+  ).toBeVisible();
+  const sidebar = page.locator('#app-sidebar');
+  await expect(sidebar.getByRole('link', { name: 'Overview', exact: true })).toBeInViewport();
   await page.setViewportSize({ width: 320, height: 568 });
-  const menu = page.getByRole('button', { name: 'Workspaces', exact: true });
-  await menu.click();
-  await expect(page.locator('.brand-logo')).toBeVisible();
-  await page.getByRole('link', { name: 'Settings', exact: true }).focus();
-  await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeInViewport();
+  await expect(sidebar).toHaveCSS('width', '46px');
+  await expect(sidebar.locator('.shell-brand-logo')).toBeVisible();
+  const bell = sidebar.getByRole('button', { name: 'Notifications', exact: true });
+  await bell.click();
+  const drawer = page.getByRole('dialog', { name: 'Notifications', exact: true });
+  await expect(drawer).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(menu).toBeFocused();
-  await expect(menu).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.locator('.sidebar')).toBeHidden();
+  await expect(drawer).toHaveCount(0);
+  await expect(bell).toBeFocused();
+  await expect(sidebar).toBeVisible();
   await contained(page);
 });
 
@@ -180,15 +191,17 @@ test('mobile sessions retain names, status, time, usage and working source actio
     });
   });
   await page.goto('/overview');
-  const table = page.locator('.session-table');
+  await openObservedSessions(page);
+  const table = page.locator('details[open] .spec-table');
   await expect(table).toBeVisible();
-  await expect(page.locator('.stat-live')).toHaveCount(1);
   await expect(table.getByRole('columnheader', { name: 'Status', exact: true })).toHaveCount(1);
-  await table.scrollIntoViewIfNeeded();
-  expect(await table.evaluate((element) => element.scrollWidth)).toBeLessThanOrEqual(288);
-  await expect(table.locator('.status-running')).toBeInViewport();
-  await expect(table.locator('.token-cell')).toBeInViewport();
-  await table.locator('.agent-cell').click();
+  await expect(table.getByRole('columnheader', { name: 'Last activity', exact: true })).toHaveCount(
+    1,
+  );
+  await expect(table.getByRole('row').last()).toContainText(/Running|Stale/);
+  await contained(page);
+  await table.getByRole('link', { name: /^Synthetic agent with a very long/ }).click();
   await expect(page.locator('.session-detail')).toBeVisible();
+  await expect(page.locator('.session-token-badge strong')).toHaveText(/\d/);
   await contained(page);
 });

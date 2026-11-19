@@ -1,3 +1,4 @@
+import { openObservedSessions } from '../helpers/spec-dashboard.js';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -61,10 +62,8 @@ test('only safe integers apply; the comparison is explicit and never persisted',
   // Closing and reopening the session detail loses the threshold (memory only).
   await page.getByRole('button', { name: 'Close', exact: true }).first().click();
   await expect(page.locator('.session-detail')).toHaveCount(0);
-  await page
-    .getByRole('button', { name: /Synthetic browser agent/ })
-    .first()
-    .click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Session details', exact: true })).toBeVisible();
   await expect(status(page)).toHaveCount(0);
   await expect(page.locator('.session-detail .live-token-threshold-control input')).toHaveValue('');

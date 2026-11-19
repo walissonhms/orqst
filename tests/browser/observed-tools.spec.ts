@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 // Native-shaped synthetic source, read only by the disposable browser harness.
 import { test, expect } from '@playwright/test';
 import { appendFile, readFile, writeFile, rm } from 'node:fs/promises';
@@ -61,7 +62,8 @@ test('tool evidence pairs by explicit identity, remains inert and receives retai
     await expect(panel.locator('article')).toHaveCount(2);
     await expect(panel.locator('article').first()).toContainText('Separate record');
     await expect(panel).not.toContainText('Running');
-    await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+    await changeLanguage(page, 'pt-BR');
+    await page.getByRole('button', { name: 'Ferramentas observadas', exact: true }).click();
     await expect(panel).toContainText('Entrada e saída de ferramentas observadas');
     await expect(panel).toContainText('somente de leitura');
     await page.setViewportSize({ width: 390, height: 844 });

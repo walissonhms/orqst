@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 // Disposable synthetic source -> observer -> API/WS -> shared browser/Desktop header.
 import { test, expect } from '@playwright/test';
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
@@ -32,7 +33,10 @@ test('model identifiers stay historical, unavailable discovery stays explicit, a
   await model.getByText('Model evidence limits', { exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(model.locator('details')).toHaveAttribute('open', '');
-  await expect(model).toContainText('The model observation time is unavailable');
+  await expect(model.locator('details p[title]')).toHaveAttribute(
+    'title',
+    /The model observation time is unavailable/,
+  );
   await expect(model).toContainText(
     'Availability, capabilities and selection have not been verified.',
   );
@@ -49,7 +53,7 @@ test('model identifiers stay historical, unavailable discovery stays explicit, a
   await expect(model.locator('code')).toHaveText('synthetic-next-model');
   await expect(model).toContainText('Observed model identifier');
   await expect(model).toContainText('Model discovery is not implemented.');
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
   await expect(model).toContainText('Identificador de modelo observado');
   await expect(model).toContainText(
     'Disponibilidade, capacidades e seleção não foram verificadas.',
@@ -60,8 +64,11 @@ test('model identifiers stay historical, unavailable discovery stays explicit, a
   await page.goto(`/#session=${id}`);
   await expect(model).toContainText('Identificador de modelo observado');
   await model.getByText('Limites da evidência de modelo', { exact: true }).click();
-  await expect(model).toContainText('O horário da observação do modelo está indisponível');
-  await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
+  await expect(model.locator('details p[title]')).toHaveAttribute(
+    'title',
+    /O horário da observação do modelo está indisponível/,
+  );
+  await changeLanguage(page, 'en-US');
   await page.setViewportSize({ width: 390, height: 844 });
   await appendFile(
     source,

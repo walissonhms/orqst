@@ -2,9 +2,11 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { test, expect, type Page } from '@playwright/test';
 import { defaultFeatureId, featureNativeSnapshotSchema, type Snapshot } from '@orqst/protocol';
+import { changeLanguage, openObservedSessions, settingsTabs } from '../helpers/spec-dashboard.js';
 
 const sourceId = 'synthetic-browser-session';
-const captureRoot = 'docs/development/spec-l1';
+const integratedCaptures = process.env.ORQST_SPEC_INTEGRATED_CAPTURES;
+const captureRoot = integratedCaptures ?? 'docs/development/spec-l1';
 const screenSizes = [
   { width: 1440, height: 900 },
   { width: 1280, height: 800 },
@@ -14,7 +16,7 @@ const approvedHtml = pathToFileURL(
 ).href;
 
 async function capture(page: Page, name: string) {
-  if (process.env.ORQST_SPEC_L1_CAPTURES !== '1') return;
+  if (!integratedCaptures && process.env.ORQST_SPEC_L1_CAPTURES !== '1') return;
   const { width, height } = page.viewportSize()!;
   await page.screenshot({
     path: `${captureRoot}/${width}x${height}/${name}.png`,
@@ -65,8 +67,16 @@ async function studioFixture(page: Page) {
     Object.defineProperty(window, 'orqstFeatures', {
       value: {
         contractVersion: 1,
-        async request({ action, featureId }: { action: string; featureId?: string }) {
-          calls.push(action);
+        async request({
+          action,
+          featureId,
+          command,
+        }: {
+          action: string;
+          featureId?: string;
+          command?: { kind: string };
+        }) {
+          calls.push(action === 'inspector' ? `inspector:${command?.kind}` : action);
           if (action === 'pane') return { status: 'ok', snapshot: structuredClone(snapshot) };
           if (action === 'snapshot') return { status: 'ok', snapshot: structuredClone(snapshot) };
           if (
@@ -91,6 +101,10 @@ test('observer Studio shows the Desktop requirement and keeps the shared navigat
   page,
 }) => {
   await page.goto('/');
+  await page
+    .getByRole('dialog', { name: 'Welcome to ORQST' })
+    .getByRole('button', { name: 'Skip', exact: true })
+    .click();
   await expect(page).toHaveURL('/studio');
   await expect(
     page.getByText('Terminals run in the ORQST Desktop app.', { exact: false }),
@@ -103,7 +117,10 @@ test('observer Studio shows the Desktop requirement and keeps the shared navigat
     'aria-current',
     'page',
   );
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true })
+    .click();
   await expect(page.getByRole('dialog', { name: 'Notifications' })).toBeVisible();
 });
 
@@ -113,9 +130,8 @@ test('managed Studio route shares the unsaved draft guard on click and history t
   await studioFixture(page);
   await page.goto('/studio');
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
-    .click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   await page
     .getByRole('button', { name: 'Extract artifact manually', exact: true })
     .first()
@@ -141,7 +157,9 @@ test('managed Studio route shares the unsaved draft guard on click and history t
   await expect(page.getByRole('link', { name: 'Overview', exact: true })).toBeInViewport({
     ratio: 1,
   });
-  await expect(page.getByRole('button', { name: 'Notifications', exact: true })).toBeInViewport({
+  await expect(
+    page.locator('#app-sidebar').getByRole('button', { name: 'Notifications', exact: true }),
+  ).toBeInViewport({
     ratio: 1,
   });
   await expect(page.locator('.topbar').getByLabel('Language', { exact: true })).toHaveCount(0);
@@ -157,7 +175,7 @@ for (const size of screenSizes) {
     await studioFixture(page);
     await fixture(page);
     await page.goto('/configuracoes');
-    await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
+    await changeLanguage(page, 'pt-BR');
     const sidebar = page.locator('#app-sidebar');
     const topbar = page.locator('.topbar');
     const crumb = topbar.locator('.breadcrumbs');
@@ -183,8 +201,12 @@ for (const size of screenSizes) {
       /Terminal/,
       /Limites/,
     ]);
-    await expect(topbar.locator('.shell-account-limits')).toHaveCSS('border-left-width', '1px');
-    await expect(topbar.locator('.shell-account-limits')).toHaveAttribute('data-empty', 'true');
+    await expect(topbar.locator('.studio-limits-control')).toHaveCSS(
+      'border-inline-start-width',
+      '1px',
+    );
+    await expect(topbar.locator('.studio-limits-control')).toContainText('—');
+    await expect(topbar.locator('.studio-limits-control')).not.toContainText('0%');
     await expect(sidebar.getByRole('button', { name: 'browser-test' }).locator('small')).toHaveText(
       '0',
     );
@@ -237,28 +259,36 @@ for (const size of screenSizes) {
       await expect(sidebar.getByText('Sem Feature', { exact: true })).toHaveCount(0);
       await expect(topbar.getByText('PT-BR', { exact: true })).toHaveCount(0);
       if (name === 'overview')
-        await expect(page.getByRole('heading', { name: /^Sessões observadas/ })).toBeVisible();
+        await expect(
+          page.locator('summary').filter({ hasText: 'Sessões observadas' }),
+        ).toBeVisible();
       if (name === 'metrics') {
         await expect(topbar.getByRole('button', { name: 'Atualizar', exact: true })).toBeVisible();
-        await expect(page.locator('.analytics-stats')).toBeVisible();
+        await expect(page.locator('.spec-usage-counters')).toBeVisible();
       }
       if (size.width === 1440) await capture(page, `dashboard-${name}`);
     }
     await expect(
       sidebar.getByRole('link', { name: /Agentes|Kanban|Planned|Planejado/i }),
     ).toHaveCount(0);
-    await page.getByRole('link', { name: 'Agentes', exact: true }).click();
-    await expect(page).toHaveURL('/configuracoes/agentes');
+    await settingsTabs(page).getByRole('button', { name: 'Agentes', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Agentes', exact: true })).toBeVisible();
+    await expect(page).toHaveURL('/configuracoes');
     await expect(sidebar.getByRole('link', { name: 'Configurações', exact: true })).toHaveAttribute(
       'aria-current',
       'page',
     );
 
     const bell = sidebar.getByRole('button', { name: 'Notificações', exact: true });
-    await expect(bell.locator('.shell-unread')).toHaveText('1');
+    // The fixture contains an observed unread alert and no managed alert.
+    await expect(bell.locator('.shell-unread')).toHaveCount(0);
     await bell.click();
-    await expect(page.getByRole('dialog', { name: 'Notificações' })).toBeVisible();
-    await expect(page).toHaveURL('/configuracoes/agentes');
+    const drawer = page.getByRole('dialog', { name: 'Notificações', exact: true });
+    await expect(drawer).toBeVisible();
+    await expect(
+      drawer.getByRole('button', { name: 'Notificações de sessões observadas' }),
+    ).toBeVisible();
+    await expect(page).toHaveURL('/configuracoes');
     await page.keyboard.press('Escape');
     await expect(bell).toBeFocused();
 
@@ -279,7 +309,7 @@ for (const size of screenSizes) {
           ),
         ),
       )
-      .toEqual(['select', 'pane']);
+      .toEqual(['select', 'inspector:read', 'pane']);
 
     await sidebar.getByRole('link', { name: 'Visão geral', exact: true }).click();
     await search.click();
@@ -338,9 +368,9 @@ test('workspace directory, layout, sidebar and scope restore without claiming pr
   await expect(page.getByRole('combobox', { name: 'Sort by' })).toHaveValue('name');
   await expect(page.locator('#app-sidebar')).toHaveCSS('width', '155px');
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await page.getByRole('link', { name: 'Agents', exact: true }).click();
+  await settingsTabs(page).getByRole('button', { name: 'Agents', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
-  await page.evaluate(() => history.go(-2));
+  await page.goBack();
   await expect(page.getByRole('heading', { name: 'Workspace directory' })).toBeVisible();
   await page
     .getByRole('textbox', { name: 'Search workspace names or paths' })
@@ -354,9 +384,10 @@ test('workspace directory, layout, sidebar and scope restore without claiming pr
     () => JSON.parse(localStorage.getItem('orqst.shell.v1')!).workspaceId as string,
   );
   expect(workspace).toBeTruthy();
-  await page.getByRole('combobox', { name: 'Status', exact: true }).selectOption('failed');
+  const period = page.getByRole('combobox', { name: 'Period', exact: true });
+  await period.selectOption('0');
   await page.reload();
-  await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveValue('failed');
+  await expect(period).toHaveValue('0');
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('orqst.shell.v1')!).workspaceId),
   ).toBe(workspace);
@@ -397,39 +428,29 @@ test('adapter inventory is truthful, bilingual and has no execution or model sel
 }) => {
   await page.goto('/#agents');
   await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
-  const matrix = page.getByRole('region', { name: 'Observation capability matrix' });
+  const matrix = page.getByRole('region', {
+    name: /^(CLI support matrix|Matriz de suporte das CLIs)$/,
+  });
+  const rows = matrix.getByRole('row');
+  const facts = ['Path', 'Version', 'Login', 'Models'] as const;
+  for (const fact of facts) {
+    await expect(
+      rows
+        .filter({ has: page.getByRole('rowheader', { name: fact, exact: true }) })
+        .getByRole('cell'),
+    ).toHaveText(Array(4).fill('—'));
+  }
+  await expect(matrix.getByRole('row', { name: /ORQST messages.*Unavailable/i })).toBeVisible();
   await expect(
-    matrix.getByRole('row', {
-      name: 'Session control Unavailable Unavailable Unavailable Unavailable',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    matrix.getByRole('row', {
-      name: 'Mode Observation only Not observed yet Not observed yet Observation only',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    matrix.getByRole('row', {
-      name: 'External session discovery Supported Unavailable Unavailable Supported',
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(matrix).toContainText('not a machine installation scan');
-  await expect(
-    page.getByRole('button', { name: /Start|Resume|Stop|Install|Authenticate/ }),
+    matrix.getByRole('button', { name: /Start|Resume|Stop|Install|Authenticate/ }),
   ).toHaveCount(0);
-  await page.getByRole('link', { name: 'General', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Language', exact: true }).selectOption('pt-BR');
-  await page.getByRole('link', { name: 'Agentes', exact: true }).click();
+  await expect(matrix.getByRole('combobox')).toHaveCount(0);
+  await changeLanguage(page, 'pt-BR');
+  await settingsTabs(page).getByRole('button', { name: 'Agentes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Agentes', exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('row', {
-      name: 'Controle de sessão Indisponível Indisponível Indisponível Indisponível',
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expect(matrix.getByRole('row', { name: /^Modelos/ }).getByRole('cell')).toHaveText(
+    Array(4).fill('—'),
+  );
 });
 
 test('workspace and notification dialogs contain focus, close with Escape and link back to source from Analytics', async ({
@@ -446,7 +467,9 @@ test('workspace and notification dialogs contain focus, close with Escape and li
   await page.keyboard.press('Escape');
   await expect(form).toHaveCount(0);
   await expect(add).toBeFocused();
-  const notifications = page.getByRole('button', { name: 'Notifications', exact: true });
+  const notifications = page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true });
   await notifications.click();
   await page.keyboard.press('Escape');
   await expect(notifications).toBeFocused();
@@ -456,7 +479,7 @@ test('workspace and notification dialogs contain focus, close with Escape and li
     .getByRole('button', { name: /Execution failed/ })
     .click();
   await expect(page.getByRole('region', { name: 'Session details' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
 });
 
 test('new views and dialogs fit desktop, laptop and mobile with reduced motion', async ({
@@ -467,7 +490,7 @@ test('new views and dialogs fit desktop, laptop and mobile with reduced motion',
     await page.setViewportSize({ width, height: 900 });
     for (const view of ['workspaces', 'agents']) {
       await page.goto(`/#${view}`);
-      await expect(page.locator('.workspace-directory, .adapter-panel')).toBeVisible();
+      await expect(page.locator('.workspace-directory, .spec-cli')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );
@@ -503,7 +526,7 @@ test('compact token disclosure reuses confirmed readings, remains visible on scr
       });
     return route.continue();
   });
-  await page.goto('/#session=synthetic-browser-session');
+  await page.goto('/overview/sessions/synthetic-browser-session');
   const badge = page.locator('.session-token-badge');
   const header = page.locator('.session-detail > .live-metrics');
   await expect(header.locator('.live-metric-values strong')).toHaveCount(4);
@@ -529,7 +552,7 @@ test('compact token disclosure reuses confirmed readings, remains visible on scr
   await expect(badge).toHaveCount(0);
   failed = false;
   unavailable = true;
-  await page.goto('/#session=synthetic-browser-session');
+  await page.goto('/overview/sessions/synthetic-browser-session');
   await expect(badge.locator('summary')).toContainText('Unavailable');
   await expect(badge.locator('strong')).toHaveText('—');
   await expect(header).toContainText('No cumulative token snapshot was recorded.');
@@ -544,7 +567,10 @@ test('notification filters preserve source categories without inventing alerts',
 }) => {
   await fixture(page);
   await page.goto('/#agents');
-  await page.getByRole('button', { name: 'Notifications', exact: true }).click();
+  await page
+    .locator('#app-sidebar')
+    .getByRole('button', { name: 'Notifications', exact: true })
+    .click();
   const dialog = page.getByRole('dialog', { name: 'Notifications' });
   await expect(dialog.locator('.notification-item')).toHaveCount(1);
   await expect(dialog.locator('.notification-item')).toHaveClass(/notification-agent-failed/);

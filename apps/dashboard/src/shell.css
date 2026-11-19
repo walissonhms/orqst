@@ -1192,9 +1192,10 @@ button:disabled {
   font-weight: 900;
   letter-spacing: 2px;
 }
-.shell-mark {
-  color: var(--orqst-neon);
-  font-size: 12px;
+.shell-brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 .shell-tree {
   min-height: 0;
@@ -1349,6 +1350,7 @@ button:disabled {
   z-index: 2;
   display: flex;
   flex: 0 0 var(--orqst-topbar-height);
+  min-height: 0;
   align-items: center;
   justify-content: space-between;
   min-width: 0;
@@ -1536,11 +1538,9 @@ button:disabled {
     padding: 0;
     justify-content: center;
   }
-  .shell-brand > span:first-child,
   .shell-tree-name,
   .shell-tree-row small,
   .shell-feature-heading > button,
-  .shell-core-label,
   .shell-subtitle {
     display: none;
   }
@@ -1562,6 +1562,13 @@ button:disabled {
     flex-direction: column;
     align-items: center;
     gap: 3px;
+  }
+  .shell-core-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .shell-core {
     justify-content: center;

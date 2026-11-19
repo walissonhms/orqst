@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 import { test, expect, type Page } from '@playwright/test';
 import { sessionMetricsResultSchema, type SessionMetricsResult } from '@orqst/protocol';
 
@@ -109,7 +110,7 @@ test('reduced motion keeps static translated cues and a newly opened artifact st
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const { header, refresh, next, setResult, expected } = await setup(page);
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
   setResult(next());
   await refresh();
   const cue = header.locator('.live-metric-updated').first();
@@ -117,7 +118,8 @@ test('reduced motion keeps static translated cues and a newly opened artifact st
   const style = await cue.evaluate((node) => {
     const css = getComputedStyle(node);
     const expected = document.createElement('span');
-    expected.style.backgroundColor = 'color-mix(in srgb, #b45cff 12%, #141329)';
+    expected.style.backgroundColor =
+      'color-mix(in srgb, var(--orqst-neon) 12%, var(--orqst-surface))';
     document.body.append(expected);
     const expectedBackground = getComputedStyle(expected).backgroundColor;
     expected.remove();

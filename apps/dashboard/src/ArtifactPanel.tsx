@@ -290,6 +290,13 @@ export function ArtifactPanel({
                 {reference.evidence.source.hash}
               </dd>
             </dl>
+            <p className="fine-print">{t('artifacts.provenanceNote')}</p>
+            <p className="fine-print">{t('artifacts.retainedNote')}</p>
+            {!library && (
+              <p className="fine-print">
+                {t(draftChanged ? 'artifacts.draftChanged' : 'artifacts.draftUnchanged')}
+              </p>
+            )}
           </details>
           <div className="artifact-modes" role="group" aria-label={t('artifacts.views')}>
             {(['preview', 'source', 'edit'] as const)

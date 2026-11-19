@@ -1,8 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
+import { changeLanguage, openAppearance } from '../helpers/spec-dashboard.js';
 
 async function openSettings(page: Page) {
   await page.goto('/#settings');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await openAppearance(page);
 }
 async function enlargeReading(page: Page) {
   await page
@@ -47,6 +49,7 @@ test('reading preferences migrate old storage, synchronize, survive reload and r
   await expect(other.locator('html')).toHaveAttribute('data-text-size', 'extra-large');
   await expect(other.locator('html')).toHaveAttribute('data-content-font', 'sans');
   await page.reload();
+  await openAppearance(page);
   await expect(page.getByRole('combobox', { name: 'Captured text font', exact: true })).toHaveValue(
     'sans',
   );
@@ -198,9 +201,7 @@ test('maximum reading sizes reflow across views, overlays and artifacts at lapto
       await expect(page.locator('html')).toHaveAttribute('data-text-size', 'extra-large');
       await expect(
         page
-          .locator(
-            '.settings-page, .workspace-directory, .adapter-panel, .analytics, .session-detail',
-          )
+          .locator('.spec-settings, .workspace-directory, .spec-cli, .analytics, .session-detail')
           .first(),
       ).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
@@ -230,10 +231,8 @@ test('maximum reading sizes reflow across views, overlays and artifacts at lapto
     });
   }
   await openSettings(page);
-  await page
-    .locator('.settings-group')
-    .getByRole('combobox', { name: 'Language', exact: true })
-    .selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openAppearance(page);
   await expect(
     page.getByRole('combobox', { name: 'Tamanho do texto da interface', exact: true }),
   ).toHaveValue('extra-large');

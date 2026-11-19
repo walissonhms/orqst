@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 // Synthetic sessions, isolated observer/storage and a test-only browser listener.
 import { test, expect } from '@playwright/test';
 import { appendFile, readFile, writeFile } from 'node:fs/promises';
@@ -37,7 +38,7 @@ test('real observer history is partial, lazy, nullable, inert and localized', as
   const history = page.locator('.model-history');
   await expect(history).toBeVisible();
   expect(requests).toBe(0);
-  await history.locator('summary').focus();
+  await history.locator(':scope > summary').focus();
   await page.keyboard.press('Enter');
   await expect(history.locator('li')).toHaveCount(3);
   await expect(history.locator('li').first().locator('code').first()).toHaveText(hostile);
@@ -50,7 +51,8 @@ test('real observer history is partial, lazy, nullable, inert and localized', as
     await page.evaluate(() => Reflect.get(window, 'syntheticHistoryInjected')),
   ).toBeUndefined();
   expect(await history.innerText()).not.toContain('synthetic-model-history-hostile.jsonl');
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await history.locator(':scope > summary').click();
   await expect(history).toContainText('Cobertura parcial');
   await expect(history).toContainText('Horário do evento normalizado');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -69,7 +71,7 @@ test('all-null evidence is distinct from missing evidence and bursts do not refe
   });
   await page.goto(`/#session=${id}`);
   const history = page.locator('.model-history');
-  await history.locator('summary').click();
+  await history.locator(':scope > summary').click();
   await expect(history).toContainText('These records do not establish any model.');
   const before = requests;
   for (let index = 0; index < 5; index++) {
@@ -101,22 +103,22 @@ test('late readings cannot cross sessions or survive closing; invalid responses 
     await page.waitForTimeout(800);
     await route.fulfill({ response });
   });
-  await history.locator('summary').click();
-  await history.locator('summary').click();
+  await history.locator(':scope > summary').click();
+  await history.locator(':scope > summary').click();
   await expect(history.locator('li')).toHaveCount(0);
   await page.goto(`/#session=${second.id}`);
-  await history.locator('summary').click();
+  await history.locator(':scope > summary').click();
   await expect(history).toContainText('synthetic-new');
   await page.waitForTimeout(900);
   await expect(history).not.toContainText('synthetic-old-private');
-  await history.locator('summary').click();
+  await history.locator(':scope > summary').click();
   await page.route(`**/api/sessions/${second.id}/model-history`, (route) =>
     route.fulfill({
       contentType: 'application/json',
       body: '{"availability":"available","value":{"private":"invalid"}}',
     }),
   );
-  await history.locator('summary').click();
+  await history.locator(':scope > summary').click();
   await expect(history).toContainText('History unavailable: the reading could not be validated.');
   await expect(history.locator('li')).toHaveCount(0);
 });

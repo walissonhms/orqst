@@ -423,13 +423,18 @@ function AnalyticsReadingView({
                 />
                 {t('analytics.unidentifiedOnly')}
               </label>
-              <button className="button" onClick={() => setRevision((value) => value + 1)}>
-                <RefreshCw size={13} />
-                {t('analytics.refresh')}
-              </button>
             </>
           )}
         </div>
+        {!feature && (
+          <button
+            className="button spec-metrics-refresh"
+            onClick={() => setRevision((value) => value + 1)}
+          >
+            <RefreshCw size={13} />
+            {t('analytics.refresh')}
+          </button>
+        )}
       </RouteHeaderActions>
       {feature ? (
         <FeatureUsage scope={scope} featureId={feature.featureId} />
@@ -438,7 +443,11 @@ function AnalyticsReadingView({
           {!request && <p role="alert">{t('screens.metrics.invalidPeriod')}</p>}
           <details className="notice analytics-coverage disclosure">
             <summary>{t('analytics.incompleteShort')}</summary>
-            {t('analytics.incomplete')}
+            <p>{t('analytics.incomplete')}</p>
+            <p>
+              {t('analytics.calendar', { zone: Intl.DateTimeFormat().resolvedOptions().timeZone })}
+            </p>
+            <p>{t('analytics.identifiers')}</p>
           </details>
           {tab === 'models' && (
             <details
@@ -678,6 +687,12 @@ function AnalyticsReadingView({
                   })}
                 </p>
                 <p className="fine-print">{t('analytics.coverageScope')}</p>
+                {data.usage && (
+                  <p className="fine-print">
+                    {t('analytics.denominator', { tokens: number(data.usage.total) })}
+                  </p>
+                )}
+                <p className="fine-print">{t('analytics.unavailable')}</p>
                 {data.coverage.gaps.length > 0 && (
                   <ul>
                     {data.coverage.gaps.map((gap) => (
