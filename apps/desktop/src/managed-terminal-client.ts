@@ -34,10 +34,6 @@ if (studioChrome) {
   });
   document.documentElement.lang = language;
   container.setAttribute('aria-label', studioLocale.t('output'));
-  document.getElementById('start')!.textContent = studioLocale.t(
-    main.dataset.operationalOpen === 'true' ? 'open' : 'start',
-  );
-  document.getElementById('attach')!.textContent = studioLocale.t('attach');
   if (status.dataset.blocked === 'true')
     status.textContent = studioLocale.t(status.dataset.blockerKey ?? 'unavailable');
 }

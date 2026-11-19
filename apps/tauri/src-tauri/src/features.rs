@@ -4,8 +4,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use tauri::webview::{NewWindowResponse, WebviewBuilder};
-use tauri::{Manager, Webview, WebviewUrl, Window, WindowEvent};
+use tauri::{Manager, Webview};
 
 const CHROME_URL: &str = "orqst-features://local/index.html";
 #[derive(Default)]
@@ -16,8 +15,6 @@ struct State {
     main_document: u64,
     chrome_document: u64,
     sequence: u64,
-    installing: bool,
-    chrome_capability: bool,
     snapshot_generation: u64,
     view_revision: u64,
     workspace_id: Option<String>,
@@ -1444,7 +1441,7 @@ fn dashboard_document_matches(label: &str, parent: &str, source: &str, origin: &
         })
 }
 /// The existing owned dashboard may be on any approved SPA page. This grants no Studio capability.
-fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
+pub(crate) fn dashboard_identity(view: &Webview) -> Option<(String, u64)> {
     identity_from(
         &view.state::<Features>().0,
         true,
@@ -2228,6 +2225,14 @@ fn inspector_request_source_allowed(source: &str, request: &Value) -> bool {
                 .is_ok_and(|url| matches!(url.path(), "/" | "/studio")))
 }
 
+pub(crate) fn studio_dashboard_source(source: &str) -> bool {
+    tauri::Url::parse(source).is_ok_and(|url| {
+        url.scheme() == "http" && url.host_str() == Some("127.0.0.1")
+            && url.query().is_none() && url.fragment().is_none()
+            && matches!(url.path(), "/" | "/studio")
+    })
+}
+
 /// Feature tree actions are available on every dashboard route. Other actions keep
 /// the previous Studio source restriction and all request checks still apply.
 fn feature_action_source_allowed(source: &str, request: &Value) -> bool {
@@ -2237,8 +2242,13 @@ fn feature_action_source_allowed(source: &str, request: &Value) -> bool {
     if source == CHROME_URL {
         return true;
     }
-    if request["action"] == "arrange" || is_terminal_close(request) {
-        return false;
+    if request["action"] == "arrange" {
+        return request["layoutVersion"] == 2 && request["chrome"]["top"] == 45
+            && (studio_dashboard_source(source) || request["panes"].as_array().is_some_and(|panes|
+                panes.iter().all(|pane| pane["rect"].is_null())));
+    }
+    if is_terminal_close(request) {
+        return studio_dashboard_source(source);
     }
     matches!(
         request["action"].as_str(),
@@ -2331,7 +2341,6 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
             return json!({"status":"busy"});
         }
     }
-    let _ = install_workspace(app);
     let id = {
         let state = app.state::<Features>();
         let mut guard = state.0.lock().unwrap();
@@ -2360,6 +2369,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                     presentation,
                     document,
                     &id,
+                    &source,
                 )
                 .await
                 {
@@ -2674,6 +2684,7 @@ pub fn configure(
     let client = std::fs::read_to_string(app.path().resource_dir()?.join("features/client.js"))?;
     Ok(format!("if(window.top===window.self && location.origin === {} && !location.search) {{\n{client}\n}}",json!(origin)))
 }
+#[cfg(test)]
 fn workspace_capability(structured: bool) -> tauri::ipc::CapabilityBuilder {
     let capability = tauri::ipc::CapabilityBuilder::new("feature-workspace-metadata")
         .local(true)
@@ -2691,116 +2702,6 @@ fn workspace_capability(structured: bool) -> tauri::ipc::CapabilityBuilder {
     }
 }
 
-pub fn install_workspace(app: &tauri::AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    let Some(workspace) = app.get_window("main") else {
-        return Ok(());
-    };
-    {
-        let state = app.state::<Features>();
-        let mut guard = state.0.lock().unwrap();
-        if app.get_webview("feature-workspace").is_some() || guard.installing {
-            return Ok(());
-        }
-        guard.installing = true;
-    }
-    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
-        if !app.state::<Features>().0.lock().unwrap().chrome_capability {
-            app.add_capability(workspace_capability(crate::structured_agents::enabled()))?;
-            app.state::<Features>().0.lock().unwrap().chrome_capability = true;
-        }
-        let size = workspace
-            .inner_size()?
-            .to_logical::<f64>(workspace.scale_factor()?);
-        let view = workspace.add_child(
-            WebviewBuilder::new(
-                "feature-workspace",
-                WebviewUrl::External(CHROME_URL.parse()?),
-            )
-            .incognito(true)
-            .focused(false)
-            .disable_drag_drop_handler()
-            .on_navigation(|url| url.as_str() == CHROME_URL)
-            .on_new_window(|_, _| NewWindowResponse::Deny)
-            .on_download(|_, _| false)
-            .on_page_load(|view, payload| {
-                if payload.event() == tauri::webview::PageLoadEvent::Started {
-                    invalidate(view.app_handle(), view.label());
-                }
-            }),
-            tauri::LogicalPosition::new(0.0, 0.0),
-            size,
-        )?;
-        // Installing the view is not a request to cover the dashboard/preparation drawer.
-        view.hide()?;
-        // inner_size changes to the parent-window viewport after the first child is installed.
-        view.set_bounds(tauri::Rect {
-            position: tauri::LogicalPosition::new(0.0, 0.0).into(),
-            size: workspace
-                .inner_size()?
-                .to_logical::<f64>(workspace.scale_factor()?)
-                .into(),
-        })?;
-        Ok(())
-    })();
-    app.state::<Features>().0.lock().unwrap().installing = false;
-    if result.is_err() {
-        if let Some(view) = app.get_webview("feature-workspace") {
-            let _ = view.close();
-        }
-    }
-    result
-}
-pub fn on_window_event(window: &Window, event: &WindowEvent) {
-    if window.label() != "main" {
-        return;
-    }
-    match event {
-        WindowEvent::Focused(true) => {
-            let _ = install_workspace(window.app_handle());
-        }
-        WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
-            if let (Some(view), Ok(size), Ok(scale)) = (
-                window.app_handle().get_webview("feature-workspace"),
-                window.inner_size(),
-                window.scale_factor(),
-            ) {
-                let _ = view.set_bounds(tauri::Rect {
-                    position: tauri::LogicalPosition::new(0.0, 0.0).into(),
-                    size: size.to_logical::<f64>(scale).into(),
-                });
-            }
-        }
-        WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed => {
-            invalidate(window.app_handle(), "feature-workspace")
-        }
-        _ => {}
-    }
-}
-pub fn resource(app: &tauri::AppHandle, uri: &tauri::http::Uri) -> Option<(Vec<u8>, &'static str)> {
-    if uri.scheme_str() != Some("orqst-features")
-        || uri.host() != Some("local")
-        || uri.query().is_some()
-    {
-        return None;
-    }
-    let (file,mime) = match uri.path() {
-        "/logo.svg" => return Some((std::fs::read(app.path().resource_dir().ok()?.join("dashboard/brand/orqst-logo-dark.svg")).ok()?, "image/svg+xml")),
-        "/index.html" => {
-            let html = "<!doctype html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>ORQST</title><link rel=\"stylesheet\" href=\"workspace.css\"></head><body style=\"margin:0\"><div id=\"root\"></div><script src=\"workspace.js\"></script></body></html>";
-            let html = if crate::structured_agents::enabled() {
-                html.replace("<html>", "<html data-structured-agents>")
-            } else { html.into() };
-            return Some((html.into_bytes(), "text/html; charset=utf-8"));
-        }
-        "/workspace.js" => ("workspace.js","application/javascript; charset=utf-8"),
-        "/workspace.css" => ("workspace.css","text/css; charset=utf-8"),
-        _ => return None,
-    };
-    Some((
-        std::fs::read(app.path().resource_dir().ok()?.join("features").join(file)).ok()?,
-        mime,
-    ))
-}
 #[cfg(test)]
 mod tests {
     #[test]
@@ -3587,12 +3488,17 @@ mod tests {
             &studio,
             &json!({"action":"pane","command":"focus"})
         ));
-        assert!(!feature_action_source_allowed(
-            &studio,
-            &json!({"action":"pane","command":"close"})
-        ));
+        let close = json!({"action":"pane","command":"close"});
+        assert!(feature_action_source_allowed(&studio, &close));
+        assert!(!feature_action_source_allowed(&communication, &close));
         assert!(!feature_action_source_allowed(&studio, &json!({"action":"arrange"})));
         assert!(feature_action_source_allowed(CHROME_URL, &json!({"action":"arrange"})));
+        let mut frame = json!({"action":"arrange","layoutVersion":2,"chrome":{"top":45},
+            "panes":[{"slot":0,"rect":{"x":0,"y":32,"width":100,"height":100}}]});
+        assert!(feature_action_source_allowed(&studio, &frame));
+        assert!(!feature_action_source_allowed(&communication, &frame));
+        frame["panes"][0]["rect"] = Value::Null;
+        assert!(feature_action_source_allowed(&communication, &frame));
     }
 
     #[test]

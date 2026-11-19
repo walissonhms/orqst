@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { terminalNativeReplySchema } from '@orqst/protocol';
 import { createTerminalClient } from '../../desktop/src/terminal-client.js';
+import { awaitPreparedOpen } from './prepared-open.js';
 import { installCanvasEscape } from './terminal-escape.js';
 import {
   parseTerminalViewAction,
@@ -53,46 +54,46 @@ void invoke<TerminalLayoutState>('terminal_view', { action: 'layout' }).then((va
 });
 void import('../../desktop/src/managed-terminal-client.js').then(() => {
   if (document.querySelector<HTMLElement>('main')?.dataset.operationalOpen !== 'true') return;
-  let attempted = false;
-  let busy = false;
-  const open = async () => {
-    if (attempted || busy) return;
-    busy = true;
+  const main = document.querySelector<HTMLElement>('main');
+  const slot = Number(main?.dataset.slot);
+  let requested = false;
+  let live = true;
+  const openVisible = async () => {
+    if (requested || !live || !state?.visible.includes(slot)) return;
+    requested = true;
+    let value: unknown;
     try {
-      // Native holds the one-use intent and rechecks actual Webview focus. This
-      // call has no profile, path, authority or approval supplied by JavaScript.
-      const result = await invoke<{ attempted: boolean; value?: unknown }>(
-        'terminal_open_prepared',
+      value = await awaitPreparedOpen(
+        () => invoke<{ attempted: boolean; value?: unknown }>('terminal_open_prepared'),
+        () => new Promise((resolve) => window.setTimeout(resolve, 150)),
+        () => live,
       );
-      if (!result.attempted) return;
-      attempted = true;
-      const reply = terminalNativeReplySchema.safeParse(result.value);
-      window.dispatchEvent(
-        new CustomEvent('orqst-terminal-open', {
-          detail: reply.success ? reply.data : { status: 'denied' },
-        }),
-      );
+      if (value === undefined && live) {
+        const result = await invoke<{ attempted: boolean; value?: unknown }>(
+          'terminal_open_prepared',
+          { abandon: true },
+        );
+        value = result.value;
+      }
     } catch {
-      // An IPC failure is uncertain, never a reason to repeat opening on focus.
-      attempted = true;
-      window.dispatchEvent(
-        new CustomEvent('orqst-terminal-open', { detail: { status: 'denied' } }),
-      );
-    } finally {
-      busy = false;
+      // The dispatch result is unknown. Never replay the operation.
     }
+    if (!live) return;
+    const reply = terminalNativeReplySchema.safeParse(value);
+    window.dispatchEvent(
+      new CustomEvent('orqst-terminal-open', {
+        detail: reply.success ? reply.data : { status: 'unavailable' },
+      }),
+    );
   };
-  window.addEventListener('focus', () => void open());
-  void open();
-  // The view may already hold focus, or the focusing layout may be replaced, so no focus
-  // event arrives. Ask again each second until native consumes the intent (it expires in 60 s).
-  // An idle answer consumes nothing; native still checks the intent, focus and generation.
-  const started = Date.now();
-  const retry = window.setInterval(() => {
-    if (attempted || Date.now() - started > 60_000) {
-      window.clearInterval(retry);
-      return;
-    }
-    void open();
-  }, 1000);
+  listeners.add(openVisible);
+  window.addEventListener(
+    'pagehide',
+    () => {
+      live = false;
+      listeners.delete(openVisible);
+    },
+    { once: true },
+  );
+  void openVisible();
 });

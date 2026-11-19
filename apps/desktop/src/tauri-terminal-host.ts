@@ -444,8 +444,9 @@ async function start() {
           const mutable = !passiveFeatureRequest(message.request);
           const closedPane =
             message.request.action === 'pane' && message.request.command === 'close';
+          // Only the Rust native review path can forward a close on this private pipe.
           const closeReviewed =
-            closedPane && message.source === 'orqst-features://local/index.html';
+            closedPane && /^http:\/\/127\.0\.0\.1:\d{1,5}\/(?:studio)?$/.test(message.source);
           const actor = 'actorId' in message ? message.actorId : undefined;
           const nativeActorMatches = actor === undefined || actor === `native-${core.epoch}`;
           const allowed = nativeActorMatches && (!mutable || service.beginMetadata());

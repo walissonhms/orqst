@@ -73,7 +73,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![terminal::terminal_request, terminal::terminal_open_prepared, terminal::terminal_view, terminal::terminal_restore, agents::agents_request, files::file_request, features::feature_request, features::feature_prepare, features::feature_permissions, features::feature_structured_agents, terminal_creation::studio_request, features::diagnostic_note])
         .manage(terminal_creation::Preparation::default())
         .manage(offline_recovery::Recovery::default())
-        .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); features::on_window_event(window,event); agents::on_window_event(window,event); })
+        .on_window_event(|window,event| { offline_recovery::on_window_event(window,event); terminal_creation::on_window_event(window,event); agents::on_window_event(window,event); })
         .register_uri_scheme_protocol("orqst-recovery", |_, request| offline_recovery::response(&request))
         .register_uri_scheme_protocol("orqst-terminal", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
@@ -88,15 +88,6 @@ fn main() {
                 .header("X-Content-Type-Options", "nosniff")
                 .header("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
                 .body(body).expect("static terminal response")
-        })
-        .register_uri_scheme_protocol("orqst-features", |context, request| {
-            let resource = (request.method() == tauri::http::Method::GET)
-                .then(|| features::resource(context.app_handle(), request.uri())).flatten();
-            let (status,body,mime) = resource.map(|(b,m)|(200,b,m)).unwrap_or((404,Vec::new(),"text/plain"));
-            tauri::http::Response::builder().status(status).header("Content-Type",mime)
-                .header("Cache-Control","no-store").header("X-Content-Type-Options","nosniff")
-                .header("Content-Security-Policy","default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
-                .body(body).expect("static Feature response")
         })
         .register_uri_scheme_protocol("orqst-agents", |context, request| {
             let resource = (request.method() == tauri::http::Method::GET)
@@ -187,7 +178,6 @@ fn main() {
                 terminal::stop(app.handle());
                 eprintln!("ORQST managed terminal startup refused.");
             }
-            features::install_workspace(app.handle())?;
             if tauri::async_runtime::block_on(agents::start(app.handle())).is_err() {
                 agents::stop(app.handle());
                 eprintln!("ORQST managed agents startup refused.");

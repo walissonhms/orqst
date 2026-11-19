@@ -74,7 +74,7 @@ import {
   type PlacedPane,
   type Rect,
 } from './terminal-arrangement';
-import type { NativePaneLayout } from './studio-native';
+import { nativeChrome, type NativePaneLayout } from './studio-native';
 import { nativeHiddenTerminals } from './feature-workspace-dock';
 import { PaneMenu, type AccountOption, type PaneAction, type PaneActionType } from './PaneMenu';
 import { PaneCard } from './PaneCard';
@@ -193,6 +193,7 @@ interface Props {
    * any overlay would be covered by native views.
    */
   native?: {
+    dashboard?: boolean;
     onLayout: (layout: NativePaneLayout[], mode: ArrangementMode) => void;
     overlayOpen?: boolean;
   };
@@ -1047,9 +1048,12 @@ export function FeatureStudioStage({
       measure();
     }
     children.observe(document.body, { childList: true, subtree: true });
+    const dialogs = new MutationObserver(measure);
+    dialogs.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
     sync();
     return () => {
       children.disconnect();
+      dialogs.disconnect();
       changes.disconnect();
       resize.disconnect();
       cancelAnimationFrame(frame);
@@ -1070,10 +1074,14 @@ export function FeatureStudioStage({
       .closest('.ts-root')
       ?.querySelector('.ts-toolbar')
       ?.getBoundingClientRect();
-    const origin = {
-      left: root?.left ?? stage.getBoundingClientRect().left,
-      top: toolbar?.bottom ?? stage.getBoundingClientRect().top,
-    };
+    const chrome = native?.dashboard ? nativeChrome(false, window.innerWidth, 'v6') : undefined;
+    const origin = chrome
+      ? { left: chrome.sidebar, top: chrome.top }
+      : {
+          left: root?.left ?? stage.getBoundingClientRect().left,
+          top: toolbar?.bottom ?? stage.getBoundingClientRect().top,
+        };
+    const modalOpen = native?.dashboard && !!document.querySelector('dialog[open]');
     const overlays = native
       ? Array.from(document.querySelectorAll<HTMLElement>('[data-native-overlay]')).map((element) =>
           element.getBoundingClientRect(),
@@ -1103,9 +1111,10 @@ export function FeatureStudioStage({
       const hole = stage.querySelector<HTMLElement>(
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
       );
-      const box = hole?.hasAttribute('data-native-suspended')
-        ? undefined
-        : hole?.getBoundingClientRect();
+      const box =
+        byId.get(pane.id)?.cardState === 'failed' || hole?.hasAttribute('data-native-suspended')
+          ? undefined
+          : hole?.getBoundingClientRect();
       // Tiled modes may not overlap natively, and a null rect revokes the view (and its
       // pending opening). Keep the dragged view at its last sent place until it drops.
       if (
@@ -1133,6 +1142,7 @@ export function FeatureStudioStage({
         box && Math.min(box.bottom, canonical ? stageBox.top + stage.clientHeight : box.bottom);
       const rect =
         covered ||
+        modalOpen ||
         !box ||
         left === undefined ||
         top === undefined ||

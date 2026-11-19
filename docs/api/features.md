@@ -176,3 +176,12 @@ applying a late saved preference or changing process/input authority.
 Session activities, effective models, durations and parentage are not added to the
 native snapshot. The renderer explicitly displays their absence. No HTTP/WebSocket
 endpoint, cookie, Host/Origin/CSP or observer control surface is added or relaxed.
+
+### Main Studio PTY layout
+
+The packaged AppShell submits layout v2 with 45 px header and 33 px dock insets
+from its exact owned Studio document. Other approved dashboard documents may
+submit only hidden rectangles. Native checks the current main URL again before
+making a terminal body visible. The retained PTY children use their existing
+exact-document and signed operation paths. The legacy full-window Feature
+document is no longer installed by the Tauri Preview.

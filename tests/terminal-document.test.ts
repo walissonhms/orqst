@@ -116,14 +116,11 @@ test('only explicitly selected terminal documents opt into operational Open; leg
   assert.ok(selected.includes(en.managedTerminal.guide_openingIncomplete));
 });
 
-test('Studio documents omit pair guidance and start with silent status', () => {
+test('Studio documents leave pane actions to React and start with silent status', () => {
   assert.doesNotMatch(document(), /data-chrome="studio"/);
   const html = document({ studioChrome: true, operationalOpen: true });
   assert.match(html, /<main data-chrome="studio"/);
   assert.doesNotMatch(html, /<header|id="pane-menu"|id="guidance"|fresh pair/);
   assert.match(html, /id="status" hidden/);
-  for (const id of ['start', 'attach', 'input']) {
-    assert.equal(html.match(new RegExp(`id="${id}"`, 'g'))?.length, 1);
-  }
-  assert.ok(html.includes(en.managedTerminal.open));
+  assert.doesNotMatch(html, /id="(?:start|attach|input)"/);
 });

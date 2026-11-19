@@ -12,6 +12,7 @@ const listeners = new Set<() => void>();
 let cards: readonly TerminalOpenCard[] = [];
 const empty: readonly TerminalOpenCard[] = [];
 let consumers = 0;
+const openingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const emptyEvidence: ReadonlyMap<string, OwnedPaneEvidence> = new Map();
 let ownedEvidence = emptyEvidence;
 let retry: TerminalOpenCard | undefined;
@@ -57,6 +58,21 @@ export function finishTerminalOpens(
   outcomes: readonly TerminalBatchItem[],
 ) {
   const byId = new Map(outcomes.map((outcome) => [outcome.id, outcome]));
+  for (const outcome of outcomes) {
+    const terminalId = outcome.terminalId;
+    if (outcome.status !== 'accepted' || !terminalId || ownedEvidence.has(terminalId)) continue;
+    clearTimeout(openingTimers.get(terminalId));
+    openingTimers.set(
+      terminalId,
+      setTimeout(() => {
+        if (!ownedEvidence.has(terminalId))
+          updateTerminalOpenEvidence(terminalId, {
+            transport: 'connected',
+            process: 'open_unconfirmed',
+          });
+      }, 40_000),
+    );
+  }
   publish(
     cards.map((card) => {
       if (!ids.has(card.id)) return card;
@@ -71,6 +87,8 @@ export function finishTerminalOpens(
 
 /** Called with the matching Core/PTY observation, never simply on receipt of enrollment ACK. */
 export function updateTerminalOpenEvidence(terminalId: string, evidence: OwnedPaneEvidence) {
+  clearTimeout(openingTimers.get(terminalId));
+  openingTimers.delete(terminalId);
   const lifecycle = projectPaneLifecycle(evidence);
   ownedEvidence = new Map(ownedEvidence).set(terminalId, evidence);
   publish(
@@ -100,7 +118,9 @@ function receiveOwnedPtyEvidence(event: Event) {
     typeof terminalId !== 'string' ||
     !/^[0-9a-f-]{36}$/i.test(terminalId) ||
     evidence?.transport !== 'connected' ||
-    !['live', 'exited', 'uncertain'].includes(evidence.process) ||
+    !['live', 'exited', 'uncertain', 'open_refused', 'open_unconfirmed'].includes(
+      evidence.process,
+    ) ||
     typeof evidence.firstFrame !== 'boolean' ||
     (evidence.exitCode !== undefined && !Number.isSafeInteger(evidence.exitCode))
   )
