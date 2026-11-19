@@ -3,6 +3,7 @@ import type {
   FeatureNativeRequest,
   FeatureNativeSnapshot,
 } from '@orqst/protocol';
+import { terminalDisplayId } from './terminal-display.js';
 import type { WorkspacePane } from './feature-workspace-dock.js';
 import type { ArrangementMode } from './terminal-arrangement.js';
 import type { StudioTerminal } from './FeatureStudioStage.js';
@@ -35,9 +36,7 @@ export function studioTerminals(
   return snapshot.slots
     .filter((slot) => !slot.closed && members.includes(slot.terminalId))
     .map((slot) => {
-      const label =
-        selected?.terminalDisplays?.find(({ terminalId }) => terminalId === slot.terminalId)
-          ?.displayId ?? `T-${String(slot.slot + 1).padStart(3, '0')}`;
+      const label = terminalDisplayId(selected, slot.terminalId, slot.slot);
       // A display name the user gave wins; otherwise the CLI name, never the ID twice.
       const fallback = {
         codex: 'Codex',
@@ -70,13 +69,11 @@ export function studioTerminals(
               ? 'unknown'
               : entry.agentState === 'waiting_for_user'
                 ? 'waiting_for_user'
-                : entry?.agentState === 'failed'
+                : entry.agentState === 'failed'
                   ? 'failed'
-                  : entry?.agentState === 'running'
+                  : entry.agentState === 'running'
                     ? 'running'
-                    : entry?.state === 'running'
-                      ? 'ready'
-                      : 'unknown',
+                    : 'unknown',
         ...(entry?.session ? { sessionId: entry.session.sessionId } : {}),
         ...(entry?.activities ? { activity: entry.activities } : {}),
         ...(entry?.startedAt !== undefined && entry.state === 'running'

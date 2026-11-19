@@ -449,9 +449,11 @@ function FeatureDelegateAction({
       <button
         type="button"
         className="mc-delegate"
+        role="button"
         aria-haspopup="dialog"
-        disabled={!available || opening}
-        title={available ? undefined : t('mention.unavailable')}
+        aria-label={t('mention.delegate')}
+        aria-disabled={!available || opening}
+        title={t(available ? 'mention.delegate' : 'mention.unavailable')}
         onClick={() => void openDelegate()}
       >
         <span aria-hidden="true">↗</span> {t('mention.delegate')}

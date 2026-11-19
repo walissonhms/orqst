@@ -35,6 +35,10 @@ const snapshot = featureNativeSnapshotSchema.parse({
       description: '',
       status: 'active',
       terminalIds: [terminalId, otherId],
+      terminalDisplays: [
+        { terminalId, displayId: 'T-004' },
+        { terminalId: otherId, displayId: 'T-005' },
+      ],
       revision: 1,
       createdAt: 1,
       updatedAt: 1,
@@ -63,7 +67,7 @@ const turn = {
 test('live owned alerts require the same UUID and slot, and exclude completed turns', () => {
   const alert = ownedTurnNotification(turn, snapshot, now);
   assert.equal(alert?.kind, 'waiting_for_user');
-  assert.equal(alert?.target?.label, 'T-001');
+  assert.equal(alert?.target?.label, 'T-004');
   assert.equal(alert?.target?.featureId, featureId);
   assert.equal(
     ownedTurnNotification({ ...turn, category: 'failed' }, snapshot, now)?.kind,

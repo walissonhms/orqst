@@ -281,6 +281,7 @@ test('Metrics shows known limits, unknowns, and cache as a subset', async ({ pag
     .selectOption(secondFeatureId);
   const row = screen.getByRole('row', { name: /Claude.*fixture-sonnet/ });
   await expect(row.getByRole('cell')).toHaveText([
+    'T-002',
     'Claude',
     'fixture-sonnet',
     '100',

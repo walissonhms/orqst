@@ -1,4 +1,5 @@
 import type { FeatureNativeSnapshot } from '@orqst/protocol';
+import { terminalDisplayId } from './terminal-display.js';
 
 export type PermissionOperation = 'delegate' | 'execute' | 'view';
 export interface PermissionTerminal {
@@ -14,7 +15,7 @@ export interface PermissionRule {
 
 const OPERATIONS: PermissionOperation[] = ['delegate', 'execute', 'view'];
 
-/** Terminals assigned to the active Feature, labelled T-001 by their slot. */
+/** Terminals assigned to the active Feature, with their persisted display IDs. */
 export function permissionTerminals(
   snapshot: FeatureNativeSnapshot | undefined,
   featureId: string | null,
@@ -27,7 +28,7 @@ export function permissionTerminals(
       ? [
           {
             terminalId,
-            label: `T-${String(slot.slot + 1).padStart(3, '0')}`,
+            label: terminalDisplayId(feature, terminalId, slot.slot),
             provider: slot.provider,
           },
         ]

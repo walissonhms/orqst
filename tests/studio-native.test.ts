@@ -97,6 +97,11 @@ test('studio terminals use only evidenced snapshot facts', () => {
   assert.equal(terminals[1]!.lastActivity, 'Read');
   assert.equal(terminals[1]!.orchestrator, true);
   assert.equal(terminals[0]!.status, 'unknown', 'no turn evidence means unknown');
+  assert.equal(
+    terminals[1]!.cardState,
+    'unknown',
+    'completed turn history does not report prompt readiness',
+  );
   assert.equal(terminals[1]!.status, 'completed', 'evidenced Claude turn state is shown');
   const stale = studioTerminals(
     snapshot(),

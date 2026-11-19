@@ -1,3 +1,4 @@
+import { terminalDisplayId } from './terminal-display.js';
 import {
   communicationAuditSchema,
   ownedTurnAlertSchema,
@@ -95,12 +96,13 @@ function target(
 ): StudioAlert['target'] {
   const slot = snapshot.slots.find((entry) => entry.terminalId === terminalId);
   const feature = snapshot.features.find((entry) => entry.terminalIds.includes(terminalId));
-  if (!slot || (feature?.featureId ?? null) !== featureId) return undefined;
+  const label = terminalDisplayId(feature, terminalId, slot?.slot);
+  if (!label || (feature?.featureId ?? null) !== featureId) return undefined;
   return {
     featureId,
     terminalId,
     featureName: feature?.name ?? null,
-    label: `T-${String(slot.slot + 1).padStart(3, '0')}`,
+    label,
   };
 }
 

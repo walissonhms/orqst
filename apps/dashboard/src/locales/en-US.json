@@ -1240,6 +1240,7 @@
       "details": "Details and logs",
       "terminate": "End process",
       "closeQuestion": "Close {{label}}?",
+      "closeDescription": "Hide keeps it running. End stops it.",
       "hideView": "Hide",
       "emptyFeature": "No terminals in this Feature",
       "ending": "Ending…",

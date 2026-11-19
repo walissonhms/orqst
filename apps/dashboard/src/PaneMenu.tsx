@@ -7,7 +7,6 @@ import {
   ExternalLink,
   Info,
   Crown,
-  LayoutGrid,
   Minus,
   Settings,
   Square,
@@ -20,7 +19,6 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import type { StudioTerminal } from './FeatureStudioStage';
-import { studioArrangementModes, type ArrangementMode } from './terminal-arrangement';
 
 interface CanonicalPaneMenu {
   onRename?: () => void;
@@ -32,8 +30,6 @@ interface CanonicalPaneMenu {
   onDock?: () => void;
   onTerminate?: () => void;
   onRestart?: () => void;
-  mode: ArrangementMode;
-  onLayoutMode(mode: ArrangementMode): void;
 }
 
 /** Actions a pane menu can request. The host decides which ones exist today. */
@@ -96,7 +92,6 @@ export function PaneMenu({
   const button = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [layoutsOpen, setLayoutsOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const openChange = useRef(onOpenChange);
   openChange.current = onOpenChange;
@@ -114,7 +109,7 @@ export function PaneMenu({
           ? Math.max(8, rect.top - height - 6)
           : rect.bottom + 6,
     });
-  }, [open, !!v6, layoutsOpen]);
+  }, [open, !!v6]);
 
   useEffect(() => {
     if (!open) return;
@@ -169,16 +164,14 @@ export function PaneMenu({
         ref={button}
         type="button"
         className="ts-more"
+        role="button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t('terminalStudio.menu.open')}
         title={t('terminalStudio.menu.open')}
-        onClick={() => {
-          setLayoutsOpen(false);
-          setOpen(!open);
-        }}
+        onClick={() => setOpen(!open)}
       >
-        <MoreHorizontal size={15} />
+        <MoreHorizontal size={15} aria-hidden="true" />
       </button>
       {open &&
         createPortal(
@@ -200,7 +193,7 @@ export function PaneMenu({
                 event.preventDefault();
                 const items = [
                   ...(menu.current?.querySelectorAll<HTMLElement>(
-                    '[role="menuitem"]:not([disabled]), [role="menuitemradio"]',
+                    '[role="menuitem"]:not([disabled])',
                   ) ?? []),
                 ];
                 const index = items.indexOf(document.activeElement as HTMLElement);
@@ -238,45 +231,18 @@ export function PaneMenu({
                 )}
                 {item(null, <Minus size={15} />, t('studio.pane.hide'), v6.onHide)}
                 {item(null, <Square size={15} />, t('studio.pane.maximize'), onToggleMaximize)}
-                {item(
-                  null,
-                  <CopyPlus size={15} />,
-                  t('studio.pane.duplicateConfig'),
-                  v6.onDuplicate,
-                )}
+                {v6.onDuplicate &&
+                  item(
+                    null,
+                    <CopyPlus size={15} />,
+                    t('studio.pane.duplicateConfig'),
+                    v6.onDuplicate,
+                  )}
                 {item(null, <ExternalLink size={15} />, t('studio.pane.sendMessage'), v6.onMention)}
-                {item(null, <RefreshCw size={15} />, t('studio.pane.restart'), v6.onRestart)}
+                {v6.onRestart &&
+                  item(null, <RefreshCw size={15} />, t('studio.pane.restart'), v6.onRestart)}
                 {item(null, <Info size={15} />, t('studio.pane.details'), () =>
                   onAction({ type: 'details' }),
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="pm-item"
-                  aria-expanded={layoutsOpen}
-                  onClick={() => setLayoutsOpen((previous) => !previous)}
-                >
-                  <LayoutGrid size={15} aria-hidden="true" />
-                  <span>{t('studio.pane.layouts')}</span>
-                </button>
-                {layoutsOpen && (
-                  <div
-                    className="pm-arrangements"
-                    role="group"
-                    aria-label={t('studio.pane.layouts')}
-                  >
-                    {studioArrangementModes.map((mode) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={mode === v6.mode}
-                        onClick={run(() => v6.onLayoutMode(mode))}
-                      >
-                        {t(`terminalStudio.mode.${mode}`)}
-                      </button>
-                    ))}
-                  </div>
                 )}
                 <hr role="separator" />
                 {item(

@@ -60,6 +60,14 @@
   border: 1px solid var(--orqst-border, #262334);
 }
 
+.pane-lifecycle-ended-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: -2px -4px;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
 .pane-lifecycle-ended > ul > li > span {
   flex-wrap: wrap;
   min-width: 0;
@@ -76,10 +84,6 @@
   max-height: min(40vh, 22rem);
   overflow: auto;
   background: var(--orqst-panel, #090b10);
-}
-
-.pane-lifecycle-dock .saved-terminal-list > p {
-  display: none;
 }
 
 .pane-lifecycle-recovery {

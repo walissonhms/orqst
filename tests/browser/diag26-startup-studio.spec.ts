@@ -5,6 +5,7 @@ import {
   defaultFeatureId,
   type DesktopFeatures,
   type FeatureNativeSnapshot,
+  type FeatureNativeRequest,
   type StudioStartup,
   type TauriStudio,
 } from '@orqst/protocol';
@@ -47,9 +48,10 @@ function view(workspaceId: string, featureId: string | null) {
 
 async function installFixture(
   page: Page,
-  mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity',
+  mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity' | 'diag28',
   embedPtys = false,
 ) {
+  const diag28 = mode === 'diag28';
   const selected = {
     ...feature(workspaceId, featureId, 'Revisão'),
     terminalIds: [
@@ -59,7 +61,7 @@ async function installFixture(
       ...(mode === 'antigravity' ? [antigravityId] : []),
     ],
     terminalDisplays: [
-      { terminalId, displayId: 'T-001' },
+      { terminalId, displayId: diag28 ? 'T-004' : 'T-001' },
       { terminalId: uncertainId, displayId: 'T-002' },
       { terminalId: releasedId, displayId: 'T-003', released: true as const },
       ...(mode === 'antigravity' ? [{ terminalId: antigravityId, displayId: 'T-004' }] : []),
@@ -91,9 +93,15 @@ async function installFixture(
     activeFeatureId: featureId,
     features: [feature(workspaceId, generalId, 'General'), selected],
     view: view(workspaceId, featureId),
-    layoutSaved: true,
+    layoutSaved: !diag28,
     slots: [
-      { slot: 0, terminalId, provider: 'opencode', displayName: 'Backend' },
+      {
+        slot: 0,
+        terminalId,
+        ...(diag28
+          ? { provider: 'codex', displayName: 'Codex 1' }
+          : { provider: 'opencode', displayName: 'Backend' }),
+      },
       { slot: 1, terminalId: uncertainId, provider: 'codex', displayName: 'Investigar' },
       {
         slot: 2,
@@ -108,7 +116,7 @@ async function installFixture(
     ],
   };
   await page.addInitScript(
-    ({ mode, startup, live, modelId, releasedId, embedPtys }) => {
+    ({ mode, startup, live, modelId, releasedId, embedPtys, diag28 }) => {
       localStorage.setItem('i18nextLng', 'pt-BR');
       if (!localStorage.getItem('orqst.shell.v1'))
         localStorage.setItem(
@@ -133,12 +141,38 @@ async function installFixture(
             return { status: 'ok' };
           },
         }),
-        request: async () => {
-          if (mode !== 'live' && mode !== 'antigravity') return { status: 'unavailable' };
+        request: async (request: FeatureNativeRequest) => {
+          if (diag28 && request.action === 'pane' && request.command === 'close')
+            Reflect.set(window, 'diag28Close', request.terminalId);
+          if (mode !== 'live' && mode !== 'antigravity' && !diag28)
+            return { status: 'unavailable' };
           const at = Date.now();
           return {
             status: 'ok',
-            snapshot: live,
+            snapshot: structuredClone(live),
+            ...(request.action === 'inspector' && diag28
+              ? {
+                  inspector: {
+                    status: 'ok',
+                    featureId: live.activeFeatureId,
+                    recipients: [live.slots[0]?.terminalId],
+                    senders: [],
+                    rows: [
+                      {
+                        id: 'synthetic-message',
+                        to: live.slots[0]?.terminalId,
+                        from: 'owner',
+                        at,
+                        delivery: 'delivered',
+                        task: 'running',
+                        kind: 'message',
+                        text: 'Synthetic message',
+                      },
+                    ],
+                    audit: [],
+                  },
+                }
+              : {}),
             canvas: {
               observedAt: at,
               entries: live.slots.map(({ slot, terminalId }) => ({
@@ -196,6 +230,13 @@ async function installFixture(
                     },
                   ],
                 })),
+                ...(diag28
+                  ? {
+                      pendingOwnedExits: [
+                        { id: releasedId, principalCount: 1, code: 'owned_exit_pending' },
+                      ],
+                    }
+                  : {}),
                 reopenable: [
                   {
                     terminalId: releasedId,
@@ -209,7 +250,33 @@ async function installFixture(
             };
           if (request.action === 'create-batch')
             return new Promise((resolve) => {
-              Reflect.set(window, 'acceptDiag27Open', (terminalId: string) =>
+              Reflect.set(
+                window,
+                'diag28OpenNames',
+                request.requests.map(({ name }) => name),
+              );
+              Reflect.set(window, 'acceptDiag27Open', (terminalId: string) => {
+                if (diag28 && live.activeFeatureId) {
+                  const feature = live.features.find(
+                    ({ featureId }) => featureId === live.activeFeatureId,
+                  );
+                  const name = request.requests[0]?.name;
+                  live.slots.push({ slot: 3, terminalId, provider: 'codex', displayName: name });
+                  feature?.terminalIds.push(terminalId);
+                  feature?.terminalDisplays?.push({ terminalId, displayId: 'T-005' });
+                  live.generation++;
+                  window.dispatchEvent(
+                    new CustomEvent('orqst-feature-state', { detail: structuredClone(live) }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent('orqst-owned-pty-lifecycle', {
+                      detail: {
+                        terminalId,
+                        evidence: { transport: 'connected', process: 'live', firstFrame: true },
+                      },
+                    }),
+                  );
+                }
                 resolve({
                   status: 'batch',
                   items: request.requests.map(({ id }) => ({
@@ -220,8 +287,8 @@ async function installFixture(
                     reason: 'core_enrolled',
                     effects: 'possible',
                   })),
-                }),
-              );
+                });
+              });
               Reflect.set(window, 'refuseOpen', () =>
                 resolve({
                   status: 'batch',
@@ -238,7 +305,7 @@ async function installFixture(
         },
       });
     },
-    { mode, startup, live, modelId, releasedId, embedPtys },
+    { mode, startup, live, modelId, releasedId, embedPtys, diag28 },
   );
   await page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -453,4 +520,216 @@ test('a refused native open remains a failed Studio card with a retry action', a
   await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue(
     'Terminal recusado',
   );
+});
+
+test('diag28 renders the same stable terminal ID, accessible controls and live count', async ({
+  page,
+}) => {
+  await installFixture(page, 'diag28', true);
+  await page.goto('/studio');
+  const feature = page.getByRole('button', { name: 'Revisão', exact: true });
+  const pane = page.locator(`[data-pane-id="${terminalId}"]`);
+  const dot = pane.getByRole('img', { name: 'Sem sinal', exact: true });
+  await expect(feature).toHaveText(/Revisão\s*1/);
+  await expect(pane.locator('.ts-label')).toHaveText('T-004');
+  await expect(dot).toHaveAttribute('title', 'Sem sinal');
+  await expect(dot).toHaveCSS('background-color', 'rgb(129, 128, 149)');
+  await expect(page.getByRole('button', { name: 'Delegar', exact: true })).toBeEnabled();
+  const notice = page.getByRole('status').filter({ hasText: 'Layout não salvo' });
+  const summary = page.locator('.ts-summary');
+  const frame = () => page.evaluate(() => Reflect.get(window, 'diag27Layout'));
+  await expect(notice).toBeVisible();
+  await expect(summary).toContainText('1 terminal · Revisão');
+  await page.locator('main').focus();
+  await expect(page.locator('main')).toHaveCSS('outline-style', 'none');
+  await captureDiag28(page, 'studio', async () => {
+    const warningBox = (await notice.boundingBox())!;
+    const summaryBox = (await summary.boundingBox())!;
+    expect(warningBox.x + warningBox.width).toBeLessThan(summaryBox.x);
+  });
+
+  const menuTrigger = pane.getByRole('button', { name: 'Mais ações' });
+  await expect(menuTrigger).toHaveAttribute('title', 'Mais ações');
+  await menuTrigger.click();
+  const menu = page.getByRole('menu');
+  await expect(menu.getByRole('menuitem')).toHaveText([
+    'Configurações / renomear',
+    'Definir orquestrador',
+    'Tornar flutuante',
+    'Minimizar',
+    'Maximizar / restaurar',
+    'Enviar mensagem…',
+    'Detalhes e logs',
+    'Encerrar processo',
+  ]);
+  await page.keyboard.press('End');
+  await expect(menu.getByRole('menuitem', { name: 'Encerrar processo' })).toBeFocused();
+  await captureDiag28(page, 'pane-menu');
+  await page.keyboard.press('Escape');
+  await expect(menuTrigger).toBeFocused();
+
+  await pane.locator('.ts-close').click();
+  const close = page.getByRole('dialog', { name: 'Fechar T-004?' });
+  await expect(close.getByRole('button')).toHaveText(['Cancelar', 'Ocultar', 'Encerrar processo']);
+  await expect(close).toHaveAccessibleDescription(
+    'Ocultar mantém ativo. Encerrar para o processo.',
+  );
+  await expect(close.getByRole('button', { name: 'Ocultar' })).toBeFocused();
+  await expect.poll(frame).toMatchObject({
+    panes: expect.arrayContaining([
+      expect.objectContaining({
+        terminalId,
+        visible: true,
+        rect: expect.objectContaining({ height: expect.any(Number) }),
+      }),
+    ]),
+  });
+  await captureDiag28(page, 'close', async () => {
+    const box = (await close.boundingBox())!;
+    const danger = (await close.getByRole('button', { name: 'Encerrar processo' }).boundingBox())!;
+    const body = (await pane.locator('.ts-body').boundingBox())!;
+    expect(danger.x + danger.width).toBeLessThanOrEqual(box.x + box.width);
+    expect(body.y).toBeGreaterThan(box.y + box.height);
+  });
+  await page.keyboard.press('Escape');
+  await expect(close).toHaveCount(0);
+  await expect(pane.locator('.ts-close')).toBeFocused();
+  await pane.locator('.ts-close').click();
+  await close.getByRole('button', { name: 'Ocultar' }).click();
+  await expect(page.locator('.ts-chip').getByText('Codex 1')).toBeVisible();
+  expect(await page.evaluate(() => Reflect.has(window, 'diag28Close'))).toBe(false);
+  await page.locator('.ts-chip').getByText('Codex 1').click();
+  await pane.locator('.ts-close').click();
+  await close.getByRole('button', { name: 'Encerrar processo' }).click();
+  await expect.poll(() => page.evaluate(() => Reflect.get(window, 'diag28Close'))).toBe(terminalId);
+
+  const ended = page.getByRole('button', { name: 'Encerrados (2)' });
+  await expect(ended).toHaveAttribute('aria-expanded', 'false');
+  await ended.press('Space');
+  await expect(ended).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Estado incerto')).toBeVisible();
+  await captureDiag28(page, 'ended');
+
+  const search = page.getByRole('button', { name: 'Busca e comandos' });
+  await expect(search).toHaveAttribute('title', 'Buscar (⌘K)');
+  await search.click();
+  const palette = page.getByRole('dialog', { name: 'Busca e comandos' });
+  await palette.getByRole('textbox').fill('T-004');
+  await expect(palette.getByText('T-004 · Codex 1')).toBeVisible();
+  await captureDiag28(page, 'palette');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('link', { name: 'Visão geral', exact: true }).click();
+  await expect(page.getByRole('row', { name: /Revisão.*T-004.*Codex/ })).toBeVisible();
+  await captureDiag28(page, 'overview');
+  await page.getByRole('link', { name: 'Comunicação', exact: true }).click();
+  await expect(page.locator('.communication-path').getByText('T-004 Codex')).toBeVisible();
+  await captureDiag28(page, 'communication');
+  await page.getByRole('link', { name: 'Métricas', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Feature', exact: true }).selectOption(featureId);
+  await expect(page.getByRole('row', { name: /T-004.*Codex/ })).toBeVisible();
+  await captureDiag28(page, 'metrics');
+
+  await page.evaluate(
+    (terminalId) =>
+      window.dispatchEvent(
+        new CustomEvent('orqst-owned-turn-alert', {
+          detail: {
+            kind: 'owned-turn-alert',
+            contractVersion: 1,
+            terminalId,
+            epoch: '10000000-0000-4000-8000-000000000001',
+            turnId: '10000000-0000-4000-8000-000000000002',
+            slot: 0,
+            category: 'waiting_for_user',
+            observedAt: Date.now(),
+            silent: true,
+          },
+        }),
+      ),
+    terminalId,
+  );
+  const bell = page.getByRole('button', { name: 'Notificações', exact: true });
+  await expect(bell).toHaveAttribute('title', /Notificações/);
+  await bell.click();
+  const notifications = page.getByRole('dialog', { name: 'Notificações' });
+  await expect(notifications.getByRole('button', { name: /T-004.*Revisão/ })).toBeVisible();
+  await captureDiag28(page, 'notifications');
+  await page.keyboard.press('Escape');
+
+  await feature.click();
+  await expect(page).toHaveURL('/studio');
+  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  const create = page.getByRole('dialog', { name: 'Novo terminal' });
+  await expect(create.getByRole('textbox').first()).toBeVisible();
+  await expect(create.getByText(/Terminais salvos|Encerrados|recibo|descendentes/)).toHaveCount(0);
+  await captureDiag28(page, 'new-terminal');
+  await create.locator('button[type=submit]').click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, 'diag28OpenNames')))
+    .toEqual(['Codex 2']);
+  const starting = page.locator('.ts-pane').filter({ hasText: 'Codex 2' });
+  await expect(starting.getByRole('img', { name: 'Iniciando', exact: true })).toHaveCSS(
+    'background-color',
+    'rgb(129, 128, 149)',
+  );
+  await captureDiag28(page, 'second-codex');
+  await expect(feature).toHaveText(/Revisão\s*1/);
+  await page.evaluate(() =>
+    Reflect.get(window, 'acceptDiag27Open')('e75d4f83-d62e-4a74-950e-001ed1b735b7'),
+  );
+  await expect(feature).toHaveText(/Revisão\s*2/);
+  await expect(starting.locator('.ts-label')).toHaveText('T-005');
+  await captureDiag28(page, 'unique-live-codex');
+
+  await page.evaluate(
+    (terminalId) =>
+      window.dispatchEvent(
+        new CustomEvent('orqst-owned-pty-lifecycle', {
+          detail: {
+            terminalId,
+            evidence: { transport: 'connected', process: 'exited', firstFrame: false, exitCode: 0 },
+          },
+        }),
+      ),
+    terminalId,
+  );
+  await expect(feature).toHaveText(/Revisão\s*1/);
+  await expect(page).toHaveURL('/studio');
+});
+
+async function captureDiag28(page: Page, name: string, check?: () => Promise<void>) {
+  const output = process.env.ORQST_DIAG28_UI_CAPTURES;
+  for (const [width, height] of [
+    [1440, 900],
+    [1280, 800],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    if (check) await check();
+    if (output) {
+      await page.mouse.move(1, 1);
+      await page.screenshot({
+        animations: 'disabled',
+        path: join(output, `${width}x${height}`, name + '.png'),
+      });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+test('diag28 approved V6 browser references', async ({ page }) => {
+  test.skip(!process.env.ORQST_DIAG28_UI_CAPTURES, 'Capture-only visual reference');
+  const body = await readFile('docs/design/v6/source/ORQST_workspace_v6_features.html', 'utf8');
+  await page.route('**/diag28-v6-reference', (route) =>
+    route.fulfill({
+      contentType: 'text/html',
+      body,
+    }),
+  );
+  await page.goto('/diag28-v6-reference');
+  await captureDiag28(page, 'v6-studio');
+  await page.locator('.panehead button').filter({ hasText: '⋯' }).first().click();
+  await captureDiag28(page, 'v6-menu');
+  await page.locator('#add').click();
+  await captureDiag28(page, 'v6-new-terminal');
 });

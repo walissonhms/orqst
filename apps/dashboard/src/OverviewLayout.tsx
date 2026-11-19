@@ -105,9 +105,7 @@ export function OverviewLayout({
             ? 'ended'
             : reading?.agentState && reading.agentState !== 'unknown'
               ? reading.agentState
-              : reading?.state === 'running'
-                ? 'running'
-                : 'unknown';
+              : 'unknown';
         return [
           {
             featureId: feature.featureId,

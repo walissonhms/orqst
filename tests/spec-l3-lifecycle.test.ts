@@ -19,6 +19,7 @@ test('projects owned PTY and turn facts independently', () => {
     'waiting_for_user',
   );
   assert.equal(projectPaneLifecycle({ ...live, turn: 'running' }).state, 'running');
+  assert.deepEqual(projectPaneLifecycle({ ...live, turn: 'failed' }), { state: 'failed' });
   assert.equal(projectPaneLifecycle({ ...live, transport: 'lost' }).state, 'disconnected');
   assert.equal(projectPaneLifecycle({ ...live, process: 'exited', exitCode: 0 }).state, 'ended');
   assert.deepEqual(projectPaneLifecycle({ ...live, process: 'exited', exitCode: 23 }), {

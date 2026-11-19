@@ -4,6 +4,7 @@ import {
   useEffect,
   useLayoutEffect,
   useImperativeHandle,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -150,6 +151,7 @@ export interface StudioMessage {
 
 export interface StudioLayoutControls {
   toggleGrid(): void;
+  setMode(mode: ArrangementMode): void;
   restore(): void;
   placeTerminal(id: string, slot: number): void;
   focusTerminal(terminalId: string): void;
@@ -177,6 +179,7 @@ interface Props {
   terminals: StudioTerminal[];
   messages: StudioMessage[];
   recentMessage?: StudioMessage;
+  layoutUnsaved?: boolean;
   endingTerminal?: string;
   renderBody: (terminal: StudioTerminal) => ReactNode;
   onNewTerminal?: (slot?: number) => void;
@@ -416,6 +419,7 @@ export function FeatureStudioStage({
   terminals,
   messages,
   recentMessage,
+  layoutUnsaved,
   endingTerminal,
   renderBody,
   onNewTerminal,
@@ -443,6 +447,7 @@ export function FeatureStudioStage({
   reconciling = false,
 }: Props) {
   const { t } = useTranslation();
+  const closeDescriptionId = useId();
   const canonical = v6 !== undefined;
   const MaximizeIcon = canonical ? Square : Maximize2;
   const RestoreIcon = canonical ? SquareStack : Minimize2;
@@ -506,6 +511,8 @@ export function FeatureStudioStage({
     }
     setFocusRequest(undefined);
   }, [focusRequest]);
+  const setMode = (mode: ArrangementMode) =>
+    setState((current) => ({ ...current, mode, maximized: null }));
   useImperativeHandle(
     v6?.layoutControlsRef,
     () => ({
@@ -524,6 +531,7 @@ export function FeatureStudioStage({
           maximized: null,
           grid: undefined,
         })),
+      setMode,
       restore: () => {
         setState(restoreStudioLayout);
         setStack([]);
@@ -773,9 +781,6 @@ export function FeatureStudioStage({
   const bringToFront = useCallback((id: string) => {
     setStack((current) => [...current.filter((entry) => entry !== id), id]);
   }, []);
-
-  const setMode = (mode: ArrangementMode) =>
-    setState((current) => ({ ...current, mode, maximized: null }));
 
   const togglePaneMaximized = (id: string) => {
     stageRef.current?.scrollTo(0, 0);
@@ -1081,7 +1086,7 @@ export function FeatureStudioStage({
           left: root?.left ?? stage.getBoundingClientRect().left,
           top: toolbar?.bottom ?? stage.getBoundingClientRect().top,
         };
-    const modalOpen = native?.dashboard && !!document.querySelector('dialog[open]');
+    const modalOpen = native?.dashboard && !!document.querySelector('dialog:modal');
     const overlays = native
       ? Array.from(document.querySelectorAll<HTMLElement>('[data-native-overlay]')).map((element) =>
           element.getBoundingClientRect(),
@@ -1112,7 +1117,7 @@ export function FeatureStudioStage({
         `.ts-body[data-terminal-id="${CSS.escape(pane.id)}"]`,
       );
       const box =
-        byId.get(pane.id)?.cardState === 'failed' || hole?.hasAttribute('data-native-suspended')
+        byId.get(pane.id)?.lifecycle?.failure || hole?.hasAttribute('data-native-suspended')
           ? undefined
           : hole?.getBoundingClientRect();
       // Tiled modes may not overlap natively, and a null rect revokes the view (and its
@@ -1303,6 +1308,47 @@ export function FeatureStudioStage({
         </nav>
       )}
 
+      {/* Keep the confirmation above the stage so sibling PTY webviews can stay visible. */}
+      {closeTarget && byId.has(closeTarget.id) && (
+        <Modal
+          label={t('studio.pane.closeQuestion', { label: closeTarget.label })}
+          className="ts-close-dialog"
+          descriptionId={closeDescriptionId}
+          initialFocus=".ts-close-hide"
+          nonModal
+          onClose={() => setCloseTarget(undefined)}
+        >
+          <h2>{t('studio.pane.closeQuestion', { label: closeTarget.label })}</h2>
+          <p id={closeDescriptionId}>{t('studio.pane.closeDescription')}</p>
+          <div className="ts-close-options">
+            <button type="button" onClick={() => setCloseTarget(undefined)}>
+              {t('cancel')}
+            </button>
+            <button
+              type="button"
+              className="ts-close-hide"
+              onClick={() => {
+                setState((current) => minimize(current, closeTarget.id));
+                setCloseTarget(undefined);
+              }}
+            >
+              {t('studio.pane.hideView')}
+            </button>
+            <button
+              type="button"
+              className="ts-end-process"
+              disabled={closePending}
+              onClick={() => {
+                const id = closeTarget.id;
+                setCloseTarget(undefined);
+                onCloseTerminal?.(id);
+              }}
+            >
+              {t('studio.pane.terminate')}
+            </button>
+          </div>
+        </Modal>
+      )}
       <div
         ref={stageRef}
         className={`ts-stage ts-mode-${state.mode}${drag ? ' ts-dragging' : ''}`}
@@ -1594,10 +1640,8 @@ export function FeatureStudioStage({
                             : undefined,
                         onTerminate:
                           onCloseTerminal && !closePending && terminal.cardState !== 'ended'
-                            ? () => onCloseTerminal(pane.id)
+                            ? () => setCloseTarget(terminal)
                             : undefined,
-                        mode: state.mode,
-                        onLayoutMode: setMode,
                       }
                     }
                     terminal={terminal}
@@ -1854,43 +1898,6 @@ export function FeatureStudioStage({
           </div>
         </Modal>
       )}
-      {closeTarget && byId.has(closeTarget.id) && (
-        <Modal
-          label={t('studio.pane.closeQuestion', { label: closeTarget.label })}
-          className="mc-dialog"
-          onClose={() => setCloseTarget(undefined)}
-        >
-          <div data-native-overlay="">
-            <h2>{t('studio.pane.closeQuestion', { label: closeTarget.label })}</h2>
-            <div className="ts-close-options">
-              <button type="button" onClick={() => setCloseTarget(undefined)}>
-                {t('cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setState((current) => minimize(current, closeTarget.id));
-                  setCloseTarget(undefined);
-                }}
-              >
-                {t('studio.pane.hideView')}
-              </button>
-              <button
-                type="button"
-                className="ts-end-process"
-                onClick={() => {
-                  const id = closeTarget.id;
-                  setCloseTarget(undefined);
-                  onCloseTerminal?.(id);
-                }}
-              >
-                {t('studio.pane.terminate')}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
       <footer
         className="ts-dock"
         aria-label={canonical ? t('dock.title') : t('terminalStudio.dock')}
@@ -1933,6 +1940,11 @@ export function FeatureStudioStage({
             <AtSign size={13} />
             {t('terminalStudio.mention.open')}
           </button>
+        )}
+        {canonical && layoutUnsaved && (
+          <span className="ts-layout-warning" role="status" title={t('features.layoutUnsaved')}>
+            {t('features.layoutUnsaved')}
+          </span>
         )}
         {canonical ? (
           <span className="ts-summary">

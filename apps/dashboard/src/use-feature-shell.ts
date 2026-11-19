@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FeatureNativeRequest, FeatureNativeSnapshot, StudioStartup } from '@orqst/protocol';
 import { workspacePanes, type WorkspacePane } from './feature-workspace-dock';
 
@@ -45,12 +45,12 @@ export function useFeatureShell(inspectingCommunication = false) {
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
 
-  function apply(incoming: FeatureNativeSnapshot) {
+  const apply = useCallback((incoming: FeatureNativeSnapshot) => {
     if (!latest.current || incoming.generation >= latest.current.generation) {
       latest.current = incoming;
       setSnapshot(incoming);
     }
-  }
+  }, []);
   useEffect(() => {
     if (!native) return;
     let live = true;
@@ -72,7 +72,7 @@ export function useFeatureShell(inspectingCommunication = false) {
       window.removeEventListener('orqst-feature-state', update);
       window.removeEventListener('orqst-terminal-dock', dock);
     };
-  }, [native, inspectingCommunication]);
+  }, [native, inspectingCommunication, apply]);
 
   async function request(action: ShellRequest) {
     if (!native || !latest.current || pending.current) return undefined;
@@ -118,6 +118,7 @@ export function useFeatureShell(inspectingCommunication = false) {
   return {
     native,
     snapshot,
+    observeSnapshot: apply,
     panes,
     busy,
     loading,

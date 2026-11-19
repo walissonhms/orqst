@@ -53,6 +53,8 @@ import { CommunicationInspector } from './CommunicationInspector';
 import { AppShell } from './AppShell';
 import { ShellSidebar, type FeatureOperation } from './ShellSidebar';
 import { studioTerminals } from './studio-native';
+import { openFeatureTerminalIds } from './feature-counts';
+import { useOwnedPaneEvidence } from './use-terminal-lifecycle';
 import { Workspaces } from './Workspaces';
 import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayout, type StudioCardTarget } from './OverviewLayout';
@@ -536,6 +538,7 @@ export function App() {
   }, []);
   const featureShell = useFeatureShell(view === 'communication');
   const liveSnapshot = featureShell.snapshot;
+  const paneEvidence = useOwnedPaneEvidence();
   const [studioCanvas, setStudioCanvas] = useState<{
     workspaceId: string;
     canvas: FeatureCanvasEvidence;
@@ -980,6 +983,8 @@ export function App() {
   const unreadCount = managedShell ? ownedUnread : unread;
   const notificationControl = (
     <button
+      type="button"
+      role="button"
       className="shell-icon shell-bell"
       title={
         managedShell
@@ -1018,18 +1023,10 @@ export function App() {
   const coreConnection = offline ? 'offline' : connection;
   const featureWritable =
     usingLiveWorkspace && coreConnection !== 'offline' && !quitFence && !featureShell.busy;
-  const openSlots = new Set(
-    studioCanvas?.workspaceId === featureSnapshot?.workspace.id
-      ? studioCanvas?.canvas.entries
-          .filter(
-            ({ slot, terminalId, state }) =>
-              state === 'running' &&
-              featureSnapshot?.slots.some(
-                (entry) => entry.slot === slot && entry.terminalId === terminalId && !entry.closed,
-              ),
-          )
-          .map(({ terminalId }) => terminalId)
-      : [],
+  const openSlots = openFeatureTerminalIds(
+    featureSnapshot,
+    studioCanvas?.workspaceId === featureSnapshot?.workspace.id ? studioCanvas?.canvas : undefined,
+    paneEvidence,
   );
   const managedFeatures = features.filter((feature) => feature.status !== 'archived');
 
@@ -1230,6 +1227,7 @@ export function App() {
           onPreparationHandled={() => setPreparationRequest(undefined)}
           savedStudio={savedStudio}
           onSavedMetadataChange={featureShell.retryStartup}
+          onSnapshot={featureShell.observeSnapshot}
           onCanvas={setStudioCanvas}
           workspaces={managedWorkspace ? [managedWorkspace] : []}
           workspaceId={managedWorkspace?.id}

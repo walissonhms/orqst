@@ -1240,6 +1240,7 @@
       "details": "Detalhes e logs",
       "terminate": "Encerrar processo",
       "closeQuestion": "Fechar {{label}}?",
+      "closeDescription": "Ocultar mantém ativo. Encerrar para o processo.",
       "hideView": "Ocultar",
       "emptyFeature": "Nenhum terminal nesta Feature",
       "ending": "Encerrando…",

@@ -8,7 +8,7 @@ import {
   toggleOperation,
 } from '../apps/dashboard/src/feature-permissions-matrix.js';
 
-test('terminals are the Feature members labelled by slot', () => {
+test('legacy Features without display IDs keep their slot labels', () => {
   const snapshot = {
     features: [{ featureId: 'f', terminalIds: ['a', 'b'] }],
     slots: [
@@ -20,6 +20,22 @@ test('terminals are the Feature members labelled by slot', () => {
   assert.deepEqual(permissionTerminals(snapshot, 'f'), [
     { terminalId: 'a', label: 'T-001', provider: 'codex' },
     { terminalId: 'b', label: 'T-004', provider: 'claude' },
+  ]);
+});
+
+test('explicit Feature display IDs win over reused slots', () => {
+  const snapshot = {
+    features: [
+      {
+        featureId: 'f',
+        terminalIds: ['a'],
+        terminalDisplays: [{ terminalId: 'a', displayId: 'T-004' }],
+      },
+    ],
+    slots: [{ slot: 0, terminalId: 'a', provider: 'codex' }],
+  } as never;
+  assert.deepEqual(permissionTerminals(snapshot, 'f'), [
+    { terminalId: 'a', label: 'T-004', provider: 'codex' },
   ]);
 });
 
