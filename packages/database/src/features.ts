@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import {
   DEFAULT_FEATURE_NAME,
   defaultFeatureId,
@@ -24,17 +24,19 @@ export function openFeatures(
   db: DatabaseSync,
   transaction: <T>(action: () => T) => T,
   now = Date.now,
+  readOnly = false,
 ) {
-  transaction(() => {
-    db.exec(`CREATE TABLE IF NOT EXISTS feature_configuration_schema (
+  if (!readOnly)
+    transaction(() => {
+      db.exec(`CREATE TABLE IF NOT EXISTS feature_configuration_schema (
       singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL
     ); INSERT OR IGNORE INTO feature_configuration_schema VALUES (1,1);`);
-    if (
-      db.prepare('SELECT version FROM feature_configuration_schema WHERE singleton=1').get()
-        ?.version !== 1
-    )
-      throw new Error('Unsupported feature configuration schema');
-    db.exec(`CREATE TABLE IF NOT EXISTS features (
+      if (
+        db.prepare('SELECT version FROM feature_configuration_schema WHERE singleton=1').get()
+          ?.version !== 1
+      )
+        throw new Error('Unsupported feature configuration schema');
+      db.exec(`CREATE TABLE IF NOT EXISTS features (
       id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
       description TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL,
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
@@ -52,28 +54,36 @@ export function openFeatures(
     ); CREATE TABLE IF NOT EXISTS feature_configuration_events (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT, metadata TEXT NOT NULL CHECK(json_valid(metadata))
     );`);
-    // Import unlabelled memberships in persisted assignment order. Allocate after
-    // existing ordinals, including terminals already removed from the Feature.
-    db.exec(`INSERT INTO feature_terminal_displays (terminal_id,workspace_id,ordinal)
+      // Import unlabelled memberships in persisted assignment order. Allocate after
+      // existing ordinals, including terminals already removed from the Feature.
+      db.exec(`INSERT INTO feature_terminal_displays (terminal_id,workspace_id,ordinal)
       SELECT a.terminal_id,f.workspace_id,
         ROW_NUMBER() OVER (PARTITION BY f.workspace_id ORDER BY a.rowid) +
         COALESCE((SELECT MAX(d.ordinal) FROM feature_terminal_displays d WHERE d.workspace_id=f.workspace_id),0)
       FROM feature_terminal_assignments a JOIN features f ON f.id=a.feature_id
       LEFT JOIN feature_terminal_displays d ON d.terminal_id=a.terminal_id
       WHERE d.terminal_id IS NULL;`);
-  });
-  transaction(() => {
-    db.exec(`CREATE TABLE IF NOT EXISTS feature_view_schema (
+    });
+  if (!readOnly)
+    transaction(() => {
+      db.exec(`CREATE TABLE IF NOT EXISTS feature_view_schema (
       singleton INTEGER PRIMARY KEY CHECK(singleton=1), version INTEGER NOT NULL
     ); INSERT OR IGNORE INTO feature_view_schema VALUES (1,1);`);
-    if (
-      db.prepare('SELECT version FROM feature_view_schema WHERE singleton=1').get()?.version !== 1
-    )
-      throw new Error('Unsupported feature view schema');
-    db.exec(`CREATE TABLE IF NOT EXISTS feature_views (
+      if (
+        db.prepare('SELECT version FROM feature_view_schema WHERE singleton=1').get()?.version !== 1
+      )
+        throw new Error('Unsupported feature view schema');
+      db.exec(`CREATE TABLE IF NOT EXISTS feature_views (
       workspace_id TEXT PRIMARY KEY, feature_id TEXT REFERENCES features(id), revision INTEGER NOT NULL
     );`);
-  });
+    });
+  if (
+    readOnly &&
+    (db.prepare('SELECT version FROM feature_configuration_schema WHERE singleton=1').get()
+      ?.version !== 1 ||
+      db.prepare('SELECT version FROM feature_view_schema WHERE singleton=1').get()?.version !== 1)
+  )
+    throw new Error('Unsupported Feature metadata schema');
   const readView = (workspaceId: string) => {
     featureScopeSchema.shape.workspaceId.parse(workspaceId);
     const row = db.prepare('SELECT * FROM feature_views WHERE workspace_id=?').get(workspaceId);
@@ -260,6 +270,11 @@ export function openFeatures(
   return {
     read,
     readView,
+    workspaceIds: () =>
+      db
+        .prepare('SELECT workspace_id FROM features GROUP BY workspace_id ORDER BY min(rowid)')
+        .all()
+        .map(({ workspace_id }) => featureScopeSchema.shape.workspaceId.parse(workspace_id)),
     readAssignmentScope: (workspaceId: string) =>
       transaction(() => {
         const view = readView(workspaceId);
@@ -592,4 +607,22 @@ export function openFeatures(
         );
     },
   };
+}
+
+/** The file has already been checked by the private preferences owner. */
+export function readStudioFeatures(file: string) {
+  const db = new DatabaseSync(file, { readOnly: true });
+  try {
+    db.exec('PRAGMA query_only=ON; PRAGMA busy_timeout=1000; BEGIN;');
+    if (!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='features'").get())
+      return [];
+    const features = openFeatures(db, (action) => action(), Date.now, true);
+    return features.workspaceIds().map((id) => ({
+      id,
+      features: features.list(id),
+      view: features.readView(id),
+    }));
+  } finally {
+    db.close();
+  }
 }

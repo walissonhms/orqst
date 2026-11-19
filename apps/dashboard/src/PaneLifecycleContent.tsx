@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PaneLifecycle } from './terminal-lifecycle.js';
 import './pane-lifecycle.css';
@@ -20,6 +21,7 @@ export function PaneLifecycleContent({
   onViewLogs,
   onCancel,
   onReconnect,
+  details,
 }: {
   lifecycle: PaneLifecycle;
   onRetry?: () => void;
@@ -27,6 +29,7 @@ export function PaneLifecycleContent({
   onViewLogs?: () => void;
   onCancel?: () => void;
   onReconnect?: () => void;
+  details?: ReactNode;
 }) {
   const { t } = useTranslation();
   if (lifecycle.state === 'starting')
@@ -34,7 +37,7 @@ export function PaneLifecycleContent({
       <div className="pane-lifecycle-content">
         <PaneLifecycleStatus lifecycle={lifecycle} />
         {onCancel && (
-          <button type="button" onClick={onCancel}>
+          <button className="button" type="button" onClick={onCancel}>
             {t('features.cancel')}
           </button>
         )}
@@ -45,7 +48,7 @@ export function PaneLifecycleContent({
       <div className="pane-lifecycle-content">
         <PaneLifecycleStatus lifecycle={lifecycle} />
         {onReconnect && (
-          <button type="button" onClick={onReconnect}>
+          <button className="button" type="button" onClick={onReconnect}>
             {t('paneLifecycle.reconnect')}
           </button>
         )}
@@ -55,10 +58,11 @@ export function PaneLifecycleContent({
   if (lifecycle.state !== 'failed' || !failure) return null;
   return (
     <div className="pane-lifecycle-content" role="alert">
+      <PaneLifecycleStatus lifecycle={lifecycle} />
       <p>{t(`paneLifecycle.failure.${failure.reason}`, { exitCode: failure.exitCode })}</p>
       <div className="pane-lifecycle-actions">
         {onRetry && (
-          <button type="button" disabled={!failure.retryable} onClick={onRetry}>
+          <button className="button" type="button" disabled={!failure.retryable} onClick={onRetry}>
             {t(
               failure.reason === 'cli_review_required'
                 ? 'studio.cliReview.action'
@@ -67,16 +71,22 @@ export function PaneLifecycleContent({
           </button>
         )}
         {onChangeCli && failure.reason !== 'cli_review_required' && (
-          <button type="button" disabled={!failure.retryable} onClick={onChangeCli}>
+          <button
+            className="button"
+            type="button"
+            disabled={!failure.retryable}
+            onClick={onChangeCli}
+          >
             {t('paneLifecycle.changeCli')}
           </button>
         )}
         {onViewLogs && (
-          <button type="button" onClick={onViewLogs}>
+          <button className="button" type="button" onClick={onViewLogs}>
             {t('paneLifecycle.viewLogs')}
           </button>
         )}
       </div>
+      {details}
     </div>
   );
 }

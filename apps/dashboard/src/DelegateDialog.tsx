@@ -17,6 +17,7 @@ export function DelegateDialog({
   from: initialFrom,
   to: initialTo,
   otherFeatures,
+  hasAntigravity,
   senders,
   onSend,
   onClose,
@@ -25,6 +26,7 @@ export function DelegateDialog({
   from?: string | null;
   to?: string;
   otherFeatures?: boolean;
+  hasAntigravity?: boolean;
   senders?: readonly string[];
   onSend: (from: string | null, to: string, text: string) => Promise<string | undefined>;
   onClose: () => void;
@@ -165,7 +167,7 @@ export function DelegateDialog({
             {!options.length && <p className="delegate-hint">{t('communication.noTargets')}</p>}
           </fieldset>
         )}
-        {terminals.some(({ provider }) => provider === 'antigravity') && (
+        {(hasAntigravity ?? terminals.some(({ provider }) => provider === 'antigravity')) && (
           <p className="delegate-hint">{t('communication.antigravity')}</p>
         )}
         <label htmlFor={messageId}>

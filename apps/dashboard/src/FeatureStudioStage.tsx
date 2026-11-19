@@ -201,6 +201,7 @@ interface Props {
   showToolbar?: boolean;
   /** Extra guidance under the empty state (e.g. terminals in another Feature). */
   emptyHint?: ReactNode;
+  reconciling?: boolean;
   /** Host scope switcher shown after the start controls (e.g. Feature tabs). */
   toolbarScopes?: ReactNode;
   /** Host controls shown just before New terminal (e.g. account limits). */
@@ -438,6 +439,7 @@ export function FeatureStudioStage({
   toolbarEnd,
   dockEnd,
   emptyHint,
+  reconciling = false,
 }: Props) {
   const { t } = useTranslation();
   const canonical = v6 !== undefined;
@@ -560,7 +562,20 @@ export function FeatureStudioStage({
     return () => window.clearInterval(timer);
   }, [fixedNow]);
 
-  useEffect(() => setState((current) => reconcile(current, terminals)), [terminals]);
+  const wasReconciling = useRef(reconciling);
+  useEffect(() => {
+    if (reconciling) {
+      wasReconciling.current = true;
+      setState((current) => reconcile(current, terminals));
+      return;
+    }
+    if (wasReconciling.current) {
+      wasReconciling.current = false;
+      setState(initialState(storageKey, terminals, canonical));
+      return;
+    }
+    setState((current) => reconcile(current, terminals));
+  }, [terminals, reconciling, storageKey, canonical]);
   const nativeActiveId = terminals.find((terminal) => terminal.active)?.id;
   const nativeHidden = useRef(new Set<string>());
   useEffect(() => {
@@ -582,7 +597,8 @@ export function FeatureStudioStage({
       setState(initialState(storageKey, terminals, canonical));
       return;
     }
-    saveState(storageKey, { ...localState, active: activePane, closedEnded: [...closedEnded] });
+    if (!reconciling && !wasReconciling.current)
+      saveState(storageKey, { ...localState, active: activePane, closedEnded: [...closedEnded] });
     // terminals is read only when the key changes; reconcile handles later changes.
   }, [storageKey, localState, activePane, closedEnded]);
 
@@ -1285,18 +1301,19 @@ export function FeatureStudioStage({
         onPointerCancel={() => setDrag(null)}
         onScroll={native ? () => setOverlayTick((tick) => tick + 1) : undefined}
       >
-        {viewState.panes.length === 0 && (
-          <div className="ts-empty">
-            <p>{t(canonical ? 'studio.pane.emptyFeature' : 'terminalStudio.empty')}</p>
-            {emptyHint}
-            {onNewTerminal && (
-              <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
-                {!canonical && <Plus size={15} />}
-                {t(canonical ? 'feature.addTerminal' : 'terminalStudio.newTerminal')}
-              </button>
-            )}
-          </div>
-        )}
+        {viewState.panes.length === 0 &&
+          (!canonical || !onNewTerminal || !!emptyHint || !dockGeometry) && (
+            <div className="ts-empty">
+              <p>{t(canonical ? 'studio.pane.emptyFeature' : 'terminalStudio.empty')}</p>
+              {emptyHint}
+              {onNewTerminal && (
+                <button type="button" className="ts-primary" onClick={() => onNewTerminal()}>
+                  {!canonical && <Plus size={15} />}
+                  {t(canonical ? 'feature.addTerminal' : 'terminalStudio.newTerminal')}
+                </button>
+              )}
+            </div>
+          )}
         {!canonical && terminals.length > 0 && visibleCount === 0 && (
           <div className="ts-empty">
             <p>{t('terminalStudio.allMinimized')}</p>
@@ -1308,7 +1325,7 @@ export function FeatureStudioStage({
 
         {dockGeometry &&
           !scoped.maximized &&
-          scoped.panes.length > 0 &&
+          (scoped.panes.length > 0 || (canonical && onNewTerminal && !emptyHint)) &&
           dockGeometry.slots.map((rect, slot) =>
             placed.some((pane) => !pane.floating && pane.z === slot) ? null : (
               <button
@@ -1367,6 +1384,7 @@ export function FeatureStudioStage({
               }}
               aria-label={`${terminal.label} ${terminal.name}`}
               data-pane-id={pane.id}
+              tabIndex={canonical ? -1 : undefined}
               onPointerDown={() => {
                 if (state.mode === 'free' || pane.floating) bringToFront(pane.id);
                 if (canonical) setActivePane(pane.id);

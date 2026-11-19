@@ -8,18 +8,18 @@ import {
   realpathSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import { Store } from '@orqst/database';
+import { Store, readStudioFeatures } from '@orqst/database';
 import type { TerminalLayoutRecord } from '@orqst/protocol';
 import { terminalDirectory } from './codex-profile.js';
 
-/** Core-only visual metadata writer; never opens an execution journal or claims ownership. */
-export function withTerminalPreferences<T>(userData: string, action: (store: Store) => T): T {
+function checkedPreferencesFile(userData: string, readOnly: boolean) {
   const directory = join(realpathSync(userData), 'terminal-layouts');
-  try {
-    mkdirSync(directory, { mode: 0o700 });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
-  }
+  if (!readOnly)
+    try {
+      mkdirSync(directory, { mode: 0o700 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
   const file = join(directory, 'preferences.sqlite');
   const checkFile = (path: string) => {
     try {
@@ -46,8 +46,34 @@ export function withTerminalPreferences<T>(userData: string, action: (store: Sto
     }
   };
 
+  try {
+    lstatSync(directory);
+  } catch (error) {
+    if (readOnly && (error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
   terminalDirectory(directory, true);
   for (const suffix of ['', '-wal', '-shm', '-journal']) checkFile(file + suffix);
+  return file;
+}
+
+/** Read durable metadata without migrating preferences or claiming terminal ownership. */
+export function readStudioFeatureTree(userData: string) {
+  const file = checkedPreferencesFile(userData, true);
+  if (!file) return [];
+  try {
+    lstatSync(file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+  return readStudioFeatures(file);
+}
+
+/** Core-only visual metadata writer; never opens an execution journal or claims ownership. */
+export function withTerminalPreferences<T>(userData: string, action: (store: Store) => T): T {
+  const file = checkedPreferencesFile(userData, false);
+  if (!file) throw new Error('Layout database unavailable');
   try {
     const fd = openSync(
       file,

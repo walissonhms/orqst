@@ -122,3 +122,19 @@ Structured snapshots may include a session `usage` with `usageKind` set to
 may include its USD estimate with `source: "opencode_estimate"`. Bound Claude PTY
 canvas entries may supply a normalized usage total. For the source and coverage
 of each projection, see [token accounting](../architecture/data-model.md#token-accounting).
+
+### Startup metadata and CLI detection
+
+The main renderer may request `{ action: 'startup' }` or
+`{ action: 'discovery' }` without native focus. Startup returns
+`{ status: 'startup', startup: { workspaces } }` from the private Feature tree,
+including each Workspace's saved Feature view. A failed or unsupported read
+returns an unavailable/refused status. An empty successful tree is distinct
+from either failure. Discovery returns `{ status: 'discovery', clis }` with
+passive executable detection for onboarding. It carries neither an
+installation path nor a launch choice.
+
+The existing scoped catalog also works without focus. All passive reads retain
+the main document and presentation checks and accept no interactive responses
+from the helper. Existing focus, selection review and authorization checks
+still govern operations that edit configuration or open a process.

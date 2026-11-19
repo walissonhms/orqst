@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FeatureNativeRequest, FeatureNativeSnapshot } from '@orqst/protocol';
+import type { FeatureNativeRequest, FeatureNativeSnapshot, StudioStartup } from '@orqst/protocol';
 import { workspacePanes, type WorkspacePane } from './feature-workspace-dock';
 
 type ShellRequest =
@@ -11,6 +11,33 @@ type ShellRequest =
 /** The Core owns workspace scope, membership and terminal identity. */
 export function useFeatureShell(inspectingCommunication = false) {
   const native = window.orqstFeatures?.contractVersion === 1 ? window.orqstFeatures : undefined;
+  const studio =
+    window.orqstTauriStudio?.contractVersion === 1 ? window.orqstTauriStudio : undefined;
+  const [startup, setStartup] = useState<StudioStartup>();
+  const [startupPending, setStartupPending] = useState(Boolean(studio));
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  useEffect(() => {
+    if (!studio) return;
+    let active = true;
+    // Let the shell settle '/' to '/studio' before native captures the document URL.
+    void Promise.resolve()
+      .then(() => (active ? studio.request({ action: 'startup' }) : undefined))
+      .then((reply) => {
+        if (active && reply?.status === 'startup') setStartup(reply.startup);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setStartupPending(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [studio, startupAttempt]);
+  function retryStartup() {
+    setStartupPending(true);
+    setStartupAttempt((value) => value + 1);
+  }
+
   const [snapshot, setSnapshot] = useState<FeatureNativeSnapshot>();
   const latest = useRef<FeatureNativeSnapshot | undefined>(undefined);
   const [panes, setPanes] = useState<WorkspacePane[]>([]);
@@ -88,5 +115,17 @@ export function useFeatureShell(inspectingCommunication = false) {
       'ok'
     );
   }
-  return { native, snapshot, panes, busy, loading, request, select, focusTerminal };
+  return {
+    native,
+    snapshot,
+    panes,
+    busy,
+    loading,
+    request,
+    select,
+    focusTerminal,
+    startup,
+    startupPending,
+    retryStartup,
+  };
 }

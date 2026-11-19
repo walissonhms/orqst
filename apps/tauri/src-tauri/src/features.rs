@@ -678,6 +678,10 @@ pub(crate) fn valid_terminal_displays(value: &Value) -> bool {
 }
 
 pub(crate) fn valid_snapshot(v: &Value) -> bool {
+    valid_snapshot_shape(v, false)
+}
+
+pub(crate) fn valid_snapshot_shape(v: &Value, allow_empty_slots: bool) -> bool {
     if !exact(
         v,
         &[
@@ -719,7 +723,7 @@ pub(crate) fn valid_snapshot(v: &Value) -> bool {
     let (Some(features), Some(slots)) = (v["features"].as_array(), v["slots"].as_array()) else {
         return false;
     };
-    if features.len() > 1024 || slots.is_empty() || slots.len() > 8 {
+    if features.len() > 1024 || (!allow_empty_slots && slots.is_empty()) || slots.len() > 8 {
         return false;
     }
     let mut feature_ids = HashSet::new();

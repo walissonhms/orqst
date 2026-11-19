@@ -122,6 +122,7 @@ export function useTerminalLifecycle(
   workspaceId: string,
   featureId: string | null,
   native?: TauriStudio,
+  catalogFeatureId = featureId,
 ) {
   const current = useSyncExternalStore(
     subscribe,
@@ -139,12 +140,14 @@ export function useTerminalLifecycle(
   useEffect(() => {
     if (!native || !workspaceId) return;
     const refresh = () => {
-      void loadTerminalCatalog(native, { workspaceId, featureId }).catch(() => undefined);
+      void loadTerminalCatalog(native, { workspaceId, featureId: catalogFeatureId }).catch(
+        () => undefined,
+      );
     };
     refresh();
     const ttl = window.setInterval(refresh, 10 * 60_000);
     return () => window.clearInterval(ttl);
-  }, [native, workspaceId, featureId]);
+  }, [native, workspaceId, catalogFeatureId]);
   return useMemo(
     () =>
       current.filter(

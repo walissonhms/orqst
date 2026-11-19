@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { featureViewStateSchema, workspaceFeatureSchema } from './features.js';
 import { TERMINAL_SLOT_CEILING } from './terminal-capacity.js';
 import {
   terminalCatalogRequestSchema,
@@ -34,6 +35,8 @@ export type StudioReply = z.infer<typeof studioReplySchema>;
 // Native preparation choices carry no paths, launch proofs or task grants.
 export const tauriStudioRequestSchema = z.discriminatedUnion('action', [
   z.strictObject({ action: z.literal('snapshot') }),
+  z.strictObject({ action: z.literal('startup') }),
+  z.strictObject({ action: z.literal('discovery') }),
   terminalCatalogRequestSchema,
   terminalCliReviewRequestSchema.extend({
     generation: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
@@ -125,7 +128,42 @@ export const terminalPreparationFailureSchema = z
         ].includes(failure.stage)),
   );
 export type TerminalPreparationFailure = z.infer<typeof terminalPreparationFailureSchema>;
+export const studioStartupSchema = z.strictObject({
+  workspaces: z
+    .array(
+      z.strictObject({
+        id: featureViewStateSchema.shape.workspaceId,
+        name: z.string().min(1).max(2048),
+        features: z.array(workspaceFeatureSchema).max(1024),
+        view: featureViewStateSchema,
+      }),
+    )
+    .max(1024),
+});
+export type StudioStartup = z.infer<typeof studioStartupSchema>;
+
+export const cliDiscoverySchema = z
+  .array(
+    z.strictObject({
+      provider: z.enum(['codex', 'opencode', 'claude', 'antigravity']),
+      lookup: z.enum(['candidate_found', 'not_found', 'incomplete']),
+    }),
+  )
+  .length(4);
+
 export const tauriStudioReplySchema = z.union([
+  z.strictObject({
+    status: z.literal('startup'),
+    startup: studioStartupSchema,
+    snapshot: z.undefined().optional(),
+    failure: z.undefined().optional(),
+  }),
+  z.strictObject({
+    status: z.literal('discovery'),
+    clis: cliDiscoverySchema,
+    snapshot: z.undefined().optional(),
+    failure: z.undefined().optional(),
+  }),
   terminalBatchReplySchema.safeExtend({
     snapshot: tauriStudioSnapshotSchema.optional(),
     failure: z.undefined().optional(),

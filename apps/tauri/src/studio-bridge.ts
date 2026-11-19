@@ -14,10 +14,19 @@ export function createTauriStudioClient(
     async request(input: Parameters<TauriStudio['request']>[0]) {
       const request = tauriStudioRequestSchema.safeParse(input, { jitless: true });
       if (!request.success) return { status: 'denied' as const };
-      if (!['snapshot', 'catalog'].includes(request.data.action) && !activated())
+      if (
+        !['snapshot', 'catalog', 'startup', 'discovery'].includes(request.data.action) &&
+        !activated()
+      )
         return { status: 'focus_required' as const };
       try {
         const reply = tauriStudioReplySchema.safeParse(await send(request.data), { jitless: true });
+        if (
+          reply.success &&
+          ((reply.data.status === 'startup' && request.data.action !== 'startup') ||
+            (reply.data.status === 'discovery' && request.data.action !== 'discovery'))
+        )
+          return { status: 'unavailable' as const };
         if (request.data.action === 'create-batch' && reply.success && reply.data.status === 'ok')
           return { status: 'unavailable' as const };
         if (reply.success && reply.data.status === 'batch') {

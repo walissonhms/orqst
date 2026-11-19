@@ -773,7 +773,13 @@ test('existing unassigned terminals stay untouched, render localized notice + Mo
             },
             request: async (req) => {
               requests.push(req);
-              if (req.action === 'snapshot') return { status: 'ok', snapshot: buildSnapshot() };
+              if (req.action === 'snapshot') {
+                const snapshot = buildSnapshot();
+                const at = Date.now();
+                const canvas = { observedAt: at, entries: snapshot.slots.map(({ slot, terminalId }) =>
+                  ({ slot, terminalId, state: 'running', startedAt: at - 1000 })) };
+                return { status: 'ok', snapshot, canvas };
+              }
               if (req.action === 'assign') {
                 const slot = req.slot === 0 ? t1 : t2;
                 const entry = ensureDefault();

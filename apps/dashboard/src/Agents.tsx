@@ -4,7 +4,11 @@ import { RouteHeaderActions } from './AppShell';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RefreshCw } from 'lucide-react';
-import { terminalPreparationCatalogSchema, type TerminalPreparationCatalog } from '@orqst/protocol';
+import {
+  cliDiscoverySchema,
+  terminalPreparationCatalogSchema,
+  type TerminalPreparationCatalog,
+} from '@orqst/protocol';
 
 const installDocs = {
   codex: 'https://learn.chatgpt.com/docs/codex/cli',
@@ -64,6 +68,66 @@ function useCatalog(scope?: CatalogScope) {
   };
 }
 
+function CatalogFailure({ retry }: { retry?: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="spec-actions">
+      <p role="alert">{t('screens.agents.failed')}</p>
+      {retry && (
+        <button className="button" type="button" onClick={retry}>
+          {t('paneLifecycle.retry')}
+        </button>
+      )}
+    </div>
+  );
+}
+
+export function CliDiscovery() {
+  const { t } = useTranslation();
+  const native = window.orqstTauriStudio;
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{
+    attempt: number;
+    data?: ReturnType<typeof cliDiscoverySchema.parse>;
+  }>();
+  useEffect(() => {
+    if (!native) return;
+    let active = true;
+    void native.request({ action: 'discovery' }).then(
+      (reply) => {
+        if (!active) return;
+        const parsed = cliDiscoverySchema.safeParse(
+          reply.status === 'discovery' ? reply.clis : undefined,
+        );
+        setResult({ attempt, data: parsed.success ? parsed.data : undefined });
+      },
+      () => {
+        if (active) setResult({ attempt });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [native, attempt]);
+  if (!native) return <p>{t('screens.agents.failed')}</p>;
+  if (result?.attempt !== attempt) return <p role="status">{t('screens.agents.checking')}</p>;
+  if (!result.data) return <CatalogFailure retry={() => setAttempt(attempt + 1)} />;
+  return (
+    <ul className="spec-rows">
+      {result.data.map(({ provider, lookup }) => (
+        <li key={provider}>
+          <strong>{t(`screens.cli.${provider}`)}</strong>
+          <span>
+            {t(
+              `screens.agents.${lookup === 'candidate_found' ? 'installed' : lookup === 'not_found' ? 'missing' : 'checkNeeded'}`,
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function Agents({ scope, compact = false }: { scope?: CatalogScope; compact?: boolean }) {
   const { t } = useTranslation();
   const { catalog, native, generation, pending, failed, available, refresh } = useCatalog(scope);
@@ -78,12 +142,14 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
       refresh();
     }
   }
+  if (!available) return <CliDiscovery />;
+
   const rows = providers.map((provider) => ({
     provider,
     entry: catalog?.providers.find((candidate) => candidate.provider === provider),
   }));
   function status(entry?: TerminalPreparationCatalog['providers'][number]) {
-    if (!entry) return '—';
+    if (!entry) return t('screens.agents.checkNeeded');
     if (entry.status === 'available' || entry.path) return t('screens.agents.installed');
     if (entry.reason === 'executable_not_found') return t('screens.agents.missing');
     return t('screens.agents.checkNeeded');
@@ -103,123 +169,124 @@ export function Agents({ scope, compact = false }: { scope?: CatalogScope; compa
           </button>
         </RouteHeaderActions>
       )}
-      {!compact && failed && <p role="alert">{t('screens.agents.failed')}</p>}
+      {failed && <CatalogFailure retry={refresh} />}
       {pending && <p role="status">{t('screens.agents.checking')}</p>}
-      {compact ? (
-        <ul className="spec-rows">
-          {rows.map(({ provider, entry }) => (
-            <li key={provider}>
-              <strong>{t(`screens.cli.${provider}`)}</strong>
-              <span>{status(entry)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div
-          className="table-scroll"
-          tabIndex={0}
-          role="region"
-          aria-label={t('screens.agents.matrix')}
-        >
-          <table className="spec-table spec-cli-matrix">
-            <thead>
-              <tr>
-                <th scope="col">{t('screens.cliLabel')}</th>
-                {rows.map(({ provider }) => (
-                  <th scope="col" key={provider}>
-                    {t(`screens.cli.${provider}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th scope="row">{t('status')}</th>
-                {rows.map(({ provider, entry }) => (
-                  <td
-                    key={provider}
-                    title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}
-                  >
-                    {status(entry)}
-                    {entry && (
-                      <CliReviewStatus
-                        entry={entry}
-                        busy={reviewing || pending || generation === undefined}
-                        onReview={(entry) => void review(entry).catch(() => undefined)}
-                      />
-                    )}
-                  </td>
-                ))}
-              </tr>
-              {(['path', 'version', 'login', 'terminal', 'messages', 'tokens'] as const).map(
-                (key) => (
-                  <tr key={key}>
-                    <th scope="row">{t(`screens.agents.${key}`)}</th>
-                    {rows.map(({ provider, entry }) => (
-                      <td key={provider}>
-                        {key === 'path' || key === 'version'
-                          ? (entry?.[key] ?? '—')
-                          : key === 'terminal'
-                            ? t('screens.agents.pty')
-                            : key === 'messages'
-                              ? t(
-                                  `screens.agents.${provider === 'antigravity' ? 'noRelay' : provider === 'claude' ? 'mcpRelay' : 'autoRelay'}`,
-                                )
-                              : key === 'tokens' && provider !== 'antigravity'
-                                ? t('screens.agents.whenReported')
-                                : '—'}
-                      </td>
-                    ))}
-                  </tr>
-                ),
-              )}
-              <tr>
-                <th scope="row">{t('screens.agents.models')}</th>
-                {rows.map(({ provider, entry }) => (
-                  <td key={provider}>
-                    {entry?.models.length ? (
-                      <details>
-                        <summary>
-                          {t('screens.agents.modelCount', { count: entry.models.length })}
-                        </summary>
-                        <ul>
-                          {entry.models.map((model) => (
-                            <li key={model.id}>{model.label}</li>
-                          ))}
-                        </ul>
-                      </details>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                ))}
-              </tr>
-              <tr>
-                <th scope="row">{t('screens.agents.installation')}</th>
-                {rows.map(({ provider, entry }) => (
-                  <td key={provider}>
-                    {entry?.reason === 'executable_not_found' ? (
-                      <a
-                        className="button"
-                        href={installDocs[provider]}
-                        target="_blank"
-                        rel="noreferrer"
-                        aria-label={t('screens.agents.installProvider', {
-                          provider: t(`screens.cli.${provider}`),
-                        })}
-                      >
-                        {t('screens.agents.install')}
-                      </a>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      )}
+      {catalog &&
+        (compact ? (
+          <ul className="spec-rows">
+            {rows.map(({ provider, entry }) => (
+              <li key={provider}>
+                <strong>{t(`screens.cli.${provider}`)}</strong>
+                <span>{status(entry)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div
+            className="table-scroll"
+            tabIndex={0}
+            role="region"
+            aria-label={t('screens.agents.matrix')}
+          >
+            <table className="spec-table spec-cli-matrix">
+              <thead>
+                <tr>
+                  <th scope="col">{t('screens.cliLabel')}</th>
+                  {rows.map(({ provider }) => (
+                    <th scope="col" key={provider}>
+                      {t(`screens.cli.${provider}`)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">{t('status')}</th>
+                  {rows.map(({ provider, entry }) => (
+                    <td
+                      key={provider}
+                      title={entry ? t(`studio.tauri.catalog_${entry.reason}`) : undefined}
+                    >
+                      {status(entry)}
+                      {entry && (
+                        <CliReviewStatus
+                          entry={entry}
+                          busy={reviewing || pending || generation === undefined}
+                          onReview={(entry) => void review(entry).catch(() => undefined)}
+                        />
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                {(['path', 'version', 'login', 'terminal', 'messages', 'tokens'] as const).map(
+                  (key) => (
+                    <tr key={key}>
+                      <th scope="row">{t(`screens.agents.${key}`)}</th>
+                      {rows.map(({ provider, entry }) => (
+                        <td key={provider}>
+                          {key === 'path' || key === 'version'
+                            ? (entry?.[key] ?? '—')
+                            : key === 'terminal'
+                              ? t('screens.agents.pty')
+                              : key === 'messages'
+                                ? t(
+                                    `screens.agents.${provider === 'antigravity' ? 'noRelay' : provider === 'claude' ? 'mcpRelay' : 'autoRelay'}`,
+                                  )
+                                : key === 'tokens' && provider !== 'antigravity'
+                                  ? t('screens.agents.whenReported')
+                                  : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                  ),
+                )}
+                <tr>
+                  <th scope="row">{t('screens.agents.models')}</th>
+                  {rows.map(({ provider, entry }) => (
+                    <td key={provider}>
+                      {entry?.models.length ? (
+                        <details>
+                          <summary>
+                            {t('screens.agents.modelCount', { count: entry.models.length })}
+                          </summary>
+                          <ul>
+                            {entry.models.map((model) => (
+                              <li key={model.id}>{model.label}</li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <th scope="row">{t('screens.agents.installation')}</th>
+                  {rows.map(({ provider, entry }) => (
+                    <td key={provider}>
+                      {entry?.reason === 'executable_not_found' ? (
+                        <a
+                          className="button"
+                          href={installDocs[provider]}
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-label={t('screens.agents.installProvider', {
+                            provider: t(`screens.cli.${provider}`),
+                          })}
+                        >
+                          {t('screens.agents.install')}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        ))}
     </div>
   );
 }
