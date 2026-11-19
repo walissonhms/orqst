@@ -41,7 +41,7 @@ test('history loads only when expanded, with no query and no controls', async ({
   expect(await details.getAttribute('open')).toBeNull();
   expect(requests).toEqual([]);
 
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText(
     'Partial coverage: at most the latest 32 compact evidence records',
   );
@@ -77,7 +77,7 @@ test('an all-null window is explicit and never implies a model', async ({ page }
     }),
   );
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText(
     'No model identifier is recorded in this partial window. These records do not establish any model.',
   );
@@ -101,15 +101,15 @@ test('unavailable reasons and oversized bodies are explicit and drop the reading
     });
   });
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText('History unavailable: session evidence identity conflicts.');
   await expect(details.locator('ol')).toHaveCount(0);
 
   // An oversized body is rejected before JSON/schema and shows the generic failure.
   mode = 'oversized';
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details.locator('ol')).toHaveCount(0);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText('History unavailable: the reading could not be validated.');
   await expect(details.locator('ol')).toHaveCount(0);
 });
@@ -123,7 +123,7 @@ test('a non-JSON response is rejected before any parsing or rendering', async ({
     }),
   );
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details).toContainText('History unavailable: the reading could not be validated.');
   await expect(details.locator('ol')).toHaveCount(0);
   await expect(details.locator('code')).toHaveCount(0);
@@ -141,7 +141,7 @@ test('offline shows the disconnected state without keeping the previous list', a
     route.connectToServer();
   });
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details.locator('ol li').first()).toBeVisible();
 
   blocked = true;
@@ -161,7 +161,7 @@ test('hostile identifiers are rendered as inert text', async ({ page }) => {
     }),
   );
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect(details.locator('ol li code').first()).toHaveText(hostile);
   await expect(details.locator('img, script, a, iframe, object, embed')).toHaveCount(0);
   expect(
@@ -187,7 +187,7 @@ test('switching session discards a late response for the previous session', asyn
     return route.continue().catch(() => undefined);
   });
   const details = await openHistory(page);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await expect.poll(() => Boolean(release)).toBe(true);
 
   // Close the panel before the slow response resolves: the reading must be discarded.

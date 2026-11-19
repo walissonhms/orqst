@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
+import { openObservedSessions, settingsTabs } from '../helpers/spec-dashboard.js';
 
 const sourceId = 'synthetic-browser-session';
 const sessionPath = `/overview/sessions/${sourceId}`;
@@ -38,9 +39,12 @@ for (const [view, path, label] of views) {
     page,
   }) => {
     await page.goto(path);
-    const link = page.getByRole('link', { name: label, exact: true });
+    const link =
+      view === 'agents'
+        ? settingsTabs(page).getByRole('button', { name: label, exact: true })
+        : page.getByRole('link', { name: label, exact: true });
     await expect(link).toHaveAttribute('aria-current', 'page');
-    await expect(link).toHaveAttribute('href', path);
+    if (view !== 'agents') await expect(link).toHaveAttribute('href', path);
     await page.reload();
     await expect(link).toHaveAttribute('aria-current', 'page');
     await expect(page).toHaveURL(path);
@@ -67,11 +71,10 @@ test('Studio opens by default and SPA Back/Forward retains the document and lang
   await expect(page).toHaveURL('/studio');
   await page.goto('/agents');
   await expect(page).toHaveURL('/configuracoes/agentes');
-  await expect(page.getByRole('link', { name: 'Agentes', exact: true })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
-  await page.getByRole('link', { name: 'Geral', exact: true }).click();
+  await expect(
+    settingsTabs(page).getByRole('button', { name: 'Agentes', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
+  await settingsTabs(page).getByRole('button', { name: 'Geral', exact: true }).click();
   const idioma = page.getByRole('combobox', { name: 'Idioma', exact: true });
   await expect(idioma).toHaveValue('pt-BR');
   await idioma.selectOption('en-US');
@@ -124,9 +127,8 @@ test('cancelled Back and Forward preserve the exact history entries and draft, c
 }) => {
   await page.goto('/agents');
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page
-    .getByRole('button', { name: 'View session Synthetic browser agent', exact: true })
-    .click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   let panel = await editDraft(page);
   const length = await page.evaluate(() => history.length);
   for (let attempt = 0; attempt < 2; attempt++) {

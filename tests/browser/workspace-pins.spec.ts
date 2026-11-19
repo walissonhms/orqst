@@ -1,3 +1,4 @@
+import { openObservedSessions } from '../helpers/spec-dashboard.js';
 import { expect, test, type Page } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
 
@@ -39,9 +40,9 @@ test('keyboard pinning prioritizes both lists, persists across routes/reload and
   await expect(pin(page, 'Gamma')).toHaveAttribute('aria-pressed', 'true');
   await expect(pin(page, 'Gamma')).toBeFocused();
   expect(await order(page)).toEqual(['Synthetic Gamma', 'Synthetic Alpha', 'Synthetic Beta']);
-  await expect(page.locator('.sidebar nav').last().getByRole('button').nth(1)).toHaveAccessibleName(
-    'Synthetic Gamma (pinned)',
-  );
+  await expect(
+    page.getByRole('navigation', { name: 'WORKSPACES', exact: true }).getByRole('button').first(),
+  ).toHaveAccessibleName('Synthetic Gamma (pinned)');
   expect(await page.evaluate(() => localStorage.getItem('orqst.shell.v1'))).toBe(shell);
   await pin(page, 'Beta').click();
   expect(await order(page)).toEqual(['Synthetic Beta', 'Synthetic Gamma', 'Synthetic Alpha']);
@@ -56,7 +57,7 @@ test('keyboard pinning prioritizes both lists, persists across routes/reload and
     .filter({ hasText: 'Synthetic Gamma' })
     .getByRole('button', { name: 'Open sessions' })
     .click();
-  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page).toHaveURL(/\/visao-geral$/);
   expect(
     await page.evaluate(() => JSON.parse(localStorage.getItem('orqst.shell.v1')!).workspaceId),
   ).toBe('synthetic-c');
@@ -187,7 +188,7 @@ for (const theme of ['dark', 'light'])
       );
     }, theme);
     await page.goto('/workspaces');
-    await page.getByLabel('Idioma').selectOption('pt-BR');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'pt-BR');
     for (const width of [1440, 320]) {
       await page.setViewportSize({ width, height: 900 });
       const button = page.getByRole('button', {
@@ -255,7 +256,8 @@ test('pin limit disables only additions, retaining removal and cross-tab changes
     .filter({ hasText: 'Synthetic Alpha' })
     .getByRole('button', { name: 'Open sessions' })
     .click();
-  await page.getByRole('button', { name: 'View session Synthetic browser agent' }).click();
+  await openObservedSessions(page);
+  await page.getByRole('link', { name: 'Synthetic browser agent', exact: true }).click();
   await page
     .getByRole('button', { name: 'Extract artifact manually', exact: true })
     .first()
@@ -264,6 +266,7 @@ test('pin limit disables only additions, retaining removal and cross-tab changes
   await artifact.getByRole('button', { name: 'Edit draft', exact: true }).click();
   const draft = 'Synthetic pinned workspace draft <script>inert</script>\n';
   await artifact.getByRole('textbox').fill(draft);
+  await artifact.locator('.spec-artifact-source > summary').click();
   const source = await artifact.locator('.artifact-provenance').innerText();
   const url = page.url();
   const other = await context.newPage();

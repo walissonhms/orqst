@@ -19,6 +19,7 @@ export interface ShellWorkspace {
   id: string;
   name: string;
   count: number;
+  pinned?: boolean;
 }
 
 export interface ShellFeature {
@@ -39,6 +40,7 @@ const routeIcons = {
 
 export function ShellSidebar({
   view,
+  theme,
   workspaces,
   workspaceId,
   features,
@@ -56,6 +58,7 @@ export function ShellSidebar({
   onReconnect,
 }: {
   view: AppView;
+  theme: 'dark' | 'light';
   workspaces: ShellWorkspace[];
   workspaceId: string;
   features: ShellFeature[];
@@ -129,10 +132,11 @@ export function ShellSidebar({
           onNavigate('studio');
         }}
       >
-        <span>ORQST</span>
-        <span className="shell-mark" aria-hidden="true">
-          ✦
-        </span>
+        <img
+          className="shell-brand-logo"
+          src={theme === 'dark' ? '/brand/orqst-logo-dark.svg' : '/brand/orqst-logo.svg'}
+          alt={t('brand')}
+        />
       </a>
       <div className="shell-tree">
         <h2 id="shell-workspaces">{t('features.workspaces')}</h2>
@@ -143,7 +147,11 @@ export function ShellSidebar({
               type="button"
               className="shell-tree-row"
               title={workspace.name}
-              aria-label={workspace.name}
+              aria-label={
+                workspace.pinned
+                  ? t('shell.workspaces.pinnedName', { name: workspace.name })
+                  : workspace.name
+              }
               aria-current={workspace.id === workspaceId || undefined}
               onClick={() => onWorkspace(workspace.id)}
             >

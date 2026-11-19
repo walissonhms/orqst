@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { changeLanguage, openModelsTab } from '../helpers/spec-dashboard.js';
 
 // Synthetic capability only: this checks view integration; Electron smoke checks real IPC.
 test('native capability waits for reading acknowledgment and reports consumed save in both locales', async ({
@@ -21,6 +22,8 @@ test('native capability waits for reading acknowledgment and reports consumed sa
     Object.defineProperty(window, 'orqstAnalytics', { value: capability });
   });
   await page.goto('/#models');
+  await openModelsTab(page);
+  await page.locator('.analytics-export > summary').click();
   const section = page.locator('.analytics-export');
   const csv = section.getByRole('button', { name: 'Export CSV', exact: true });
   await expect(section.getByText(/Observed model IDs are arbitrary metadata/)).toBeVisible();
@@ -46,7 +49,9 @@ test('native capability waits for reading acknowledgment and reports consumed sa
   await expect(section.locator('a[download]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(csv).toBeEnabled();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openModelsTab(page);
+  await page.locator('.analytics-export > summary').click();
   await section.getByRole('button', { name: 'Exportar Markdown', exact: true }).click();
   await expect(section.getByRole('status')).toHaveText(
     'Relatório salvo. Atualize para exportar novamente.',

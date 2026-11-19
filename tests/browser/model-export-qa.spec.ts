@@ -1,9 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { coreStatus, openModelsTab } from '../helpers/spec-dashboard.js';
 
 // Disposable synthetic Bridge fixture (tests/browser/server.ts). No user data.
-const exportSection = (page: Page) =>
-  page.getByRole('region', { name: 'Export aggregate report', exact: true });
+const exportSection = (page: Page) => page.locator('.analytics-export');
 
 const blocked =
   'Export is blocked until a new current report is available while connected. Refresh, filter changes, errors and reconnection require a new response.';
@@ -12,7 +12,9 @@ const limits =
 
 async function openModels(page: Page): Promise<void> {
   await page.goto('/#models');
-  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  await openModelsTab(page);
+  await page.locator('.analytics-export > summary').click();
+  await expect(coreStatus(page).filter({ hasText: 'CORE ONLINE' })).toBeVisible();
   await expect(exportSection(page)).toBeVisible();
 }
 

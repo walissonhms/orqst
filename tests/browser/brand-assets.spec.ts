@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
+import { changeLanguage, openAppearance } from '../helpers/spec-dashboard.js';
 
 test('approved artwork loads locally, preserves proportions and remains accessible across layouts', async ({
   page,
@@ -19,24 +20,24 @@ test('approved artwork loads locally, preserves proportions and remains accessib
   for (const theme of ['dark', 'light']) {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto('/#settings');
+    await openAppearance(page);
     await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
     await page.getByRole('link', { name: 'Overview', exact: true }).click();
-    const mascot = page.locator('.empty-mascot');
-    await expect(mascot).toBeVisible();
-    await expect(mascot).toHaveAttribute('alt', '');
-    await expect(mascot).toHaveAttribute('aria-hidden', 'true');
     for (const width of [1440, 1024, 768, 390, 320]) {
       await page.setViewportSize({ width, height: 1000 });
-      if (width <= 700) await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
       const logo = page.getByRole('img', { name: 'ORQST', exact: true });
       await expect(logo).toBeVisible();
-      await expect(page.getByRole('link', { name: 'ORQST', exact: true })).toBeVisible();
-      await expect(page.locator('.brand')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+      await expect(page.getByRole('link', { name: 'Studio', exact: true })).toBeVisible();
+      await expect(page.locator('.shell-brand-logo')).toHaveCSS(
+        'background-color',
+        'rgba(0, 0, 0, 0)',
+      );
       await expect(logo).toHaveAttribute(
         'src',
         theme === 'dark' ? '/brand/orqst-logo-dark.svg' : '/brand/orqst-logo.svg',
       );
-      for (const element of [logo, mascot]) {
+      {
+        const element = logo;
         const metrics = await element.evaluate((image: HTMLImageElement) => ({
           loaded: image.complete && image.naturalWidth > 0,
           naturalRatio: image.naturalWidth / image.naturalHeight,
@@ -48,7 +49,6 @@ test('approved artwork loads locally, preserves proportions and remains accessib
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
       );
-      if (width <= 700) await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
     }
     await page.screenshot({
       path: test.info().outputPath(`brand-${theme}-mobile.png`),
@@ -56,15 +56,13 @@ test('approved artwork loads locally, preserves proportions and remains accessib
     });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByLabel('Language').selectOption('pt-BR');
-  await expect(
-    page.getByRole('heading', { name: 'Pronto para acompanhar seus agentes.' }),
-  ).toBeVisible();
-  const home = page.getByRole('link', { name: 'ORQST', exact: true });
+  await changeLanguage(page, 'pt-BR');
+  await expect(page.getByRole('heading', { name: 'Visão geral', exact: true })).toBeVisible();
+  const home = page.getByRole('link', { name: 'Studio', exact: true });
   await home.focus();
   await expect(home).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL('/overview');
+  await expect(page).toHaveURL('/studio');
   await expect(page.getByRole('img', { name: 'ORQST', exact: true })).toBeVisible();
   await page.screenshot({
     path: test.info().outputPath('brand-light-desktop.png'),
@@ -130,13 +128,14 @@ test('transparent theme variant preserves the source silhouette and purple accen
   expect(pixels.accentCount).toBeGreaterThan(3000);
   expect(pixels.lightInk).toBeGreaterThan(60000);
   expect(pixels.corner).toEqual([0, 0, 0, 0]);
+  await openAppearance(page);
   await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption('system');
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
-    await expect(page.locator('.brand-logo')).toHaveAttribute(
+    await expect(page.locator('.shell-brand-logo')).toHaveAttribute(
       'src',
       colorScheme === 'dark' ? '/brand/orqst-logo-dark.svg' : '/brand/orqst-logo.svg',
     );
-    await expect(page.locator('.brand-logo')).toHaveCSS('filter', 'none');
+    await expect(page.locator('.shell-brand-logo')).toHaveCSS('filter', 'none');
   }
 });

@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 import { test, expect, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import { resolve } from 'node:path';
@@ -42,11 +43,11 @@ test('Studio preparation guides EN/PT, keeps denied actions visible and opens re
     });
   });
   await page.goto('/studio');
-  await expect(page.getByRole('heading', { name: 'Terminals / Studio' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Studio', exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Open reviewed terminals', exact: true }),
   ).toBeDisabled();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
   await page.evaluate(() => Reflect.set(window, 'studioStatus', 'focus_required'));
   await page.getByRole('button', { name: 'Preparar Codex + OpenCode…', exact: true }).click();
   await expect(
@@ -62,13 +63,14 @@ test('Studio preparation guides EN/PT, keeps denied actions visible and opens re
   ).toBeEnabled();
   for (const width of [1440, 1024, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByRole('heading', { name: 'Terminais / Studio' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Studio', exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
     await page.screenshot({ path: `/private/tmp/orqst-675-studio-${width}.png`, fullPage: true });
   }
   expect(await page.evaluate(() => Reflect.get(window, 'studioCalls'))).toEqual([
+    'snapshot',
     'snapshot',
     'createMixed',
     'createMixed',
@@ -90,10 +92,10 @@ test('Studio distinguishes browser from older Desktop and offers no fake termina
     Object.defineProperty(window, 'orqstManagedAgents', { value: { contractVersion: 1 } }),
   );
   await page.reload();
-  await expect(page.getByText('This Desktop is running an older', { exact: false })).toBeVisible();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
+  await expect(page.getByText('Relaunch Desktop to use Studio.', { exact: true })).toBeVisible();
+  await changeLanguage(page, 'pt-BR');
   await expect(
-    page.getByText('Este Desktop está com a interface anterior', { exact: false }),
+    page.getByText('Reabra o Desktop para usar o Studio.', { exact: true }),
   ).toBeVisible();
 });
 
@@ -188,14 +190,19 @@ const catalog: TerminalPreparationCatalog = {
   ],
 };
 
-async function installStudioFixture(page: Page, count: number, language: 'pt-BR' | 'en-US') {
+async function installStudioFixture(
+  page: Page,
+  count: number,
+  language: 'pt-BR' | 'en-US',
+  initialMode: 'refuse' | 'missing-generation' = 'refuse',
+) {
   await page.addInitScript(
-    ({ snapshot, catalog, createdId, language }) => {
+    ({ snapshot, catalog, createdId, language, initialMode }) => {
       localStorage.setItem('i18nextLng', language);
       localStorage.setItem('orqst.studio.panel', 'open');
       const calls: unknown[] = [];
       Reflect.set(window, 'lane4Calls', calls);
-      Reflect.set(window, 'lane4Mode', 'refuse');
+      Reflect.set(window, 'lane4Mode', initialMode);
       Object.defineProperty(window, 'orqstFeatures', {
         value: {
           contractVersion: 1,
@@ -271,7 +278,7 @@ async function installStudioFixture(page: Page, count: number, language: 'pt-BR'
         },
       });
     },
-    { snapshot: studioSnapshot(count), catalog, createdId, language },
+    { snapshot: studioSnapshot(count), catalog, createdId, language, initialMode },
   );
 }
 
@@ -298,7 +305,7 @@ for (const [width, height] of [
     await installStudioFixture(page, 4, 'pt-BR');
     await page.goto('/studio');
     const workspaceRoot = page.locator('.studio-workspace > .feature-workspace');
-    const trigger = workspaceRoot.locator('.feature-topbar, .ts-toolbar').getByRole('button', {
+    const trigger = page.locator('.topbar').getByRole('button', {
       name: '＋ Terminal',
       exact: true,
     });
@@ -318,7 +325,7 @@ for (const [width, height] of [
     await expect(cli.locator('option[value="opencode"]')).toHaveText(/OpenCode.*não encontrada/);
     await expect(cli.locator('option[value="opencode"]')).toHaveJSProperty('disabled', true);
     await expect(cli.locator('option[value="antigravity"]')).toHaveText(
-      /Antigravity.*não revisado/,
+      /Antigravity.*revisão necessária/,
     );
     await expect(cli.locator('option[value="antigravity"]')).toHaveJSProperty('disabled', true);
     await expect(model).toHaveValue('');
@@ -362,14 +369,16 @@ for (const [width, height] of [
     await name.fill('Terminal de revisão');
     await model.selectOption(explicitModel);
     await submit.click();
-    await expect(dialog.getByText('A revisão foi cancelada')).toBeVisible();
+    await expect(dialog).toBeHidden();
+    const refused = workspaceRoot.getByRole('article', { name: /Terminal de revisão/ });
+    await expect(refused.getByRole('alert')).toContainText('Falha ao abrir terminal');
+    await refused.getByRole('button', { name: 'Ver logs' }).click();
+    await expect(refused.getByRole('region', { name: 'Ver logs' })).toHaveText('review_cancelled');
     await captureIntegrated(
       page,
       testInfo.outputPath('creation-refused.png'),
       'creation-refused.png',
     );
-    await dialog.getByRole('button', { name: 'Fechar', exact: true }).click();
-    await expect(trigger).toBeFocused();
     const submitted = await page.evaluate(() =>
       (Reflect.get(window, 'lane4Calls') as { action: string }[]).filter(
         ({ action }) => action === 'create-batch',
@@ -398,8 +407,10 @@ for (const [width, height] of [
     await trigger.click();
     await submit.click();
     await expect(dialog).toBeHidden();
-    await expect(originals).toHaveCount(5);
     await expect(workspaceRoot.locator(`[data-terminal-id="${createdId}"]`).first()).toBeVisible();
+    for (const id of [1, 2, 3, 4].map(fixtureId)) {
+      await expect(workspaceRoot.locator(`.ts-body[data-terminal-id="${id}"]`)).toHaveCount(1);
+    }
     expect(
       await originals.first().evaluate((node) => node === Reflect.get(window, 'lane4OriginalPane')),
     ).toBe(true);
@@ -417,10 +428,7 @@ for (const [width, height] of [
     await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
     await installStudioFixture(page, 0, 'pt-BR');
     await page.goto('/studio');
-    await page
-      .locator('.feature-topbar, .ts-toolbar')
-      .getByRole('button', { name: '＋ Terminal', exact: true })
-      .click();
+    await page.locator('.topbar').getByRole('button', { name: '＋ Terminal', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Novos terminais' });
     await expect(dialog.getByLabel('Nome', { exact: true })).toBeFocused();
     await captureIntegrated(page, testInfo.outputPath('creation-empty.png'), 'creation-empty.png');
@@ -437,13 +445,9 @@ for (const [width, height] of [
 }
 
 test('a catalog with no admission generation cannot open a terminal', async ({ page }) => {
-  await installStudioFixture(page, 1, 'en-US');
+  await installStudioFixture(page, 1, 'en-US', 'missing-generation');
   await page.goto('/studio');
-  await page.evaluate(() => Reflect.set(window, 'lane4Mode', 'missing-generation'));
-  await page
-    .locator('.feature-topbar, .ts-toolbar')
-    .getByRole('button', { name: '＋ Terminal', exact: true })
-    .click();
+  await page.locator('.topbar').getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'New terminals' });
   await expect(
     dialog.getByText('The native catalog and its current session could not be verified.'),
@@ -452,29 +456,43 @@ test('a catalog with no admission generation cannot open a terminal', async ({ p
   await expect(
     dialog.getByRole('button', { name: 'Refresh selection', exact: true }),
   ).toBeEnabled();
-  expect(await page.evaluate(() => Reflect.get(window, 'lane4Calls'))).toEqual([
-    { action: 'catalog', workspaceId: workspace.id, featureId },
-  ]);
+  const calls = await page.evaluate(() => Reflect.get(window, 'lane4Calls') as unknown[]);
+  expect(calls.length).toBeGreaterThan(0);
+  for (const call of calls) {
+    expect(call).toEqual({ action: 'catalog', workspaceId: workspace.id, featureId });
+  }
 });
 
 test('batch outcomes remain individual when native enrollment is uncertain', async ({ page }) => {
   await installStudioFixture(page, 2, 'pt-BR');
   await page.goto('/studio');
-  await page
-    .locator('.feature-topbar, .ts-toolbar')
-    .getByRole('button', { name: '＋ Terminal', exact: true })
-    .click();
+  await page.locator('.topbar').getByRole('button', { name: '＋ Terminal', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Novos terminais' });
   await dialog.getByRole('button', { name: 'Vários terminais' }).click();
   await dialog.getByRole('button', { name: '2', exact: true }).click();
   await dialog.locator('button[type="submit"]').click();
-  await expect(dialog.getByText('0 de 2 terminais abertos.')).toBeVisible();
-  await expect(dialog.getByText('A revisão foi cancelada')).toBeVisible();
-  await expect(dialog.getByText('A abertura pode ou não ter acontecido')).toBeVisible();
-  await expect(
-    dialog.getByText('Confira a área de terminais antes de tentar de novo.'),
-  ).toBeVisible();
-  await expect(dialog.locator('button[type="submit"]')).toHaveCount(0);
+  await expect(dialog).toHaveCount(0);
+  const refused = page.getByRole('article', { name: /Codex 1$/ });
+  const uncertain = page.getByRole('article', { name: /Codex 2$/ });
+  await expect(refused.getByRole('alert')).toContainText('Falha ao abrir terminal');
+  await expect(uncertain.getByRole('alert')).toContainText('Abertura não confirmada');
+  await expect(refused.getByRole('button', { name: 'Tentar novamente' })).toBeEnabled();
+  await expect(uncertain.getByRole('button', { name: 'Tentar novamente' })).toBeDisabled();
+  await expect(uncertain.getByRole('button', { name: 'Alterar CLI' })).toBeDisabled();
+  for (const [card, reason] of [
+    [refused, 'review_cancelled'],
+    [uncertain, 'opening_uncertain'],
+  ] as const) {
+    await card.getByRole('button', { name: 'Ver logs' }).click();
+    await expect(card.getByRole('region', { name: 'Ver logs' })).toHaveText(reason);
+  }
+  expect(
+    await page.evaluate(() =>
+      (Reflect.get(window, 'lane4Calls') as { action: string }[]).filter(
+        ({ action }) => action === 'create-batch',
+      ),
+    ),
+  ).toHaveLength(1);
 });
 
 const mentionBundle = () =>
@@ -564,35 +582,32 @@ for (const [width, height] of [
     });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'Delegar' });
+    const search = dialog.getByRole('searchbox', { name: 'Para' });
     const text = dialog.getByRole('textbox', { name: 'Mensagem' });
-    const submit = dialog.getByRole('button', { name: 'Enfileirar mensagem' });
-    await expect(text).toBeFocused();
+    const submit = dialog.getByRole('button', { name: 'Enviar', exact: true });
+    await expect(search).toBeFocused();
     await captureIntegrated(page, testInfo.outputPath('delegate-open.png'), 'delegate-open.png');
-    await text.fill('@');
-    await expect(dialog.getByRole('option', { name: /T-005/ })).toHaveCount(0);
-    const listbox = dialog.getByRole('listbox');
-    await expect(listbox.getByRole('option')).toHaveCount(4);
-    await expect(listbox.getByText('Modelo desconhecido', { exact: true })).toHaveCount(4);
+    await expect(dialog.getByRole('radio')).toHaveCount(4);
+    await search.fill('T-005');
+    await expect(dialog.getByRole('radio')).toHaveCount(0);
+    await text.fill('revise o teste');
+    await expect(submit).toBeDisabled();
+    await search.fill('T-002');
+    await expect(dialog.getByRole('radio')).toHaveCount(1);
     await captureIntegrated(
       page,
       testInfo.outputPath('delegate-targets.png'),
       'delegate-targets.png',
     );
-    await text.fill('@T-002 @T-005 revise o teste');
-    await expect(submit).toBeDisabled();
-    await text.fill('@T-002 @outra-feature/T-002 revise o teste');
-    await expect(submit).toBeDisabled();
-    await text.fill('@T-002 revise o teste');
+    await dialog.getByRole('radio', { name: /T-002/ }).check();
+    await expect(
+      dialog.getByText('Entrega na fila do T-002 quando o turno atual terminar'),
+    ).toBeVisible();
     await expect(submit).toBeEnabled();
     await captureIntegrated(page, testInfo.outputPath('delegate-draft.png'), 'delegate-draft.png');
     await submit.click();
-    await expect(dialog.getByText('Na fila da caixa de entrada do terminal')).toBeVisible();
-    await expect(dialog.getByText('Enviado', { exact: false })).toHaveCount(0);
-    await captureIntegrated(
-      page,
-      testInfo.outputPath('delegate-queued.png'),
-      'delegate-queued.png',
-    );
+    await expect(dialog).toBeHidden();
+    await expect(trigger).toBeFocused();
     expect(await page.evaluate(() => Reflect.get(window, 'lane4Mentions'))).toEqual([
       {
         contractVersion: 1,
@@ -600,13 +615,15 @@ for (const [width, height] of [
         action: 'mention',
         from: { kind: 'user' },
         to: [fixtureId(2)],
-        text: '@T-002 revise o teste',
+        text: 'revise o teste',
       },
     ]);
     await page.evaluate((id) => Reflect.set(window, 'lane4WrongReceipt', id), fixtureId(5));
-    await text.fill('@T-002 confirme o teste');
+    await trigger.click();
+    await dialog.getByRole('radio', { name: /T-002/ }).check();
+    await text.fill('confirme o teste');
     await submit.click();
-    await expect(dialog.getByText('Entrega desconhecida', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('alert')).toHaveText('Entrega desconhecida');
     await expect(dialog.getByText('Na fila da caixa de entrada do terminal')).toHaveCount(0);
     await expect(dialog.getByText('Enviado', { exact: false })).toHaveCount(0);
     await page.keyboard.press('Escape');

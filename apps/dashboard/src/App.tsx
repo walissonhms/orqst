@@ -53,7 +53,7 @@ import { AppShell } from './AppShell';
 import { ShellSidebar, type FeatureOperation } from './ShellSidebar';
 import { studioTerminals } from './studio-native';
 import { Workspaces } from './Workspaces';
-import { useWorkspacePins } from './workspace-pins';
+import { pinnedFirst, useWorkspacePins } from './workspace-pins';
 import { OverviewLayout, type StudioCardTarget } from './OverviewLayout';
 import { CommandPalette } from './CommandPalette';
 import { useFeatureShell } from './use-feature-shell.js';
@@ -597,6 +597,7 @@ export function App() {
     intervention: true,
   });
   const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsError, setPrefsError] = useState(false);
   const sound = useCallback(async (activate = false) => {
     try {
       if (!audioRef.current && activate) audioRef.current = new AudioContext();
@@ -705,6 +706,7 @@ export function App() {
       setWorkspaceId(snapshot?.sessions.find((session) => session.id === id)?.workspaceId ?? '');
       setStatus('');
     } else if (page === 'overview') applySession(undefined);
+    else if (page === 'studio' && managedShell) setWorkspaceId('');
     if (page !== 'overview') setArtifactRequest(undefined);
     if (page !== 'studio') setStudioCommand(undefined);
     setView(page);
@@ -789,6 +791,7 @@ export function App() {
   function navigate(page: AppView, focusContent = false) {
     if (page === view) return;
     requestNavigation(() => {
+      if (page === 'studio' && managedShell) setWorkspaceId('');
       applyView(page);
       if (focusContent)
         requestAnimationFrame(() => document.getElementById('main-content')?.focus());
@@ -870,9 +873,9 @@ export function App() {
     try {
       await api('/api/preferences', { method: 'PUT', body: JSON.stringify(next) });
       await refresh();
-      setSaveError(false);
+      setPrefsError(false);
     } catch {
-      setSaveError(true);
+      setPrefsError(true);
       if (snapshot) setLocalPrefs(snapshot.preferences);
     } finally {
       setPrefsSaving(false);
@@ -908,6 +911,11 @@ export function App() {
       {(!snapshot || error || connection !== 'connected') && (
         <p className="notice" role="status" title={t('settings.notificationsUnavailable.detail')}>
           {t('settings.notificationsUnavailable.label')}
+        </p>
+      )}
+      {prefsError && (
+        <p className="notice" role="alert">
+          {t('settings.notificationSaveUnconfirmed')}
         </p>
       )}
       <NotificationPreferences
@@ -978,7 +986,7 @@ export function App() {
 
   function selectWorkspace(id: string) {
     setFeatureError(false);
-    openWorkspace(id === managedWorkspace?.id ? '' : id, 'studio');
+    openWorkspace(id === managedWorkspace?.id ? '' : id);
   }
   function openFeature(id: string, terminalId?: string) {
     requestNavigation(() => {
@@ -1097,7 +1105,11 @@ export function App() {
   const sidebar = (
     <ShellSidebar
       view={view}
-      workspaces={workspaceRows}
+      theme={appearance.resolvedTheme}
+      workspaces={pinnedFirst(workspaceRows, workspacePins.pins).map((workspace) => ({
+        ...workspace,
+        pinned: workspacePins.pins.includes(workspace.id),
+      }))}
       workspaceId={shellWorkspaceId}
       features={
         managedSelected
@@ -1221,6 +1233,7 @@ export function App() {
           }
           defaultFolder={currentWorkspace?.path}
           snapshot={snapshot}
+          snapshotStale={connection !== 'connected' || error}
         />
       ) : view === 'communication' ? (
         <CommunicationInspector snapshot={featureSnapshot} onOpenStudio={openStudioCard} />
@@ -1294,7 +1307,7 @@ export function App() {
         <CommandPalette
           snapshot={snapshot}
           studioScope={studioScope}
-          onNavigate={navigate}
+          onNavigate={(destination) => navigate(destination, true)}
           workspaces={workspaceRows}
           features={managedFeatures.map((feature) => ({
             id: feature.featureId,

@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type { ModelAnalyticsSummary, Usage } from '@orqst/protocol';
+import { changeLanguage, coreStatus, openModelsTab } from '../helpers/spec-dashboard.js';
 
 // Explicitly synthetic aggregates; no captured session content or shared fixture changes.
 const usage = (total: number): Usage => ({
@@ -80,9 +81,10 @@ async function syntheticApi(page: Page) {
   return queries;
 }
 async function openModels(page: Page) {
-  await page.goto('/');
-  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
-  await page.getByRole('link', { name: 'Most used models' }).click();
+  await page.goto('/studio');
+  await expect(coreStatus(page).filter({ hasText: 'CORE ONLINE' })).toBeVisible();
+  await page.getByRole('link', { name: 'Metrics' }).click();
+  await openModelsTab(page);
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
 }
 
@@ -98,10 +100,11 @@ test('synthetic multi-model ranking, explicit unknowns, shares, sessions, escapi
   await expect(rows.nth(2)).toContainText('Unidentified model');
   await expect(rows.nth(2)).toContainText('10%');
   await expect(rows.nth(3)).toContainText(hostileModel);
-  await expect(rows.nth(3).locator('td').nth(1)).toHaveText('Unavailable');
+  await expect(rows.nth(3).getByRole('cell').nth(1)).toHaveText('—');
   await expect(page.locator('.analytics-stats .stat').nth(1)).toContainText('1,000');
   await expect(page.locator('.analytics-stats .stat').nth(2).locator('strong')).toHaveText('5');
   await expect(page.locator('.analytics-coverage')).toContainText('Incomplete coverage');
+  await page.locator('.analytics-evidence > summary').click();
   await expect(page.getByText(/Token shares and bars use 1,000/)).toBeVisible();
   await expect(page.getByText('Usage not reported: 2')).toBeVisible();
   await expect(page.getByText('Measurement crosses period boundary: 1')).toBeVisible();
@@ -116,14 +119,12 @@ test('synthetic multi-model ranking, explicit unknowns, shares, sessions, escapi
   await expect(rows.nth(0)).toContainText('synthetic-beta');
   await expect(page.locator('.analytics-leader')).toHaveText('synthetic-beta');
   expect(queries).toHaveLength(count);
-  await expect(page.getByRole('link', { name: 'Most used models' })).toHaveAttribute(
-    'aria-current',
-    'page',
-  );
+  await expect(page.getByRole('link', { name: 'Metrics' })).toHaveAttribute('aria-current', 'page');
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Your agents, in focus.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
   await page.goBack();
-  await expect(page.getByRole('heading', { name: 'Most used models' })).toBeVisible();
+  await openModelsTab(page);
+  await expect(page.getByRole('heading', { name: 'Model ranking' })).toBeVisible();
 });
 
 test('synthetic filters preserve workspace and send exact IDs with exclusive unidentified selection', async ({
@@ -131,7 +132,10 @@ test('synthetic filters preserve workspace and send exact IDs with exclusive uni
 }) => {
   const queries = await syntheticApi(page);
   await openModels(page);
-  await page.getByRole('navigation', { name: 'Workspaces' }).getByRole('button').nth(1).click();
+  await page
+    .getByRole('navigation', { name: 'Workspaces' })
+    .getByRole('button', { name: 'browser-test', exact: true })
+    .click();
   await expect.poll(() => queries.at(-1)?.get('workspaceId')).not.toBeNull();
   const workspace = queries.at(-1)?.get('workspaceId');
   expect(workspace).toBeTruthy();
@@ -148,8 +152,13 @@ test('synthetic filters preserve workspace and send exact IDs with exclusive uni
   await expect.poll(() => queries.at(-1)?.get('unidentified')).toBe('true');
   expect(queries.at(-1)?.has('model')).toBe(false);
   await expect(page.locator('.analytics-table tbody tr')).toContainText('Unidentified model');
+  await page.locator('.analytics-evidence > summary').click();
   await expect(page.getByText(/Token shares and bars use 100 reported tokens/)).toBeVisible();
-  await expect(page.getByLabel('CLI adapter', { exact: true }).locator('option')).toHaveCount(2);
+  await expect(page.getByLabel('CLI adapter', { exact: true }).locator('option')).toHaveText([
+    'All observed adapters',
+    'Codex',
+    'Antigravity',
+  ]);
 });
 
 test.describe('local calendar query boundaries', () => {
@@ -171,15 +180,16 @@ test.describe('local calendar query boundaries', () => {
     expect(queries.at(-1)?.has('to')).toBe(false);
     const count = queries.length;
     await page.getByLabel('Period', { exact: true }).selectOption('custom');
-    await expect(page.getByRole('alert')).toContainText('Choose valid start');
+    await expect(page.getByRole('alert')).toContainText('Choose a valid period');
     await page.getByLabel('Start date', { exact: true }).fill('2026-03-09');
     await page.getByLabel('End date (inclusive)', { exact: true }).fill('2026-03-08');
-    await expect(page.getByRole('alert')).toContainText('Choose valid start');
+    await expect(page.getByRole('alert')).toContainText('Choose a valid period');
     await page.waitForTimeout(450);
     expect(queries).toHaveLength(count);
     await page.getByLabel('Start date', { exact: true }).fill('2026-03-08');
     await expect.poll(() => queries.at(-1)?.get('from')).toBe('2026-03-08T05:00:00.000Z');
     expect(queries.at(-1)?.get('to')).toBe('2026-03-09T04:00:00.000Z');
+    await page.locator('.analytics-coverage > summary').click();
     await expect(page.getByText(/Calendar days in America\/New_York/)).toBeVisible();
   });
 });
@@ -208,22 +218,21 @@ test('loading, unavailable versus zero, empty, HTTP errors and explicit retry', 
     await route.fulfill({ json: body });
   });
   await page.goto('/#models');
+  await openModelsTab(page);
   await expect(page.getByText('Loading model usage…')).toBeVisible();
   await expect.poll(() => Boolean(release)).toBe(true);
   mode = 'empty';
   release?.();
   await expect(page.getByText('No model observations match this query.')).toBeVisible();
-  await expect(page.locator('.analytics-stats .stat').nth(1).locator('strong')).toHaveText(
-    'Unavailable',
-  );
+  await expect(page.locator('.analytics-stats .stat').nth(1).locator('strong')).toHaveText('—');
   mode = 'missing';
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(1);
-  await expect(page.locator('.analytics-leader')).toHaveText('Unavailable');
+  await expect(page.locator('.analytics-leader')).toHaveText('—');
   mode = 'zero';
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.locator('.analytics-stats .stat').nth(1).locator('strong')).toHaveText('0');
-  await expect(page.locator('.analytics-table tbody tr td').nth(2)).toHaveText('Unavailable');
+  await expect(page.locator('.analytics-table tbody tr td').nth(2)).toHaveText('—');
   mode = 'capacity';
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('exceeds local analytics capacity');
@@ -267,9 +276,11 @@ for (const [locale, errors] of [
       else await route.fulfill({ json: report() });
     });
     await page.goto('/#models');
+    await openModelsTab(page);
     await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
-    await page.getByLabel('Language').selectOption(locale);
-    const refresh = page.locator('.analytics .page-heading button');
+    await changeLanguage(page, locale);
+    await openModelsTab(page);
+    const refresh = page.locator('.topbar').getByRole('button', { name: /^(Refresh|Atualizar)$/ });
     for (const error of errors) {
       current = error;
       await refresh.click();
@@ -310,12 +321,13 @@ test('mobile dedicated navigation and Portuguese translation preserve plain mode
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await syntheticApi(page);
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Workspaces', exact: true }).click();
-  await page.getByRole('link', { name: 'Most used models' }).click();
+  await page.goto('/studio');
+  await page.getByRole('link', { name: 'Metrics' }).click();
+  await openModelsTab(page);
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
-  await page.getByLabel('Language').selectOption('pt-BR');
-  await expect(page.getByRole('heading', { name: 'Modelos mais utilizados' })).toBeVisible();
+  await changeLanguage(page, 'pt-BR');
+  await openModelsTab(page);
+  await expect(page.getByRole('heading', { name: 'Ranking de modelos' })).toBeVisible();
   await expect(page.getByLabel('Período', { exact: true })).toBeVisible();
   await expect(page.locator('.analytics-coverage')).toContainText('Cobertura incompleta');
   await expect(page.locator('.analytics-table')).toContainText('Modelo não identificado');
@@ -323,9 +335,11 @@ test('mobile dedicated navigation and Portuguese translation preserve plain mode
   await expect(page.locator('.analytics')).not.toContainText('analytics.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Modelos mais utilizados' })).toBeVisible();
-  await page.getByLabel('Idioma').selectOption('en-US');
-  await expect(page.getByRole('heading', { name: 'Most used models' })).toBeVisible();
+  await openModelsTab(page);
+  await expect(page.getByRole('heading', { name: 'Ranking de modelos' })).toBeVisible();
+  await changeLanguage(page, 'en-US');
+  await openModelsTab(page);
+  await expect(page.getByRole('heading', { name: 'Model ranking' })).toBeVisible();
   await expect(page.locator('.analytics-table tbody tr')).toHaveCount(4);
   const tableScroll = page.locator('.analytics .table-scroll');
   await tableScroll.focus();
@@ -344,11 +358,13 @@ test('analytics refresh follows observed source events, not snapshot polling or 
   await openModels(page);
   const count = queries.length;
   const comparison = page.getByRole('region', { name: 'Compare observed usage', exact: true });
-  await comparison.getByLabel('Comparison row 1').selectOption({ label: 'codex: synthetic-alpha' });
-  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'codex: synthetic-beta' });
+  await comparison
+    .getByLabel('Comparison row 1')
+    .selectOption({ label: 'Codex · synthetic-alpha' });
+  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'Codex · synthetic-beta' });
   await expect(comparison.getByRole('table')).toBeVisible();
-  await page.getByLabel('Language').selectOption('pt-BR');
-  await page.getByLabel('Idioma').selectOption('en-US');
+  await page.getByRole('button', { name: 'Search & commands', exact: true }).click();
+  await page.keyboard.press('Escape');
   await expect(comparison.getByRole('table')).toBeVisible();
   // Cross the existing snapshot polling interval with no new source evidence.
   await page.waitForTimeout(5500);
@@ -447,6 +463,7 @@ test('unmocked Analytics reconciles two models ingested through the disposable o
     );
   }
   await page.goto('/#models');
+  await openModelsTab(page);
   await page
     .getByRole('navigation', { name: 'Workspaces' })
     .getByRole('button', { name: /analytics-integration/ })
@@ -463,15 +480,16 @@ test('unmocked Analytics reconciles two models ingested through the disposable o
   const comparison = page.getByRole('region', { name: 'Compare observed usage', exact: true });
   await comparison
     .getByLabel('Comparison row 1')
-    .selectOption({ label: 'codex: synthetic-integration-beta' });
+    .selectOption({ label: 'Codex · synthetic-integration-beta' });
   await comparison
     .getByLabel('Comparison row 2')
-    .selectOption({ label: 'codex: synthetic-integration-alpha' });
+    .selectOption({ label: 'Codex · synthetic-integration-alpha' });
   const compared = comparison.getByRole('row', { name: 'Reported tokens', exact: false });
   await expect(compared.getByRole('cell')).toHaveText(['500', '300']);
   await expect(
     comparison.getByRole('row', { name: /^Observed sessions/ }).getByRole('cell'),
   ).toHaveText(['1', '1']);
+  await page.locator('.analytics-export > summary').click();
   // Unmocked authenticated worker response -> bounded runtime admission -> gesture download.
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
@@ -492,6 +510,7 @@ test('comparison projects current rows without recomputing, guessing or fetching
 }) => {
   const queries = await syntheticApi(page);
   await openModels(page);
+  await page.locator('.analytics-export > summary').click();
   // This synthetic report has an unbounded query, matching the export reading contract.
   await page.getByLabel('Period', { exact: true }).selectOption('all');
   await expect(page.getByRole('button', { name: 'Export CSV', exact: true })).toBeEnabled();
@@ -499,14 +518,16 @@ test('comparison projects current rows without recomputing, guessing or fetching
   const count = queries.length;
   await expect(comparison.getByRole('combobox')).toHaveCount(3);
   await expect(comparison.getByRole('table')).toHaveCount(0);
-  await comparison.getByLabel('Comparison row 1').selectOption({ label: 'codex: synthetic-alpha' });
+  await comparison
+    .getByLabel('Comparison row 1')
+    .selectOption({ label: 'Codex · synthetic-alpha' });
   await expect(comparison.getByRole('table')).toHaveCount(0);
   await expect(
     comparison
       .getByLabel('Comparison row 2')
-      .getByRole('option', { name: 'codex: synthetic-alpha' }),
+      .getByRole('option', { name: 'Codex · synthetic-alpha' }),
   ).toHaveJSProperty('disabled', true);
-  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'codex: synthetic-beta' });
+  await comparison.getByLabel('Comparison row 2').selectOption({ label: 'Codex · synthetic-beta' });
   await expect(
     comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
   ).toHaveText(['600', '300']);
@@ -516,16 +537,17 @@ test('comparison projects current rows without recomputing, guessing or fetching
   ]);
   await comparison
     .getByLabel('Comparison row 3')
-    .selectOption({ label: 'codex: Unidentified model' });
+    .selectOption({ label: 'Codex · Unidentified model' });
   await expect(
     comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
   ).toHaveText(['600', '300', '100']);
+  await comparison.locator('summary').click();
   await expect(comparison.getByText(/Descriptive, non-equivalent observations/)).toBeVisible();
   await expect(
     comparison.getByText(/Observed identifiers do not establish current availability/),
   ).toBeVisible();
   await expect(comparison.getByText(/Unavailable: tokens per execution/)).toBeVisible();
-  await expect(comparison.getByText('Provider unavailable', { exact: true })).toHaveCount(3);
+  await expect(comparison.getByText('Provider unavailable', { exact: true })).toBeVisible();
   await page.getByLabel('Rank by').selectOption('sessions');
   await expect(
     comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
@@ -561,21 +583,30 @@ test('comparison distinguishes zero, null and hostile identifiers in localized m
     await route.fulfill({ json: body });
   });
   await page.goto('/#models');
+  await openModelsTab(page);
   const comparison = page.locator('.analytics-comparison');
-  await comparison.getByLabel('Comparison row 1').selectOption({ label: `codex: ${longModel}` });
+  await comparison.getByLabel('Comparison row 1').selectOption({ label: `Codex · ${longModel}` });
   await comparison
     .getByLabel('Comparison row 2')
-    .selectOption({ label: 'codex: Unidentified model' });
+    .selectOption({ label: 'Codex · Unidentified model' });
   await expect(
     comparison.getByRole('row', { name: /^Reported tokens/ }).getByRole('cell'),
-  ).toHaveText(['Unavailable', '0']);
+  ).toHaveText(['—', '0']);
   await expect(comparison.locator('img')).toHaveCount(0);
   expect(await page.evaluate(() => Reflect.get(window, 'analyticsInjected'))).toBeUndefined();
-  await page.getByLabel('Language').selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openModelsTab(page);
+  await comparison
+    .getByLabel('Linha de comparação 1')
+    .selectOption({ label: `Codex · ${longModel}` });
+  await comparison
+    .getByLabel('Linha de comparação 2')
+    .selectOption({ label: 'Codex · Modelo não identificado' });
+  await comparison.locator('summary').click();
   await expect(comparison.getByRole('heading', { name: 'Comparar uso observado' })).toBeVisible();
   await expect(
     comparison.getByRole('row', { name: /^Tokens reportados/ }).getByRole('cell'),
-  ).toHaveText(['Indisponível', '0']);
+  ).toHaveText(['—', '0']);
   await expect(comparison).toContainText('Observações descritivas, sem equivalência de tarefas');
   await expect(comparison).not.toContainText('analytics.');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -604,10 +635,10 @@ test('comparison discards choices on refresh, filters, errors and disconnect/rec
   const selectPair = async () => {
     await comparison
       .getByLabel('Comparison row 1')
-      .selectOption({ label: 'codex: synthetic-alpha' });
+      .selectOption({ label: 'Codex · synthetic-alpha' });
     await comparison
       .getByLabel('Comparison row 2')
-      .selectOption({ label: 'codex: synthetic-beta' });
+      .selectOption({ label: 'Codex · synthetic-beta' });
     await expect(comparison.getByRole('table')).toBeVisible();
   };
   const expectReset = async () => {

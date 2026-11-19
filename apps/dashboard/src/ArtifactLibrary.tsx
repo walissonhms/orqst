@@ -157,7 +157,9 @@ function ArtifactSources({
   const [revision, setRevision] = useState(0);
   const activeRequest = useRef<AbortController | null>(null);
   const refreshButton = useRef<HTMLButtonElement>(null);
-  const load = useCallback(async (before: number, reset: boolean, scanned = 0, sourceCount = 0) => {
+  const focusAfterPaging = useRef(false);
+  const load = useCallback(async (before: number, reset: boolean, scanned = 0) => {
+    focusAfterPaging.current = !reset;
     activeRequest.current?.abort();
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -191,13 +193,6 @@ function ArtifactSources({
           failed: false,
         };
       });
-      if (
-        !reset &&
-        (events.length < artifactLibraryLimits.page ||
-          scanned + events.length >= artifactLibraryLimits.observations ||
-          sourceCount + candidates.length >= artifactLibraryLimits.sources)
-      )
-        requestAnimationFrame(() => refreshButton.current?.focus());
     } catch {
       if (!controller.signal.aborted)
         setReading((current) => ({ ...current, pending: false, failed: true }));
@@ -211,6 +206,11 @@ function ArtifactSources({
   const capped =
     reading.scanned >= artifactLibraryLimits.observations ||
     reading.sources.length >= artifactLibraryLimits.sources;
+  useEffect(() => {
+    if (reading.pending || !focusAfterPaging.current) return;
+    focusAfterPaging.current = false;
+    if (online && !reading.failed && (!reading.hasOlder || capped)) refreshButton.current?.focus();
+  }, [online, reading.pending, reading.failed, reading.hasOlder, capped]);
   const term = query.trim().toLocaleLowerCase();
   const rows = reading.sources
     .flatMap((event) => {
@@ -296,7 +296,7 @@ function ArtifactSources({
       <button
         className="button history-button"
         disabled={!online || reading.pending || !reading.hasOlder || capped}
-        onClick={() => void load(reading.before, false, reading.scanned, reading.sources.length)}
+        onClick={() => void load(reading.before, false, reading.scanned)}
       >
         {t('artifactLibrary.older')}
       </button>

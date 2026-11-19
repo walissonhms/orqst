@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { changeLanguage, openModelsTab } from '../helpers/spec-dashboard.js';
 
 // Disposable synthetic aggregate only; no user data.
 type Row = {
@@ -66,9 +67,9 @@ async function mock(page: Page, body: unknown) {
     route.fulfill({ json: body, headers: { 'content-type': 'application/json' } }),
   );
   await page.goto('/#models');
-  await expect(
-    page.getByRole('region', { name: 'Export aggregate report', exact: true }),
-  ).toBeVisible();
+  await openModelsTab(page);
+  await page.locator('.analytics-export > summary').click();
+  await expect(page.locator('.analytics-export')).toBeVisible();
   await expect(page.locator('.analytics-comparison')).toBeVisible();
 }
 
@@ -79,7 +80,8 @@ async function select(page: Page, slot: number, label: string) {
 test('rows keep adapter+model identity and distinguish null from zero', async ({ page }) => {
   await mock(page, summary(rows));
   const comparison = page.locator('.analytics-comparison');
-  await expect(comparison.getByText('Descriptive, non-equivalent observations.')).toBeVisible();
+  await comparison.locator('summary').click();
+  await expect(comparison.getByText(/Descriptive, non-equivalent observations/)).toBeVisible();
   await expect(comparison).toContainText(
     'token totals do not establish quality, efficiency or a better model',
   );
@@ -90,22 +92,22 @@ test('rows keep adapter+model identity and distinguish null from zero', async ({
   const options = comparison.locator('select').first().locator('option');
   await expect(options).toHaveText([
     'Choose an observed row',
-    'codex: shared-model',
-    'claude: shared-model',
-    'codex: Unidentified model',
+    'Codex · shared-model',
+    'Claude · shared-model',
+    'Codex · Unidentified model',
   ]);
 
-  await select(page, 0, 'codex: shared-model');
-  await select(page, 1, 'claude: shared-model');
-  await select(page, 2, 'codex: Unidentified model');
+  await select(page, 0, 'Codex · shared-model');
+  await select(page, 1, 'Claude · shared-model');
+  await select(page, 2, 'Codex · Unidentified model');
   const table = comparison.locator('table');
   await expect(table).toBeVisible();
   const headers = table.locator('thead th');
   await expect(headers).toHaveCount(4);
   await expect(headers.nth(1)).toContainText('shared-model');
-  await expect(headers.nth(1)).toContainText('codex');
+  await expect(headers.nth(1)).toContainText('Codex');
   await expect(headers.nth(2)).toContainText('shared-model');
-  await expect(headers.nth(2)).toContainText('claude');
+  await expect(headers.nth(2)).toContainText('Claude');
   await expect(headers.nth(3)).toContainText('Unidentified model');
   // Same model on two adapters stays two distinct columns.
   expect(await headers.nth(1).innerText()).not.toBe(await headers.nth(2).innerText());
@@ -113,7 +115,7 @@ test('rows keep adapter+model identity and distinguish null from zero', async ({
   const tokens = table.locator('tbody tr').first().locator('td');
   await expect(tokens.nth(0)).toHaveText('110');
   await expect(tokens.nth(1)).toHaveText('0'); // confirmed zero, not "Unavailable"
-  await expect(tokens.nth(2)).toHaveText('Unavailable'); // usage: null
+  await expect(tokens.nth(2)).toHaveText('—'); // usage: null
   expect(await table.innerText()).not.toMatch(/better|best|efficient|quality score/i);
 });
 
@@ -128,10 +130,10 @@ test('hostile identifiers are inert in options and headers', async ({ page }) =>
   );
   const comparison = page.locator('.analytics-comparison');
   await expect(comparison.locator('select').first().locator('option').nth(1)).toHaveText(
-    `codex: ${hostile}`,
+    `Codex · ${hostile}`,
   );
-  await select(page, 0, `codex: ${hostile}`);
-  await select(page, 1, 'claude: plain-model');
+  await select(page, 0, `Codex · ${hostile}`);
+  await select(page, 1, 'Claude · plain-model');
   await expect(comparison.locator('thead th').nth(1)).toContainText(hostile);
   await expect(comparison.locator('img, script, a, iframe, object, embed')).toHaveCount(0);
   expect(
@@ -146,16 +148,16 @@ test('refresh and filter changes reset the selection instead of comparing stale 
 }) => {
   await mock(page, summary(rows));
   const comparison = page.locator('.analytics-comparison');
-  await select(page, 0, 'codex: shared-model');
-  await select(page, 1, 'claude: shared-model');
+  await select(page, 0, 'Codex · shared-model');
+  await select(page, 1, 'Claude · shared-model');
   await expect(comparison.locator('table')).toBeVisible();
 
   await page.getByRole('button', { name: 'Refresh', exact: true }).click();
   await expect(comparison.locator('table')).toHaveCount(0);
   await expect(comparison).toContainText('Select at least two distinct observed rows to compare.');
 
-  await select(page, 0, 'codex: shared-model');
-  await select(page, 1, 'claude: shared-model');
+  await select(page, 0, 'Codex · shared-model');
+  await select(page, 1, 'Claude · shared-model');
   await expect(comparison.locator('table')).toBeVisible();
   // A filter change produces a new reading and must clear the comparison too.
   await page.getByLabel('CLI adapter', { exact: true }).selectOption('codex');
@@ -167,8 +169,8 @@ test('the exported aggregate is not reduced by the comparison selection', async 
   // All-history keeps the reading query empty, matching the synthetic aggregate.
   await page.getByLabel('Period', { exact: true }).selectOption('all');
   await expect(page.locator('.analytics-comparison')).toBeVisible();
-  await select(page, 0, 'codex: shared-model');
-  await select(page, 1, 'claude: shared-model');
+  await select(page, 0, 'Codex · shared-model');
+  await select(page, 1, 'Claude · shared-model');
   await expect(page.locator('.analytics-comparison table')).toBeVisible();
 
   const csv = page.getByRole('button', { name: 'Export CSV', exact: true });
@@ -194,8 +196,8 @@ test('offline removes the comparison and pt-BR keeps it accessible', async ({ pa
   });
   await mock(page, summary(rows));
   const comparison = page.locator('.analytics-comparison');
-  await select(page, 0, 'codex: shared-model');
-  await select(page, 1, 'claude: shared-model');
+  await select(page, 0, 'Codex · shared-model');
+  await select(page, 1, 'Claude · shared-model');
   const table = comparison.locator('table');
   await expect(table).toBeVisible();
   await expect(
@@ -205,7 +207,8 @@ test('offline removes the comparison and pt-BR keeps it accessible', async ({ pa
   await expect(table.locator('th[scope="col"]')).toHaveCount(3);
   await expect(table.locator('th[scope="row"]').first()).toHaveText('Reported tokens');
 
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openModelsTab(page);
   await expect(comparison).toContainText('Comparar uso observado');
   await expect(comparison).toContainText('não comprovam qualidade, eficiência');
   await page.setViewportSize({ width: 360, height: 800 });
@@ -213,7 +216,8 @@ test('offline removes the comparison and pt-BR keeps it accessible', async ({ pa
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
+  await changeLanguage(page, 'en-US');
+  await openModelsTab(page);
 
   // Disconnection removes the current reading, so the comparison disappears.
   blocked = true;

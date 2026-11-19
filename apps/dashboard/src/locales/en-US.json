@@ -628,6 +628,7 @@
     "reset": "Reset appearance",
     "resetHelp": "Restore dark theme, standard contrast, compact spacing, system motion, standard text sizes and original reading typography? Language, workspace selection, notification preferences, captured history and artifact drafts are unchanged.",
     "resetConfirm": "Restore appearance defaults",
+    "notificationSaveUnconfirmed": "Preference change unconfirmed.",
     "notificationScope": "Categories and sound are saved by the local Bridge and shared by connected dashboards. Browser permission is managed by the browser; audio may need activation again after reload.",
     "notificationsUnavailable": {
       "label": "Reconnect to edit notifications.",
@@ -2035,6 +2036,7 @@
         "advanced": "Advanced"
       },
       "startup": "Startup",
+      "appearanceVisit": "Appearance applies for this visit.",
       "lastPage": "Last page",
       "terminalFont": "Terminal font",
       "defaultFolder": "Default folder",

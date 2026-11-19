@@ -22,6 +22,7 @@ export interface SettingsProps {
   notifications: ReactNode;
   catalogScope?: CatalogScope;
   snapshot?: Snapshot;
+  snapshotStale?: boolean;
   defaultFolder?: string;
   initialTab?: SettingsTab;
   returnAction?: { label: string; onReturn: () => void };
@@ -44,9 +45,9 @@ type Startup = 'studio' | 'overview' | 'last';
 export function readStartup(): Startup {
   try {
     const value = localStorage.getItem(startupKey);
-    return value === 'studio' || value === 'overview' ? value : 'last';
+    return value === 'last' || value === 'overview' ? value : 'studio';
   } catch {
-    return 'last';
+    return 'studio';
   }
 }
 
@@ -123,6 +124,7 @@ export function Settings({
   notifications,
   catalogScope,
   snapshot,
+  snapshotStale,
   defaultFolder,
   initialTab = 'general',
   returnAction,
@@ -312,7 +314,11 @@ export function Settings({
                   <span>{t('screens.settings.terminalFont')}</span>
                   <span>—</span>
                 </div>
-                {storageUnavailable && <p role="alert">{t('screens.settings.saveFailed')}</p>}
+                {storageUnavailable && (
+                  <p role="status" title={t('settings.storageUnavailable')}>
+                    {t('screens.settings.appearanceVisit')}
+                  </p>
+                )}
                 <button className="button" onClick={() => setResetOpen(true)}>
                   {t('settings.reset')}
                 </button>
@@ -350,34 +356,60 @@ export function Settings({
               </dl>
             )}
             {tab === 'advanced' && (
-              <dl className="spec-facts">
-                <div>
-                  <dt>{t('screens.settings.appVersion')}</dt>
-                  <dd>{dashboardPackage.version}</dd>
-                </div>
-                <div>
-                  <dt>{t('screens.settings.logs')}</dt>
-                  <dd>—</dd>
-                </div>
-                <div>
-                  <dt>{t('observationGuide.lastScan')}</dt>
-                  <dd>
-                    {snapshot?.diagnostics.lastScan
-                      ? new Date(snapshot.diagnostics.lastScan).toLocaleString(
-                          i18n.resolvedLanguage,
-                        )
-                      : '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t('sourceFiles')}</dt>
-                  <dd>{snapshot?.diagnostics.files ?? '—'}</dd>
-                </div>
-                <div>
-                  <dt>{t('scanErrors')}</dt>
-                  <dd>{snapshot?.diagnostics.errors ?? '—'}</dd>
-                </div>
-              </dl>
+              <>
+                <dl className="spec-facts">
+                  <div>
+                    <dt>{t('screens.settings.appVersion')}</dt>
+                    <dd>{dashboardPackage.version}</dd>
+                  </div>
+                  <div>
+                    <dt>{t('screens.settings.logs')}</dt>
+                    <dd>—</dd>
+                  </div>
+                  <div>
+                    <dt>{t('observationGuide.lastScan')}</dt>
+                    <dd>
+                      {snapshot?.diagnostics.lastScan ? (
+                        <time dateTime={snapshot.diagnostics.lastScan}>
+                          {new Date(snapshot.diagnostics.lastScan).toLocaleString(
+                            i18n.resolvedLanguage,
+                          )}
+                        </time>
+                      ) : (
+                        <span title={t('observationGuide.noScan')}>—</span>
+                      )}
+                    </dd>
+                  </div>
+                  {(['files', 'malformed', 'oversized', 'skipped', 'errors'] as const).map(
+                    (key) => (
+                      <div key={key}>
+                        <dt>{t(`observationGuide.${key}`)}</dt>
+                        <dd>{snapshot?.diagnostics[key] ?? '—'}</dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+                {!snapshot ? (
+                  <p role="status">{t('observationGuide.noDiagnostics')}</p>
+                ) : (
+                  <>
+                    {snapshotStale && <p role="status">{t('observationGuide.stale')}</p>}
+                    <p>{t('observationGuide.sessionCount', { count: snapshot.sessions.length })}</p>
+                    <details>
+                      <summary>{t('screens.details')}</summary>
+                      <p>
+                        {t(
+                          snapshot.diagnostics.scanning
+                            ? 'observationGuide.scanning'
+                            : 'observationGuide.notScanning',
+                        )}
+                      </p>
+                      <p>{t('observationGuide.counterHelp')}</p>
+                      <p>{t('observationGuide.historyHelp')}</p>
+                    </details>
+                  </>
+                )}
+              </>
             )}
           </div>
         </section>

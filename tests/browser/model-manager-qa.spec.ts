@@ -1,3 +1,4 @@
+import { changeLanguage } from '../helpers/spec-dashboard.js';
 import { test, expect, type Page } from '@playwright/test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -60,8 +61,14 @@ test('the observed identifier carries no time, control or usage claim', async ({
 
   // Discovery limits are explicit and the payload was not expanded for this slice.
   await block.getByText('Model evidence limits', { exact: true }).click();
-  await expect(block).toContainText('The model observation time is unavailable');
-  await expect(block).toContainText('may differ from the latest model in the source');
+  await expect(block.locator('details p[title]')).toHaveAttribute(
+    'title',
+    /The model observation time is unavailable/,
+  );
+  await expect(block.locator('details p[title]')).toHaveAttribute(
+    'title',
+    /may differ from the latest model in the source/,
+  );
   await expect(block).toContainText(
     'Model discovery is not implemented. Availability, capabilities and selection have not been verified.',
   );
@@ -80,6 +87,7 @@ test('the observed identifier carries no time, control or usage claim', async ({
       'status',
       'task',
       'usage',
+      'usageRecorded',
       'workspaceId',
     ].sort(),
   );
@@ -119,12 +127,15 @@ test('a missing model is explicitly not recorded, not a default model', async ({
 test('the observation limits are localized in pt-BR', async ({ page }) => {
   const { id } = await source('localized', 'synthetic-qa-model');
   const block = await openModel(page, id);
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
   await expect(block).toContainText('Identificador de modelo observado: synthetic-qa-model');
   await block.getByText('Limites da evidência de modelo', { exact: true }).click();
-  await expect(block).toContainText('O horário da observação do modelo está indisponível');
+  await expect(block.locator('details p[title]')).toHaveAttribute(
+    'title',
+    /O horário da observação do modelo está indisponível/,
+  );
   await expect(block).toContainText(
     'A descoberta de modelos não está implementada. Disponibilidade, capacidades e seleção não foram verificadas.',
   );
-  await page.getByLabel('Idioma', { exact: true }).selectOption('en-US');
+  await changeLanguage(page, 'en-US');
 });

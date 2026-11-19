@@ -3,54 +3,6 @@ import { managedAgentsDocument } from '../../apps/desktop/src/managed-agents-doc
 import en from '../../apps/dashboard/src/locales/en-US.json' with { type: 'json' };
 import { buildSharedTestRenderer } from '../../scripts/helpers/shared-test-resources.js';
 
-// Synthetic opener replies only; real sender/preload/focus refusal is checked in Electron smoke.
-test('managed opener explains focus refusal, recovers and supports an older running preload', async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    Reflect.set(window, 'syntheticOpenStatus', 'focus_required');
-    Object.defineProperty(window, 'orqstManagedAgents', {
-      value: {
-        contractVersion: 1,
-        async open() {
-          const status = Reflect.get(window, 'syntheticOpenStatus');
-          if (status === 'legacy') return;
-          if (status === 'throw') throw new Error('Synthetic transport loss');
-          return { status };
-        },
-      },
-    });
-  });
-  await page.goto('/overview');
-  const open = () => page.getByRole('button', { name: 'Managed agents', exact: true });
-  await open().click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Bring the ORQST dashboard' }),
-  ).toBeVisible();
-  await page.evaluate(() => Reflect.set(window, 'syntheticOpenStatus', 'ok'));
-  await open().click();
-  await expect(page.getByText('Bring the ORQST dashboard', { exact: false })).toHaveCount(0);
-  await page.evaluate(() => Reflect.set(window, 'syntheticOpenStatus', 'unavailable'));
-  await open().click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'could not be requested' }),
-  ).toBeVisible();
-  await page.evaluate(() => Reflect.set(window, 'syntheticOpenStatus', 'legacy'));
-  await open().click();
-  await expect(page.getByText('could not be requested', { exact: false })).toHaveCount(0);
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('pt-BR');
-  await page.evaluate(() => Reflect.set(window, 'syntheticOpenStatus', 'focus_required'));
-  await page.getByRole('button', { name: 'Agentes gerenciados', exact: true }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Traga o painel do ORQST' }),
-  ).toBeVisible();
-  await page.evaluate(() => Reflect.set(window, 'syntheticOpenStatus', 'throw'));
-  await page.getByRole('button', { name: 'Agentes gerenciados', exact: true }).click();
-  await expect(
-    page.getByRole('status').filter({ hasText: 'Não foi possível solicitar' }),
-  ).toBeVisible();
-});
-
 // Synthetic client state only. This does not exercise native focus, IPC or modal acceptance.
 test('focus refusal preserves known lifecycle until a fresh snapshot restores controls', async ({
   page,

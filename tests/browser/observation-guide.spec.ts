@@ -1,32 +1,24 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Locator } from '@playwright/test';
 import type { Snapshot } from '@orqst/protocol';
+import { coreStatus, settingsTabs } from '../helpers/spec-dashboard.js';
 
 const sourceId = 'synthetic-browser-session';
-const draftText = 'Synthetic guide navigation draft — preserve exactly.\n';
 
-function guide(page: Page, locale = 'en-US') {
-  return page.getByRole('dialog', {
-    name: locale === 'pt-BR' ? 'Guia de observação' : 'Observation guide',
-    exact: true,
-  });
+async function openAdvanced(page: Page) {
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await settingsTabs(page).getByRole('button', { name: 'Advanced', exact: true }).click();
+  return page.getByRole('region', { name: 'Advanced', exact: true });
 }
 
-async function fromPalette(page: Page) {
-  await page.keyboard.press('Control+k');
-  const palette = page.getByRole('dialog', { name: 'Search & commands', exact: true });
-  await palette.getByRole('textbox').fill('Observation guide');
-  await page.keyboard.press('Enter');
-  await expect(palette).toHaveCount(0);
-  await expect(guide(page).getByRole('heading', { name: 'Observation guide' })).toBeFocused();
-}
+const value = (region: Locator, label: string) =>
+  region.locator('dl > div').filter({ hasText: label }).locator('dd');
 
-test('the guide exposes actual snapshot evidence, contains keyboard focus and makes no mutation requests', async ({
+test('advanced diagnostics expose actual snapshot evidence without mutation requests', async ({
   page,
 }) => {
   await page.route('**/api/snapshot', async (route) => {
     const response = await route.fetch();
     const snapshot = (await response.json()) as Snapshot;
-    // Other suites may retain additional synthetic sessions in the shared Bridge.
     snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
     snapshot.diagnostics = {
       files: 4,
@@ -39,62 +31,36 @@ test('the guide exposes actual snapshot evidence, contains keyboard focus and ma
     };
     await route.fulfill({ response, json: snapshot });
   });
-  await page.goto('/settings');
-  await expect(page.getByRole('status').filter({ hasText: 'Live' })).toBeVisible();
+  await page.goto('/visao-geral');
+  await expect(coreStatus(page)).toHaveText('CORE ONLINE');
   const mutations: string[] = [];
   page.on('request', (request) => {
     if (!['GET', 'HEAD'].includes(request.method())) mutations.push(request.url());
   });
-  const trigger = page.getByRole('button', { name: 'Observation guide', exact: true });
-  const storage = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }));
-  await trigger.click();
-  const modal = guide(page);
-  await expect(modal.getByRole('heading', { name: 'Observation guide' })).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(modal.getByRole('button', { name: 'Back to dashboard' })).toBeFocused();
-  await expect(modal.getByRole('listitem')).toHaveCount(3);
-  await expect(modal.getByRole('status')).toHaveText('The local Bridge is connected.');
-  await expect(modal).toContainText('A source scan was in progress in this snapshot.');
-  await expect(modal.locator('time')).toHaveAttribute('datetime', '2026-11-03T12:34:56.000Z');
-  await expect(
-    modal.locator('dl > div').filter({ hasText: 'Last discovered JSONL files' }),
-  ).toContainText('4');
-  await expect(modal.locator('dl > div').filter({ hasText: 'Malformed records' })).toContainText(
-    '2',
-  );
-  await expect(modal.locator('dl > div').filter({ hasText: 'Oversized records' })).toContainText(
-    '3',
-  );
-  await expect(modal.locator('dl > div').filter({ hasText: 'Skipped source reads' })).toContainText(
-    '1',
-  );
-  await expect(
-    modal.locator('dl > div').filter({ hasText: 'Source read / scan errors' }),
-  ).toContainText('5');
-  await expect(modal).toContainText(
+  const advanced = await openAdvanced(page);
+  await expect(advanced.locator('time')).toHaveAttribute('datetime', '2026-11-03T12:34:56.000Z');
+  for (const [label, expected] of [
+    ['Last discovered JSONL files', '4'],
+    ['Malformed records', '2'],
+    ['Oversized records', '3'],
+    ['Skipped source reads', '1'],
+    ['Source read / scan errors', '5'],
+  ] as const) {
+    await expect(value(advanced, label)).toHaveText(expected);
+  }
+  await expect(advanced).toContainText(
     '1 retained session in the loaded snapshot, across all workspaces.',
   );
-  await expect(modal).toContainText('zero errors does not prove complete coverage');
+  await advanced.getByText('Details', { exact: true }).press('Enter');
+  await expect(advanced.getByText('A source scan was in progress in this snapshot.')).toBeVisible();
+  await expect(advanced.getByText(/zero errors does not prove complete coverage/)).toBeVisible();
   await expect(
-    modal.getByRole('button', { name: /Start|Install|Authenticate|Scan now|Complete/ }),
+    advanced.getByRole('button', { name: /Start|Install|Authenticate|Scan now/ }),
   ).toHaveCount(0);
-  await page.keyboard.press('Control+k');
-  await expect(page.getByRole('dialog')).toHaveCount(1);
-  await modal.getByRole('button', { name: 'Back to dashboard' }).focus();
-  await page.keyboard.press('Tab');
-  await expect(modal.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
-  await expect(modal.getByRole('button', { name: 'Back to dashboard' })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(trigger).toBeFocused();
-  await expect(page).toHaveURL('/settings');
-  expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).toBe(
-    storage,
-  );
   expect(mutations).toEqual([]);
 });
 
-test('empty history explains missing scans and the guide can return through existing routes', async ({
+test('empty diagnostics identify an unreported scan and a measured zero-session snapshot', async ({
   page,
 }) => {
   await page.route('**/api/snapshot', async (route) => {
@@ -112,34 +78,18 @@ test('empty history explains missing scans and the guide can return through exis
     };
     await route.fulfill({ response, json: snapshot });
   });
-  await page.goto('/overview');
-  const trigger = page.getByRole('button', { name: 'Observation guide', exact: true });
-  await trigger.click();
-  await expect(guide(page)).toContainText('No scan time reported');
-  await expect(guide(page)).toContainText('0 retained sessions');
-  await expect(guide(page)).toContainText('No sessions are retained in this snapshot.');
-  await guide(page).getByRole('button', { name: 'View observation capabilities' }).click();
-  await expect(guide(page)).toHaveCount(0);
-  await expect(page).toHaveURL('/agents');
-  await expect(page.locator('#main-content')).toBeFocused();
-  await expect(page.getByRole('region', { name: 'Observation capability matrix' })).toBeVisible();
+  await page.goto('/visao-geral');
+  const advanced = await openAdvanced(page);
+  await expect(advanced.getByTitle('No scan time reported')).toHaveText('—');
+  await expect(advanced).toContainText('0 retained sessions');
+  await expect(value(advanced, 'Last discovered JSONL files')).toHaveText('0');
+  await settingsTabs(page).getByRole('button', { name: 'Agents', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Agents', exact: true })).toBeVisible();
   await page.goBack();
-  await expect(trigger).toBeVisible();
-  await fromPalette(page);
-  await guide(page).getByRole('button', { name: 'Browse recorded workspaces' }).click();
-  await expect(page).toHaveURL('/workspaces');
-  await expect(page.locator('#main-content')).toBeFocused();
+  await expect(page).toHaveURL('/visao-geral');
 });
 
-test('a scoped empty workspace does not hide global retained-session evidence or alter filters', async ({
-  page,
-}) => {
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'orqst.shell.v1',
-      JSON.stringify({ workspaceId: 'synthetic-empty-workspace', status: 'failed' }),
-    );
-  });
+test('an empty workspace does not hide global evidence or change selection', async ({ page }) => {
   await page.route('**/api/snapshot', async (route) => {
     const response = await route.fetch();
     const snapshot = (await response.json()) as Snapshot;
@@ -153,39 +103,36 @@ test('a scoped empty workspace does not hide global retained-session evidence or
     });
     await route.fulfill({ response, json: snapshot });
   });
-  await page.goto('/overview');
-  await page.getByRole('button', { name: 'Observation guide', exact: true }).click();
-  await expect(guide(page)).toContainText(
+  await page.goto('/visao-geral');
+  const workspace = page.getByRole('button', { name: 'Synthetic empty workspace' });
+  await workspace.click();
+  const advanced = await openAdvanced(page);
+  await expect(advanced).toContainText(
     '1 retained session in the loaded snapshot, across all workspaces.',
   );
-  await expect(guide(page)).not.toContainText('No sessions are retained in this snapshot.');
-  await page.keyboard.press('Escape');
+  await expect(workspace).toHaveAttribute('aria-current', 'true');
   await expect(page.locator('.breadcrumbs')).toContainText('Synthetic empty workspace');
-  await expect(page.getByRole('combobox', { name: 'Status', exact: true })).toHaveValue('failed');
 });
 
-test('without a snapshot, offline onboarding stays available and unknown counts never become zero', async ({
+test('offline onboarding can be skipped and diagnostics keep unknown values unknown', async ({
   page,
 }) => {
   await page.route('**/api/snapshot', (route) => route.abort());
-  await page.goto('/settings');
-  await page.getByRole('button', { name: 'Observation guide', exact: true }).click();
-  await expect(guide(page).getByRole('status')).toContainText('snapshot could not be loaded');
-  await expect(guide(page)).toContainText('Source diagnostics are unavailable');
-  await expect(guide(page)).toContainText('Session history is unavailable');
-  await expect(guide(page).locator('dl')).toHaveCount(0);
-  await expect(guide(page)).not.toContainText('0 retained sessions');
-  await expect(
-    guide(page).getByRole('button', { name: 'Browse recorded workspaces' }),
-  ).toBeDisabled();
-  await expect(
-    guide(page).getByRole('button', { name: 'View observation capabilities' }),
-  ).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Observation guide', exact: true })).toBeFocused();
+  await page.goto('/');
+  const onboarding = page.getByRole('dialog', { name: 'Welcome to ORQST' });
+  await expect(onboarding.getByRole('heading', { name: 'Welcome to ORQST' })).toBeFocused();
+  await expect(onboarding.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  await onboarding.getByRole('button', { name: 'Skip', exact: true }).click();
+  await expect(onboarding).toHaveCount(0);
+  const advanced = await openAdvanced(page);
+  await expect(advanced.getByRole('status')).toContainText('Source diagnostics are unavailable');
+  await expect(value(advanced, 'Last discovered JSONL files')).toHaveText('—');
+  await expect(advanced).not.toContainText('0 retained sessions');
+  await expect(page.locator('.shell-offline')).toHaveCSS('height', '28px');
+  await expect(coreStatus(page)).toHaveText('CORE OFFLINE');
 });
 
-test('loaded diagnostics update in place and become explicitly stale on snapshot failure', async ({
+test('diagnostics update in place and identify the last reading as stale on snapshot failure', async ({
   page,
 }) => {
   let fail = false;
@@ -198,30 +145,26 @@ test('loaded diagnostics update in place and become explicitly stale on snapshot
     snapshot.diagnostics.files = files;
     await route.fulfill({ response, json: snapshot });
   });
-  await page.goto('/settings');
-  await page.getByRole('button', { name: 'Observation guide', exact: true }).click();
-  const count = guide(page)
-    .locator('dl > div')
-    .filter({ hasText: 'Last discovered JSONL files' })
-    .locator('dd');
+  await page.goto('/visao-geral');
+  const advanced = await openAdvanced(page);
+  const count = value(advanced, 'Last discovered JSONL files');
   await expect(count).toHaveText('1');
   files = 7;
   await expect(count).toHaveText('7');
-  await expect(guide(page).getByRole('heading', { name: 'Observation guide' })).toBeFocused();
   fail = true;
-  await expect(guide(page).getByRole('status')).toContainText('snapshot could not be loaded');
-  await expect(guide(page)).toContainText('last loaded snapshot and may be out of date');
+  await expect(advanced.getByRole('status')).toContainText(
+    'last loaded snapshot and may be out of date',
+  );
   await expect(count).toHaveText('7');
-  await expect(guide(page)).toContainText('1 retained session');
+  await expect(advanced).toContainText('1 retained session');
   fail = false;
   files = 8;
   await expect(count).toHaveText('8');
-  await expect(guide(page)).not.toContainText('last loaded snapshot and may be out of date');
+  await expect(advanced.getByRole('status')).toHaveCount(0);
 });
 
-test('palette handoff preserves exact drafts and guide navigation shares the existing discard guard', async ({
-  page,
-}) => {
+test('palette handoff to Settings shares the exact artifact draft guard', async ({ page }) => {
+  const draft = 'Synthetic diagnostic navigation draft — preserve exactly.\n';
   await page.goto(`/overview/sessions/${sourceId}`);
   await page
     .getByRole('button', { name: 'Extract artifact manually', exact: true })
@@ -229,55 +172,64 @@ test('palette handoff preserves exact drafts and guide navigation shares the exi
     .click();
   const panel = page.getByRole('region', { name: 'Manual artifact', exact: true });
   await panel.getByRole('button', { name: 'Edit draft', exact: true }).click();
-  await panel.getByRole('textbox').fill(draftText);
-  await fromPalette(page);
+  const editor = panel.getByRole('textbox');
+  await editor.fill(draft);
+  const palette = page.getByRole('dialog', { name: 'Search & commands' });
+  await page.keyboard.press('Control+k');
+  await expect(palette).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(panel.getByRole('textbox')).toBeFocused();
-  await expect(panel.getByRole('textbox')).toHaveValue(draftText);
-  await fromPalette(page);
-  await guide(page).getByRole('button', { name: 'View observation capabilities' }).click();
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue(draft);
   const discard = page.getByRole('dialog', { name: 'Discard artifact draft?', exact: true });
-  await expect(guide(page)).toHaveCount(0);
-  await expect(discard.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(panel.getByRole('textbox')).toHaveValue(draftText);
-  await expect(panel.getByRole('heading', { name: 'Manual artifact', exact: true })).toBeFocused();
-  await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
-  await fromPalette(page);
-  await guide(page).getByRole('button', { name: 'Browse recorded workspaces' }).click();
-  await discard.getByRole('button', { name: 'Discard draft and continue', exact: true }).click();
-  await expect(page).toHaveURL('/workspaces');
+  for (const confirm of [false, true]) {
+    await page.keyboard.press('Control+k');
+    await palette.getByRole('textbox').fill('Settings');
+    await page.keyboard.press('Enter');
+    await expect(discard.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    if (confirm) await discard.getByRole('button', { name: 'Discard draft and continue' }).click();
+    else {
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveValue(draft);
+      await expect(
+        panel.getByRole('heading', { name: 'Manual artifact', exact: true }),
+      ).toBeFocused();
+      await expect(page).toHaveURL(`/overview/sessions/${sourceId}`);
+    }
+  }
+  await expect(page).toHaveURL('/configuracoes');
   await expect(page.locator('#main-content')).toBeFocused();
   await expect(panel).toHaveCount(0);
 });
 
-test('localized guide fits dark and light layouts at maximum reading sizes with reduced motion', async ({
+test('first-run onboarding fits localized layouts at maximum reading sizes with reduced motion', async ({
   page,
-}) => {
-  await page.route('**/api/snapshot', async (route) => {
-    const response = await route.fetch();
-    const snapshot = (await response.json()) as Snapshot;
-    snapshot.sessions = snapshot.sessions.filter((session) => session.id === sourceId);
-    await route.fulfill({ response, json: snapshot });
-  });
-  await page.addInitScript(() => {
-    localStorage.setItem(
-      'orqst.appearance.v1',
-      JSON.stringify({
-        textSize: 'extra-large',
-        contentSize: 'extra-large',
-        density: 'comfortable',
-      }),
-    );
-  });
+}, testInfo) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/settings');
-  for (const theme of ['dark', 'light']) {
-    await page.getByRole('combobox', { name: 'Theme', exact: true }).selectOption(theme);
+  for (const theme of ['dark', 'light'] as const) {
     for (const width of [1440, 1280, 390, 320]) {
+      const locale = width < 720 ? 'pt-BR' : 'en-US';
+      await page.goto('/configuracoes');
+      await page.evaluate(
+        ({ theme, locale }) => {
+          localStorage.removeItem('orqst.onboarding.v1');
+          localStorage.setItem('i18nextLng', locale);
+          localStorage.setItem(
+            'orqst.appearance.v1',
+            JSON.stringify({
+              theme,
+              textSize: 'extra-large',
+              contentSize: 'extra-large',
+              density: 'comfortable',
+            }),
+          );
+        },
+        { theme, locale },
+      );
       await page.setViewportSize({ width, height: 900 });
-      await page.getByRole('button', { name: 'Observation guide', exact: true }).click();
-      const modal = guide(page);
+      await page.goto('/');
+      const modal = page.getByRole('dialog', {
+        name: locale === 'pt-BR' ? 'Boas-vindas ao ORQST' : 'Welcome to ORQST',
+      });
       await expect(modal).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         width,
@@ -285,22 +237,18 @@ test('localized guide fits dark and light layouts at maximum reading sizes with 
       expect(await modal.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
         true,
       );
-      const bounds = await modal.boundingBox();
-      expect(bounds!.x).toBeGreaterThanOrEqual(0);
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-      await modal.getByRole('button', { name: 'Back to dashboard' }).scrollIntoViewIfNeeded();
-      await expect(modal.getByRole('button', { name: 'Back to dashboard' })).toBeInViewport();
-      await modal.evaluate((element) => element.scrollTo(0, 0));
-      await page.screenshot({ path: test.info().outputPath(`guide-${theme}-${width}.png`) });
-      await page.keyboard.press('Escape');
+      const bounds = (await modal.boundingBox())!;
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+      const skip = modal.getByRole('button', {
+        name: locale === 'pt-BR' ? 'Pular' : 'Skip',
+        exact: true,
+      });
+      await skip.scrollIntoViewIfNeeded();
+      await expect(skip).toBeInViewport();
+      await page.screenshot({ path: testInfo.outputPath(`onboarding-${theme}-${width}.png`) });
+      await skip.click();
+      await expect(modal).toHaveCount(0);
     }
   }
-  await page.getByLabel('Language', { exact: true }).selectOption('pt-BR');
-  await page.getByRole('button', { name: 'Guia de observação', exact: true }).click();
-  await expect(guide(page, 'pt-BR')).toContainText('1 sessão retida');
-  await expect(guide(page, 'pt-BR')).toContainText('Conecte-se ao observador');
-  expect(
-    await guide(page, 'pt-BR').evaluate((element) => element.scrollWidth <= element.clientWidth),
-  ).toBe(true);
-  await page.screenshot({ path: test.info().outputPath('guide-light-pt-BR-320.png') });
 });

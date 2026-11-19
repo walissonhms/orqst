@@ -33,6 +33,7 @@ export function ModelComparison({ data }: { data: ModelAnalyticsSummary }) {
         <p>{t('analytics.nonAdditive')}</p>
         <p>{t('analytics.cache')}</p>
         <p>{t('analytics.comparison.unavailable')}</p>
+        <p>{t('analytics.providerUnavailable')}</p>
       </details>
       <div className="analytics-filters">
         {selection.map((id, index) => (

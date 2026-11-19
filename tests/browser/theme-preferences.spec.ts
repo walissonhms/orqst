@@ -1,8 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
+import { changeLanguage, openAppearance, openModelsTab } from '../helpers/spec-dashboard.js';
 
 async function settings(page: Page) {
   await page.goto('/#settings');
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+  await openAppearance(page);
 }
 const themeSelect = (page: Page) => page.getByRole('combobox', { name: 'Theme', exact: true });
 
@@ -36,6 +38,7 @@ test('old appearance preferences retain dark mode, reading choices and actual na
   await expect(page.locator('html')).toHaveCSS('color-scheme', 'light');
   await expect(themeSelect(page)).toHaveCSS('color-scheme', 'light');
   await page.reload();
+  await openAppearance(page);
   await expect(themeSelect(page)).toHaveValue('light');
   await expect(page.locator('html')).toHaveAttribute('data-content-size', 'large');
   await expect(page.locator('html')).toHaveAttribute('data-contrast', 'high');
@@ -53,6 +56,7 @@ test('system appearance follows live media changes only when selected without ov
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   expect(await page.evaluate(() => localStorage.getItem('orqst.appearance.v1'))).toBe(stored);
   await page.reload();
+  await openAppearance(page);
   await expect(themeSelect(page)).toHaveValue('system');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -122,10 +126,8 @@ test('theme remains available offline with denied storage and localized labels',
     page.getByText('Appearance applies for this visit.', { exact: false }),
   ).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page
-    .locator('.settings-group')
-    .getByRole('combobox', { name: 'Language', exact: true })
-    .selectOption('pt-BR');
+  await changeLanguage(page, 'pt-BR');
+  await openAppearance(page);
   const select = page.getByRole('combobox', { name: 'Tema', exact: true });
   await expect(select).toHaveValue('light');
   await expect(select.getByRole('option', { name: 'Claro', exact: true })).toHaveCount(1);
@@ -134,7 +136,7 @@ test('theme remains available offline with denied storage and localized labels',
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await page.getByRole('link', { name: 'Diretório de workspaces', exact: true }).click();
+  await page.getByRole('link', { name: 'Visão geral', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
@@ -246,11 +248,13 @@ test('light theme covers real views and source text at desktop, laptop and mobil
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
       await expect(page.locator('main h1')).toBeVisible();
       if (view === 'settings') {
+        await openAppearance(page);
         await page
           .getByRole('combobox', { name: 'Contrast', exact: true })
           .selectOption(width === 1440 ? 'standard' : 'high');
       }
       if (view === 'models') {
+        await openModelsTab(page);
         await expect(
           page.getByRole('region', { name: 'Model ranking', exact: true }).first(),
         ).toBeVisible();
