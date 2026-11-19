@@ -137,6 +137,19 @@ export function dismissTerminalOpen(id: string) {
   publish(cards.filter((card) => card.id !== id));
 }
 
+/** Native confirmed pool retirement invalidates its renderer-only opening state. */
+export function clearRetiredTerminalEvidence(terminalIds: readonly string[]) {
+  const retired = new Set(terminalIds);
+  const evidence = new Map(ownedEvidence);
+  for (const id of retired) {
+    clearTimeout(openingTimers.get(id));
+    openingTimers.delete(id);
+    evidence.delete(id);
+  }
+  ownedEvidence = evidence;
+  publish(cards.filter(({ terminalId }) => terminalId === undefined || !retired.has(terminalId)));
+}
+
 /** Mount once in the Studio shell. This also prewarms the current native scope. */
 export function useTerminalLifecycle(
   workspaceId: string,

@@ -108,8 +108,19 @@ export function NativeTerminalCreator({
           reply.catalog.featureId === featureId &&
           reply.snapshot
         ) {
-          // Catalog and snapshot are one native admission generation.
-          setSelection({ catalog: reply.catalog, snapshot: reply.snapshot });
+          // A background catalog can finish while the Core is still presenting
+          // an earlier terminal. Refresh only the volatile admission state.
+          const prior = reply.snapshot;
+          const latest =
+            !prior.canCreate || prior.busy
+              ? await native.request({ action: 'snapshot' }).catch(() => undefined)
+              : undefined;
+          if (current !== requestId.current) return;
+          const snapshot =
+            latest?.status === 'ok' && latest.snapshot?.generation === prior.generation
+              ? latest.snapshot
+              : prior;
+          setSelection({ catalog: reply.catalog, snapshot });
           setState('ready');
           return;
         }
@@ -440,15 +451,6 @@ export function NativeTerminalCreator({
   const title = t('terminalStudio.create.title');
   return (
     <Modal label={title} className={batch && form ? 'ntd' : 'ntd ntd-compact'} onClose={cancel}>
-      {reopenTarget && (
-        <button
-          type="button"
-          disabled={state !== 'ready'}
-          onClick={() => reopen(reopenTarget.terminalId)}
-        >
-          {t('paneLifecycle.reopen')} {reopenTarget.displayId} · {reopenTarget.name}
-        </button>
-      )}
       {form &&
         form.providers.map((entry) => (
           <CliReviewStatus
@@ -458,7 +460,28 @@ export function NativeTerminalCreator({
             onReview={(entry) => void reviewCli(entry).catch(() => undefined)}
           />
         ))}
-      {form ? (
+      {form && reopenTerminalId ? (
+        <div className="ntd-form ntd-status">
+          <header className="ntd-head">
+            <h2>{title}</h2>
+          </header>
+          {!reopenTarget && <p role="status">{t('paneLifecycle.reopenBlocked')}</p>}
+          <footer className="ntd-footer">
+            <button type="button" onClick={cancel}>
+              {t('cancel')}
+            </button>
+            {reopenTarget && (
+              <button
+                type="button"
+                disabled={state !== 'ready'}
+                onClick={() => reopen(reopenTarget.terminalId)}
+              >
+                {t('paneLifecycle.reopen')} {reopenTarget.displayId} · {reopenTarget.name}
+              </button>
+            )}
+          </footer>
+        </div>
+      ) : form ? (
         batch ? (
           <NewTerminalDialog
             inline

@@ -119,7 +119,7 @@ export function interactiveHub(config: InteractiveTerminalConfig): boolean {
   return config.version !== 4 && !!config.interactive?.hub;
 }
 
-function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
+function validateClaudeLaunchContract(config: ManagedClaudeConfig): boolean {
   const pin = config.interactive.mcp
     ? (reviewedClaudeMcpBinary(config.executableVersion, config.executable.sha256) ??
       reviewedProviderMcpBinaries.claude)
@@ -143,6 +143,7 @@ function validateClaudeLaunchContract(config: ManagedClaudeConfig): void {
       (config.interactive.mcp && !config.interactive.hub))
   )
     throw new Error('Owned hooks require the reviewed Claude TUI contract');
+  return updated;
 }
 
 export function validateManagedClaudeConfig(
@@ -209,7 +210,7 @@ export function interactiveTerminalProfiles(
   if (config.version === 1) return managedCodexProfiles(config, mcp);
   if (config.version === 3) return openCodeTerminalProfiles(config, mcp);
   if (config.version === 4) return antigravityTerminalProfiles(config, mcp);
-  validateClaudeLaunchContract(config);
+  const reviewedUpdate = validateClaudeLaunchContract(config);
   validateClaudeOwnedHooks(config);
   if (!!config.interactive.mcp !== !!mcp || (!!mcp && !config.interactive.strictMcpAcknowledged))
     throw new Error('Claude MCP composition/acknowledgment mismatch');
@@ -227,7 +228,7 @@ export function interactiveTerminalProfiles(
           sessionId: config.sessionId,
           mcp,
         },
-        hasCliExecutableReview('claude', config),
+        reviewedUpdate,
       )
     : undefined;
   return [

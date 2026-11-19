@@ -49,6 +49,7 @@ async function installFixture(
   page: Page,
   mode: 'returning' | 'first' | 'failed' | 'live' | 'antigravity',
   embedPtys = false,
+  transientAdmission = false,
 ) {
   const selected = {
     ...feature(workspaceId, featureId, 'Revisão'),
@@ -108,7 +109,7 @@ async function installFixture(
     ],
   };
   await page.addInitScript(
-    ({ mode, startup, live, modelId, releasedId, embedPtys }) => {
+    ({ mode, startup, live, modelId, releasedId, embedPtys, transientAdmission }) => {
       localStorage.setItem('i18nextLng', 'pt-BR');
       if (!localStorage.getItem('orqst.shell.v1'))
         localStorage.setItem(
@@ -133,12 +134,26 @@ async function installFixture(
             return { status: 'ok' };
           },
         }),
-        request: async () => {
+        request: async (request: Parameters<DesktopFeatures['request']>[0]) => {
           if (mode !== 'live' && mode !== 'antigravity') return { status: 'unavailable' };
+          if (request.action === 'select') {
+            if (request.expectedRevision !== live.view.revision)
+              return { status: 'stale', snapshot: live };
+            live.activeFeatureId = request.featureId;
+            live.view = {
+              ...live.view,
+              featureId: request.featureId,
+              revision: live.view.revision + 1,
+            };
+            live.generation++;
+            window.dispatchEvent(
+              new CustomEvent('orqst-feature-state', { detail: structuredClone(live) }),
+            );
+          }
           const at = Date.now();
           return {
             status: 'ok',
-            snapshot: live,
+            snapshot: structuredClone(live),
             canvas: {
               observedAt: at,
               entries: live.slots.map(({ slot, terminalId }) => ({
@@ -173,10 +188,11 @@ async function installFixture(
               })),
             };
           }
+          if (request.action === 'snapshot') return { status: 'ok', snapshot: studio };
           if (request.action === 'catalog')
             return {
               status: 'catalog',
-              snapshot: studio,
+              snapshot: transientAdmission ? { ...studio, canCreate: false } : studio,
               catalog: {
                 contractVersion: 1,
                 workspaceId: request.workspaceId,
@@ -209,6 +225,7 @@ async function installFixture(
             };
           if (request.action === 'create-batch')
             return new Promise((resolve) => {
+              Reflect.set(window, 'diag28ReopenId', request.reopenTerminalId);
               Reflect.set(window, 'acceptDiag27Open', (terminalId: string) =>
                 resolve({
                   status: 'batch',
@@ -238,7 +255,7 @@ async function installFixture(
         },
       });
     },
-    { mode, startup, live, modelId, releasedId, embedPtys },
+    { mode, startup, live, modelId, releasedId, embedPtys, transientAdmission },
   );
   await page.setViewportSize({ width: 1440, height: 900 });
 }
@@ -453,4 +470,54 @@ test('a refused native open remains a failed Studio card with a retry action', a
   await expect(page.getByRole('dialog').getByRole('textbox').first()).toHaveValue(
     'Terminal recusado',
   );
+});
+
+test('Feature round trip reapplies geometry to the same owned pane', async ({ page }) => {
+  await installFixture(page, 'live', true);
+  await page.goto('/studio');
+  const pane = page.locator(`[data-pane-id="${terminalId}"]`);
+  const frame = () => page.evaluate(() => Reflect.get(window, 'diag27Layout'));
+  await expect(pane).toBeVisible();
+  await expect.poll(frame).toMatchObject({
+    panes: expect.arrayContaining([expect.objectContaining({ terminalId, visible: true })]),
+  });
+  const before = (await frame()).panes.find(
+    (pane: { terminalId: string }) => pane.terminalId === terminalId,
+  );
+  await page.getByRole('button', { name: 'Geral', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Geral', exact: true })).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await expect(pane).toHaveCount(0);
+  await page.getByRole('button', { name: 'Revisão', exact: true }).click();
+  await expect(pane).toBeVisible();
+  await expect.poll(frame).toMatchObject({
+    panes: expect.arrayContaining([expect.objectContaining(before)]),
+  });
+});
+
+test('reopen submits the exact released member without a new-terminal fallback', async ({
+  page,
+}) => {
+  await installFixture(page, 'live', true);
+  await page.goto('/studio');
+  await page.getByText('Encerrados (2)').click();
+  const released = page.locator('.pane-lifecycle-ended li').filter({ hasText: 'T-003' });
+  await released.getByRole('button', { name: 'Reabrir' }).click();
+  const picker = page.getByRole('dialog');
+  await expect(picker.getByRole('button', { name: 'Abrir terminal', exact: true })).toHaveCount(0);
+  await picker.getByRole('button', { name: /Reabrir T-003/ }).click();
+  await expect
+    .poll(() => page.evaluate(() => Reflect.get(window, 'diag28ReopenId')))
+    .toBe(releasedId);
+});
+
+test('a cached busy admission does not disable later opens in the same scope', async ({ page }) => {
+  await installFixture(page, 'live', true, true);
+  await page.goto('/studio');
+  await page.getByRole('button', { name: '＋ Terminal', exact: true }).click();
+  await expect(
+    page.getByRole('dialog').getByRole('button', { name: 'Abrir terminal', exact: true }),
+  ).toBeEnabled();
 });

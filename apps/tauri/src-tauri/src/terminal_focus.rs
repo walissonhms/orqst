@@ -42,7 +42,7 @@ impl Focus {
 }
 
 /// Called only on the AppKit thread while Tauri holds the WKWebView alive.
-pub(super) unsafe fn chrome_first_responder(webview: *mut AnyObject) -> bool {
+pub(super) unsafe fn document_matches(webview: *mut AnyObject, source: &str) -> bool {
     if webview.is_null() {
         return false;
     }
@@ -55,9 +55,11 @@ pub(super) unsafe fn chrome_first_responder(webview: *mut AnyObject) -> bool {
         return false;
     }
     let bytes: *const std::ffi::c_char = msg_send![string, UTF8String];
-    if bytes.is_null()
-        || std::ffi::CStr::from_ptr(bytes).to_bytes() != b"orqst-features://local/index.html"
-    {
+    !bytes.is_null() && std::ffi::CStr::from_ptr(bytes).to_bytes() == source.as_bytes()
+}
+
+pub(super) unsafe fn document_first_responder(webview: *mut AnyObject, source: &str) -> bool {
+    if !document_matches(webview, source) {
         return false;
     }
     let Some(class) = AnyClass::get(c"NSApplication") else {

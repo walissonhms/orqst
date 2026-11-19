@@ -4,6 +4,7 @@ import {
   projectBatchOutcome,
   projectPaneLifecycle,
   reconcileEndedTerminals,
+  savedTerminalDisposition,
   type TerminalOpenCard,
 } from '../apps/dashboard/src/terminal-lifecycle.js';
 import { loadTerminalCatalog } from '../apps/dashboard/src/terminal-catalog-cache.js';
@@ -112,4 +113,21 @@ test('a cached scope coalesces reads for 10 minutes, then refreshes', async (t) 
   assert.equal(calls, 2);
   await loadTerminalCatalog(native, scope, true);
   assert.equal(calls, 3);
+});
+
+test('Quit and relaunch distinguish durable release, missing ownership and a connected process', () => {
+  const released = {
+    terminalId: 'retired',
+    disposition: savedTerminalDisposition(false, true),
+    released: true,
+  };
+  const orphan = { terminalId: 'orphan', disposition: savedTerminalDisposition(false, false) };
+  assert.equal(released.disposition, 'released');
+  assert.equal(orphan.disposition, 'uncertain');
+  assert.equal(savedTerminalDisposition(true, true), 'exit_confirmed');
+  const live = { terminalId: 'connected', disposition: 'uncertain' } as const;
+  assert.deepEqual(reconcileEndedTerminals([released, orphan, live], new Set([live.terminalId])), [
+    released,
+    orphan,
+  ]);
 });

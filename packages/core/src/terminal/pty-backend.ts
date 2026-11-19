@@ -7,7 +7,7 @@ import {
   readLifecycleReceipt,
 } from '../managed-codex/lifecycle-receipt.js';
 import type { TerminalBackend, TerminalProfile } from './supervisor.js';
-import { terminalExecutableSha256, terminalFile } from './codex-profile.js';
+import { cachedTerminalExecutableSha256, terminalFile } from './codex-profile.js';
 import {
   interactiveTerminalEnvironment,
   interactiveTerminalProfiles,
@@ -48,10 +48,11 @@ export function managedTerminalBackend(
       return true;
     },
     start(profile: Readonly<TerminalProfile>, events, identity) {
-      // Rehash the executable this process dispatches. The child rehashes the CLI before PTY spawn.
+      // Verify the pinned Node identity after validation. The new child still
+      // independently hashes the manifest executables before PTY spawn.
       if (
         !this.validate(profile) ||
-        terminalExecutableSha256(config.node.path) !== config.node.sha256
+        cachedTerminalExecutableSha256(config.node.path) !== config.node.sha256
       )
         throw new Error('Managed profile changed');
       if (!identity) throw new Error('PTY lifecycle identity required');

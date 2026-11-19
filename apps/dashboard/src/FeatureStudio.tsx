@@ -39,6 +39,7 @@ import { TerminalOpeningCard } from './TerminalOpeningCard.js';
 import {
   requestTerminalRetry,
   useTerminalLifecycle,
+  clearRetiredTerminalEvidence,
   useOwnedPaneEvidence,
 } from './use-terminal-lifecycle.js';
 import { PaneLifecycleContent } from './PaneLifecycleContent.js';
@@ -46,6 +47,7 @@ import { invalidateTerminalCatalog, loadTerminalCatalog } from './terminal-catal
 import {
   projectPaneLifecycle,
   reconcileEndedTerminals,
+  savedTerminalDisposition,
   type EndedTerminal,
 } from './terminal-lifecycle.js';
 import { quitBlocked, type QuitBlocked } from './quit-notice.js';
@@ -306,6 +308,19 @@ export function FeatureStudio({
     setSnapshot(incoming);
     setCoreState('online');
     return true;
+  }, []);
+  useEffect(() => {
+    const retired = () => {
+      clearRetiredTerminalEvidence(
+        current.current?.slots.map(({ terminalId }) => terminalId) ?? [],
+      );
+      current.current = undefined;
+      setSnapshot(undefined);
+      setEvidence(undefined);
+      setPanes([]);
+    };
+    window.addEventListener('orqst-terminal-pool-closed', retired);
+    return () => window.removeEventListener('orqst-terminal-pool-closed', retired);
   }, []);
   const selected = snapshot?.features.find(
     (feature) => feature.featureId === snapshot.activeFeatureId,
@@ -1091,8 +1106,14 @@ export function FeatureStudio({
             until: Date.now() + 60_000,
           };
     if (!nativeWorkspace) {
+      const targetWorkspaceId = snapshot?.workspace.id ?? workspaceId;
+      if (reopenTerminalId && creator)
+        invalidateTerminalCatalog(creator, {
+          workspaceId: targetWorkspaceId,
+          featureId: preparationFeatureId,
+        });
       openPreparation({
-        workspaceId: snapshot?.workspace.id ?? workspaceId,
+        workspaceId: targetWorkspaceId,
         featureId: preparationFeatureId,
         workspaceName: snapshot?.workspace.name,
         featureName: selected ? displayFeatureName(selected) : undefined,
@@ -1223,12 +1244,10 @@ export function FeatureStudio({
       );
       return {
         terminalId: id,
-        disposition:
-          exit || paneEvidence.get(id)?.process === 'exited'
-            ? 'exit_confirmed'
-            : display?.released
-              ? 'kernel_absent'
-              : 'uncertain',
+        disposition: savedTerminalDisposition(
+          !!exit || paneEvidence.get(id)?.process === 'exited',
+          display?.released === true,
+        ),
         released: display?.released,
         displayId: display?.displayId ?? terminal?.label,
         provider: slot?.provider ?? release?.provider,

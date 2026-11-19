@@ -37,6 +37,8 @@ export interface OwnedShutdownResult {
 export class OwnedTerminalShutdown {
   private inFlight?: Promise<OwnedShutdownResult>;
   private readonly signalled = new Set<string>();
+  private readonly gracefulAt = new Map<string, number>();
+  private readonly forced = new Set<string>();
   private epoch?: string;
 
   constructor(
@@ -47,6 +49,8 @@ export class OwnedTerminalShutdown {
       owns(attempt: OwnedShutdownAttempt): boolean;
       /** SIGTERM only. Check stillCurrent after asynchronous preparation, before signing/effect. */
       stop(attempt: OwnedShutdownAttempt, stillCurrent: () => boolean): Promise<void>;
+      /** Studio close only, under the same confirmed slot and fresh signed challenge. */
+      forceStop?(attempt: OwnedShutdownAttempt, stillCurrent: () => boolean): Promise<void>;
       prepareRetirement(): Promise<unknown>;
       /** Only a durable Core-owned pending marker can permit exit without retirement. */
       preserveExit?(): Promise<unknown>;
@@ -124,12 +128,29 @@ export class OwnedTerminalShutdown {
               uncertain(attempt, 'timeout');
               continue;
             }
-            // Latch before a possibly consumed proof. No automatic retry or SIGKILL escalation.
+            // Latch before a possibly consumed proof. A lost SIGTERM reply cannot authorize force.
             this.signalled.add(attempt.instanceId);
             try {
               await bounded(this.ports.stop(attempt, current));
+              this.gracefulAt.set(attempt.instanceId, now());
             } catch {
               uncertain(attempt, 'transport');
+            }
+          } else {
+            const stoppedAt = this.gracefulAt.get(attempt.instanceId);
+            if (
+              this.ports.forceStop &&
+              stoppedAt !== undefined &&
+              now() - stoppedAt >= 2000 &&
+              current() &&
+              !this.forced.has(attempt.instanceId)
+            ) {
+              this.forced.add(attempt.instanceId);
+              try {
+                await bounded(this.ports.forceStop(attempt, current));
+              } catch {
+                uncertain(attempt, 'transport');
+              }
             }
           }
         }

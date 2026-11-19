@@ -118,14 +118,14 @@ export class TauriTerminalService {
       });
   }
 
-  private async stopOwned(attempt: OwnedShutdownAttempt, current: () => boolean) {
+  private async stopOwned(
+    attempt: OwnedShutdownAttempt,
+    current: () => boolean,
+    signal: 'SIGTERM' | 'SIGKILL' = 'SIGTERM',
+  ) {
     const supervisor = this.panes[attempt.slot]?.supervisor;
     if (!supervisor || !current()) throw new Error('Shutdown ownership unavailable');
-    const challenge = await supervisor.requestStop(
-      'desktop-managed',
-      attempt.instanceId,
-      'SIGTERM',
-    );
+    const challenge = await supervisor.requestStop('desktop-managed', attempt.instanceId, signal);
     if (
       !current() ||
       challenge.operation !== 'stop' ||
@@ -135,7 +135,7 @@ export class TauriTerminalService {
       Date.now() >= challenge.expiresAt
     )
       throw new Error('Shutdown stop proof is stale');
-    await supervisor.stop(attempt.instanceId, 'SIGTERM', {
+    await supervisor.stop(attempt.instanceId, signal, {
       challengeId: challenge.challengeId,
       signature: sign(null, terminalChallengeBytes(challenge), this.keys.privateKey).toString(
         'base64url',
@@ -162,6 +162,7 @@ export class TauriTerminalService {
           inventory: () => core.ownedSlotInventory!(slot),
           owns: (attempt) => attempt.slot === slot && attempt.epoch === core.epoch,
           stop: (attempt, check) => this.stopOwned(attempt, check),
+          forceStop: (attempt, check) => this.stopOwned(attempt, check, 'SIGKILL'),
           prepareRetirement: () => core.releaseOwnedSlot!(slot),
         });
         this.slotShutdowns.set(slot, shutdown);

@@ -9,9 +9,11 @@ terminal bound to its current native document and terminal Core.
 Hide only changes layout and revokes input. Detach disconnects a document from
 the owned session. Stopping a task remains a separate provider operation. The
 close command uses the existing signed owned-process SIGTERM and waits up to
-five seconds for exit or nondispatch evidence. If the receipt is uncertain, the
-pane and reservation remain available for inspection. A subsequent review can
-observe late evidence for the same attempt. Close does not escalate to SIGKILL.
+five seconds for exit or nondispatch evidence. A fresh signed SIGKILL is
+allowed once after a two-second graceful interval when the same owned attempt
+is still running and the graceful stop was acknowledged. If the receipt is
+uncertain, the pane and reservation remain available for inspection. A
+subsequent review can observe late evidence for the same attempt.
 
 Both terminal Cores fence confirmed closed slots, retain their receipts and
 journals, and remove them from the Studio, dock and live message discovery.
@@ -24,8 +26,10 @@ The current admission format indexes slots by their original positions within
 one native owner epoch. Closed indexes are not recycled in that epoch. At the
 slot ceiling, the shared reservation requires closing the remaining panes
 before a fresh selection can use that capacity. The existing selection latch
-requires quitting and reopening the Preview after a completed cohort close.
-Historical Feature membership and journal data retain their UUIDs.
+clears itself after the correlated whole-cohort close and the native views
+are torn down. Reopen reads the current catalog and targets the exact released
+member. The new attempt keeps the display number. Historical Feature
+membership and journal data retain their UUIDs.
 
 ## Findings from source and the retained diagnostic logs
 

@@ -438,16 +438,28 @@ pub(crate) async fn permission_review_request(
     let epoch = epoch.to_owned();
     let owner = owner.to_owned();
     let runtime = tokio::runtime::Handle::current();
+    let window = view.window();
     if view
         .with_webview(move |native| {
             if sender.is_closed() {
                 return;
             }
             // SAFETY: Tauri guarantees a live WKWebView on this AppKit thread.
-            let focused = unsafe { native_focus::chrome_first_responder(native.inner().cast()) };
+            let close = crate::features::is_terminal_close(&envelope["request"]);
+            let source = envelope["source"].as_str().unwrap_or_default();
+            let webview = native.inner().cast();
+            let focused = if close {
+                // AppKit can complete the sheet before restoring the WKWebView responder.
+                // The exact accepted sheet and current review latch bind this dispatch.
+                (unsafe { native_focus::document_matches(webview, source) })
+                    && native_focus::sample(&window)
+                        .is_some_and(|focus| focus.owns_key(current_review(&app, focus)))
+            } else {
+                unsafe { native_focus::document_first_responder(webview, source) }
+            };
             if !focused
                 || !permission_review_current(&app, &epoch, generation, &owner)
-                || !(if crate::features::is_terminal_close(&envelope["request"]) {
+                || !(if close {
                     crate::features::close_target_current(
                         &app,
                         &envelope["request"],
@@ -465,6 +477,9 @@ pub(crate) async fn permission_review_request(
                         })
                 })
             {
+                if close && focus_diagnostics() {
+                    eprintln!("ORQST_TERMINAL_CLOSE native review context refused");
+                }
                 let _ = sender.send(None);
                 return;
             }
@@ -619,6 +634,9 @@ async fn metadata_request_inner(
         }
         receiver
     };
+    if close && focus_diagnostics() {
+        eprintln!("ORQST_TERMINAL_CLOSE dispatched");
+    }
     let result = tokio::time::timeout(Duration::from_secs(15), receiver).await;
     let valid_reply = |value: &Value| {
         if permission {
@@ -2091,6 +2109,7 @@ async fn confirm_studio_sheet(
     let current_id = id.clone();
     native_consent::confirm_webview(
         view,
+        source.clone(),
         labels,
         move || {
             native_focus::install(&current_app)
@@ -2186,7 +2205,7 @@ pub(crate) async fn confirm_terminal_close(
             translate("terminalStudio.closeTerminal.message"),
             format!("T-{:03} · {terminal_id}", slot + 1),
             translate("cancel"),
-            translate("terminalStudio.closeTerminal.title"),
+            translate("studio.pane.terminate"),
         ];
         let current_app = app.clone();
         let current_epoch = epoch.to_owned();
@@ -3927,6 +3946,7 @@ async fn start_selected_inner(
                             )
                         };
                         if let Some(running) = running {
+                            crate::features::clear_closed_pool(&app);
                             selection_closed =
                                 crate::quit_orchestration::QUIT.host.selection_closed();
                             let count = running.documents.len();
@@ -3951,6 +3971,7 @@ async fn start_selected_inner(
                                     let _ = main.show();
                                     let _ = main.set_focus();
                                 }
+                                quit_event(&handle, "orqst-terminal-pool-closed", json!({}));
                             });
                             stop_running(Some(running));
                         }

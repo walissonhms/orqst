@@ -1348,11 +1348,37 @@ async fn focus_then_current(
     focused && current()
 }
 
-fn request_focus_allowed(action: &str, direct: bool, owned_terminal: bool) -> bool {
-    direct || (action == "arrange" && owned_terminal)
+fn request_focus_allowed(action: &str, direct: bool, owned_window: bool) -> bool {
+    direct || (matches!(action, "arrange" | "select") && owned_window)
+}
+
+/// View operations are allowed while an owned PTY remains first responder.
+/// The transport still checks the exact document, active window, scope and generation.
+async fn main_window_key(view: &Webview) -> bool {
+    if view.label() != "main" {
+        return false;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let window = view.window();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        view.with_webview(move |_| {
+            let _ = tx.send(crate::terminal::quit_window_focus(&window) == Some((true, false)));
+        })
+        .is_ok()
+            && matches!(
+                tokio::time::timeout(std::time::Duration::from_secs(1), rx).await,
+                Ok(Ok(true))
+            )
+    }
+    #[cfg(not(target_os = "macos"))]
+    false
 }
 
 async fn request_focused(view: &Webview, action: &str, epoch: &str, presentation: u64) -> bool {
+    if matches!(action, "arrange" | "select") && main_window_key(view).await {
+        return request_focus_allowed(action, false, true);
+    }
     let direct = focused(view).await;
     let terminal = !direct
         && action == "arrange"
@@ -2210,7 +2236,7 @@ fn changes_presentation(request: &Value) -> bool {
     !is_terminal_close(request)
         && matches!(
             request["action"].as_str(),
-            Some("canvas" | "select" | "organize" | "pane" | "renamePane" | "movePane")
+            Some("canvas" | "organize" | "pane" | "renamePane" | "movePane")
         )
 }
 
@@ -2278,6 +2304,24 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         return deny("identity");
     };
     let close = is_terminal_close(&request);
+    let lifecycle = if close {
+        Some(crate::local_diagnostics::Stage::TerminalClose)
+    } else if request["action"] == "select" {
+        Some(crate::local_diagnostics::Stage::FeatureSelect)
+    } else {
+        None
+    };
+    let diagnostic = lifecycle.map(|stage| {
+        let attempt = crate::local_diagnostics::Attempt::begin();
+        attempt.record(stage, crate::local_diagnostics::Outcome::Requested, crate::local_diagnostics::Effects::Unconfirmed);
+        attempt
+    });
+    let record = |outcome, effects| {
+        if let Some((attempt, stage)) = diagnostic.as_ref().zip(lifecycle) {
+            attempt.record(stage, outcome, effects);
+        }
+    };
+    use crate::local_diagnostics::{Effects, Outcome};
     if !feature_action_source_allowed(&source, &request) {
         return deny("source");
     }
@@ -2306,6 +2350,7 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
         )
         .await
     {
+        record(Outcome::Refused, Effects::NotStarted);
         return deny("focus");
     }
     if identity(&window) != Some((source.clone(), document))
@@ -2373,12 +2418,15 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                 )
                 .await
                 {
+                    record(Outcome::Cancelled, Effects::NotStarted);
                     return json!({"status":"cancelled"});
                 }
                 if !current() {
+                    record(Outcome::Refused, Effects::NotStarted);
                     return denied();
                 }
-                terminal::permission_review_request(
+                record(Outcome::Approved, Effects::Unconfirmed);
+                let reply = terminal::permission_review_request(
                     app,
                     window.clone(),
                     json!({"kind":"feature-request", "id":id, "source":source,
@@ -2387,7 +2435,12 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
                     &epoch,
                     &id,
                 )
-                .await
+                .await;
+                record(
+                    if reply["status"] == "ok" { Outcome::Succeeded } else { Outcome::Unconfirmed },
+                    Effects::Possible,
+                );
+                reply
             },
             |cancelled| terminal::permission_review_finish(app, &epoch, &id, cancelled),
         )
@@ -2447,6 +2500,10 @@ pub async fn feature_request(window: Webview, request: Value) -> Value {
             if diagnose {
                 eprintln!("ORQST_ARRANGE reply {}", value["status"]);
             }
+            record(
+                if value["status"] == "ok" { Outcome::Succeeded } else { Outcome::Unconfirmed },
+                Effects::Possible,
+            );
             value
         },
         |cancelled| crate::terminal::metadata_finish(app, &epoch, &completion_id, cancelled),
@@ -2634,6 +2691,17 @@ pub(crate) fn publish_terminal_lifecycle(
     published
 }
 
+pub(crate) fn clear_closed_pool(app: &tauri::AppHandle) {
+    let state = app.state::<Features>();
+    let mut guard = state.0.lock().unwrap();
+    guard.snapshot_generation = 0;
+    guard.view_revision = 0;
+    guard.workspace_id = None;
+    guard.feature_revisions.clear();
+    guard.preparation_scope = None;
+    guard.close_targets.clear();
+}
+
 pub fn invalidate(app: &tauri::AppHandle, label: &str) {
     let state = app.state::<Features>();
     let mut guard = state.0.lock().unwrap();
@@ -2770,7 +2838,7 @@ mod tests {
         ] {
             assert_eq!(
                 super::request_focus_allowed(action, false, true),
-                action == "arrange"
+                matches!(action, "arrange" | "select")
             );
             assert!(!super::request_focus_allowed(action, false, false));
             assert!(super::request_focus_allowed(action, true, false));
@@ -2798,12 +2866,11 @@ mod tests {
     #[test]
     fn polling_and_arrangement_do_not_advance_native_presentation() {
         use serde_json::json;
-        for action in ["snapshot", "arrange", "accountLimits", "mention"] {
+        for action in ["snapshot", "arrange", "accountLimits", "mention", "select"] {
             assert!(!super::changes_presentation(&json!({"action":action})));
         }
         for action in [
             "canvas",
-            "select",
             "organize",
             "pane",
             "renamePane",

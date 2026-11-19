@@ -65,10 +65,19 @@ export function useFeatureShell(inspectingCommunication = false) {
       });
     const update = (event: Event) => apply((event as CustomEvent<FeatureNativeSnapshot>).detail);
     const dock = (event: Event) => setPanes(workspacePanes((event as CustomEvent<unknown>).detail));
+    const retired = () => {
+      latest.current = undefined;
+      setSnapshot(undefined);
+      setPanes([]);
+      setStartupPending(true);
+      setStartupAttempt((attempt) => attempt + 1);
+    };
+    window.addEventListener('orqst-terminal-pool-closed', retired);
     window.addEventListener('orqst-feature-state', update);
     window.addEventListener('orqst-terminal-dock', dock);
     return () => {
       live = false;
+      window.removeEventListener('orqst-terminal-pool-closed', retired);
       window.removeEventListener('orqst-feature-state', update);
       window.removeEventListener('orqst-terminal-dock', dock);
     };

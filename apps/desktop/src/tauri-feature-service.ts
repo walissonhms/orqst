@@ -435,7 +435,9 @@ export class TauriFeatureService {
           this.generation++;
           await this.refresh();
           await this.present(request.featureId, true, presentation, true);
-          break;
+          const snapshot = this.snapshot();
+          this.changed(snapshot);
+          return { status: 'ok', snapshot };
         }
         case 'readPermissions': {
           const permissions = await this.core.features.readPermissions(request.featureId);

@@ -178,6 +178,18 @@ window while retaining main's exact own-sheet. Observer HTTP/WS and signed
 MCP/retirement/Quit authority are unchanged. See the [contract and security review](docs/api/tauri-studio.md).
 Native/provider/final-Quit acceptance is still pending.
 
+## Native terminal lifecycle
+
+macOS application Quit enters the same native consent and evidence gate as the
+ORQST menu. Studio pane termination binds the exact dashboard document,
+current Feature membership and native sheet before the signed stop can be
+dispatched. Only a confirmed pane close can request a second, force signal
+for the same still-owned attempt after a bounded graceful period. Quit and
+historical recovery retain their original release requirements. Feature
+selection and geometry may use the active owned window when a child PTY
+holds the responder. Execution and input continue to require their separate
+native authority. See the [private contract](docs/api/terminal-native.md#confirmed-close-terminal).
+
 ## Tauri interactive MCP consent — 2026-11-04
 
 Only the native menu can request a one-use grant for an explicitly opted-in pair.
